@@ -9,7 +9,7 @@ export const enum AnimationState {
 	IDLE = "IDLE",
 }
 
-function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCType) {
+function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCType): Model | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const npc = npcTemplate.Clone();
 	const name = MEDIEVAL_NAMES[math.random(0, MEDIEVAL_NAMES.size())];
@@ -24,7 +24,7 @@ function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCTyp
 
 	const npcHumanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (!npcHumanoid) {
-		return;
+		return undefined;
 	}
 
 	const appearence = new Instance("HumanoidDescription");
@@ -35,9 +35,10 @@ function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCTyp
 	if (routePoints) {
 		patrol(npc, routePoints);
 	}
+	return npc;
 }
 
-function patrol(npc: Model, routes: BasePart[]) {
+function patrol(npc: Model, routePoints: BasePart[]) {
 	print("Patroling");
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
@@ -48,10 +49,10 @@ function patrol(npc: Model, routes: BasePart[]) {
 		if (!npc || !npc.Parent) return;
 		changeAnimationState(npc, AnimationState.WALK);
 
-		humanoid.MoveTo(routes[activeRouteIndex].Position);
+		humanoid.MoveTo(routePoints[activeRouteIndex].Position);
 		humanoid.MoveToFinished.Once(() => {
 			changeAnimationState(npc, AnimationState.IDLE);
-			if (activeRouteIndex >= routes.size() - 1) {
+			if (activeRouteIndex >= routePoints.size() - 1) {
 				activeRouteIndex = 0;
 			} else {
 				activeRouteIndex++;
@@ -120,7 +121,7 @@ function getNPCRoutes(): Folder[] {
 	const routes = Workspace.WaitForChild("NPCRoutes")
 		.GetChildren()
 		.filter((child): child is Folder => {
-			return child.IsA("Folder") && child.Name === "Route";
+			return child.IsA("Folder");
 		});
 
 	if (routes.size() === 0) {
@@ -207,7 +208,8 @@ function addTalkPrompt(npc: Model, message: string) {
 			print(`(CACHE) ${npc.Name} is already covered`);
 			return {};
 		});
-		createSpeechBillboard(head, message);
+		//createSpeechBillboard(head, message);
+		npc.Destroy();
 	});
 }
 
@@ -235,13 +237,51 @@ function createSpeechBillboard(head: BasePart, message: string): void {
 	});
 }
 
-const npcRoutes: Folder[] = getNPCRoutes();
-
-npcRoutes.forEach((npcRoute: Folder) => {
+function spawnNpcForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 	const npcTypeAttribute = npcRoute.GetAttribute("NPCType") as string;
 	const isNPC = isNPCType(npcTypeAttribute);
 	const npcType: NPCType = isNPC ? npcTypeAttribute : "COMMONER";
 	const routePoints = npcRoute.GetChildren().filter((route) => route.Name === "Route") as BasePart[];
 	const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(routePoints[0]);
-	spawnNPC(closestSpawnPointRelativeToRoute, routePoints, npcType);
-});
+	print("closestSpawnPointRelativeToRoutez: " + closestSpawnPointRelativeToRoute);
+	const npc: Model | undefined = spawnNPC(closestSpawnPointRelativeToRoute, routePoints, npcType);
+	if (npc) {
+		assigned.set(npcRoute.Name, { npc, route: npcRoute });
+		npc.AncestryChanged.Connect((child, parent) => {
+			if (!parent) {
+				print(`💀 ${child.Name} was removed from this life`);
+				assigned.delete(npcRoute.Name);
+			}
+		});
+	} else {
+		print("NPC did not spawn due to issues");
+	}
+}
+
+function updateAssignments(assigned: Map<string, Assignment>) {
+	const npcRoutes: Folder[] = getNPCRoutes();
+
+	npcRoutes.forEach((npcRoute: Folder) => {
+		if (!assigned.has(npcRoute.Name)) {
+			print("🗣️ Here ye here ye");
+			spawnNpcForRoute(npcRoute, assigned);
+		}
+	});
+}
+
+async function main() {
+	const assigned: Map<string, Assignment> = new Map();
+
+	task.spawn(() => {
+		while (true) {
+			updateAssignments(assigned);
+			task.wait(5);
+		}
+	});
+}
+main();
+
+interface Assignment {
+	npc: Model;
+	route: Folder;
+}
