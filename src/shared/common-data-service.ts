@@ -1,5 +1,5 @@
 import { DataStoreService } from "@rbxts/services";
-import { deepEqual, isArray } from "./helpers";
+import { deepEqual, isArray, log } from "./helpers";
 
 const serviceInstances = new Map<string, any>();
 
@@ -32,7 +32,7 @@ export class PlayerDataService<T extends object> {
 
 			return this.defaultData;
 		} catch (err) {
-			warn(`🔥 Failed to fetch data for ${player.Name}:`, err);
+			log(`Failed to fetch data for ${player.Name}:` + err, "ERROR");
 			return this.defaultData;
 		}
 	}
@@ -46,16 +46,16 @@ export class PlayerDataService<T extends object> {
 					: (patch as Partial<T>);
 			const updated: T = { ...existing, ...partial } as T;
 			if (typeOf(updated) !== "table" || isArray(updated)) {
-				throw `🔥 Attempted to store invalid data: must be an object, not an array`;
+				throw `Attempted to store invalid data: must be an object, not an array`;
 			}
 			if (!deepEqual(existing, updated)) {
 				await this.dataStore.SetAsync(`${player.UserId}`, updated);
-				print(`✅🪶 Updated data for ${player.Name}`);
+				log(`Updated data for ${player.Name}`);
 			} else {
-				print("📜 State has not changed, store update called but skip persistance protocol engaged");
+				log("State has not changed, store update called but skip persistance protocol engaged");
 			}
 		} catch (err) {
-			warn(`🔥 Failed to save data for ${player.Name}:`, err);
+			log(`Failed to save data for ${player.Name}:` + err, "ERROR");
 		}
 	}
 }

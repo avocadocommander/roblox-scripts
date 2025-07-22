@@ -70,3 +70,9 @@ export function getRandomMedievalPhrase(): string {
 	const index = math.random(1, MEDIEVAL_PHRASES.size());
 	return MEDIEVAL_PHRASES[index - 1];
 }
+
+
+export interface Assignment {
+	npc: Model;
+	route: Folder;
+}

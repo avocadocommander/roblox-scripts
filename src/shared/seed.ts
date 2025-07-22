@@ -8,6 +8,8 @@ export function makeSeededRandom(seed: number): () => number {
 }
 
 export function getSeedFromName(name: string): number {
+	if (!name) throw "No see was created with undefined name";
+
 	let seed = 0;
 	for (let i = 0; i < name.size(); i++) {
 		const char = name.sub(i + 1, i + 1);

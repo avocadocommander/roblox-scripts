@@ -39,3 +39,20 @@ export function deepEqual<T extends object>(a: T, b: T): boolean {
 
 	return true;
 }
+
+export function log(message: string, logType: "INFO" | "WARN" | "ERROR" = "INFO") {
+	switch (logType) {
+		case "WARN": {
+			warn(`📣 ${message}`);
+			break;
+		}
+		case "ERROR": {
+			error(`🚨 ${message}`);
+			break;
+		}
+		default: {
+			print(`${message}`);
+			break;
+		}
+	}
+}
