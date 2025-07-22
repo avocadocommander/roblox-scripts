@@ -24,6 +24,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@rbxts/rx": "^7.8.2-rc.1",
     "@rbxts/services": "^1.5.5",
     "rojo": "^1.0.2"
   }
