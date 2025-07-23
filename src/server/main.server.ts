@@ -1,4 +1,4 @@
-import { ReplicatedStorage, Workspace } from "@rbxts/services";
+import { Players, ReplicatedStorage, Workspace } from "@rbxts/services";
 import { Assignment, getRandomMedievalPhrase, isNPCType, MEDIEVAL_NAMES, NPCType, useAssetId } from "shared/module";
 import { getSeedFromName, makeSeededRandom } from "../shared/seed";
 import { PlayerDataService } from "shared/common-data-service";
@@ -12,6 +12,7 @@ export const enum AnimationState {
 
 function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCType): Model | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
+
 	const npc = npcTemplate.Clone();
 	const name = MEDIEVAL_NAMES[math.random(0, MEDIEVAL_NAMES.size())];
 	const seed = getSeedFromName(name);
@@ -42,7 +43,6 @@ function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCTyp
 		return undefined;
 	}
 	npcHumanoid.ApplyDescriptionReset(appearence);
-
 	npc.SetAttribute("Type", npcType);
 	if (routePoints) {
 		patrol(npc, routePoints);
@@ -144,7 +144,10 @@ function getNPCRoutes(): Folder[] {
 	return routes;
 }
 
-function setGenericAppearence(appearence: HumanoidDescription, seed: () => number): HumanoidDescription {
+async function setGenericAppearence(appearence: HumanoidDescription, seed: () => number): Promise<HumanoidDescription> {
+	const Players = game.GetService("Players");
+	const boyDesc = await Players.GetHumanoidDescriptionFromUserId(85968952); // Boy avatar
+
 	const faces = [
 		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
 		406001167, 7317765, 616381207,
@@ -175,6 +178,9 @@ function setGenericAppearence(appearence: HumanoidDescription, seed: () => numbe
 
 	appearence.Face = faces[math.floor(seed() * faces.size())];
 	appearence.HairAccessory = hair[math.floor(seed() * hair.size())];
+
+	appearence.BodyTypeScale = boyDesc.BodyTypeScale;
+	appearence.ProportionScale = boyDesc.ProportionScale;
 
 	return appearence;
 }
