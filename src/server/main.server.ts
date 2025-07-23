@@ -144,9 +144,9 @@ function getNPCRoutes(): Folder[] {
 	return routes;
 }
 
-async function setGenericAppearence(appearence: HumanoidDescription, seed: () => number): Promise<HumanoidDescription> {
+function setGenericAppearence(appearence: HumanoidDescription, seed: () => number): HumanoidDescription {
 	const Players = game.GetService("Players");
-	const boyDesc = await Players.GetHumanoidDescriptionFromUserId(85968952); // Boy avatar
+	const boyDesc = Players.GetHumanoidDescriptionFromUserId(85968952); // Boy avatar
 
 	const faces = [
 		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
