@@ -77,6 +77,27 @@ function patrol(npc: Model, routePoints: BasePart[]) {
 	idleTrack.Priority = Enum.AnimationPriority.Movement;
 	idleTrack.Looped = true;
 
+	let connected = false;
+
+	if (!connected) {
+		connected = true;
+		humanoid.StateChanged.Connect((oldState, newState) => {
+			print(`${oldState} -> ${newState}`);
+
+			walkTrack.Stop();
+			idleTrack.Stop();
+
+			switch (newState) {
+				case Enum.HumanoidStateType.Running:
+					walkTrack.Play();
+					break;
+				default:
+					idleTrack.Play();
+					break;
+			}
+		});
+	}
+
 	let activeRouteIndex = 0;
 
 	const startPatrol = () => {
@@ -96,20 +117,6 @@ function patrol(npc: Model, routePoints: BasePart[]) {
 	};
 
 	startPatrol();
-	humanoid.StateChanged.Connect((oldState, newState) => {
-		walkTrack.Stop();
-		idleTrack.Stop();
-
-		print(`${oldState}	->	${newState} `);
-		switch (newState) {
-			case Enum.HumanoidStateType.Running:
-				walkTrack.Play();
-				break;
-			default:
-				idleTrack.Play();
-				break;
-		}
-	});
 }
 
 function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number) {
