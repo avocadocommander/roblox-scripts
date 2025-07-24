@@ -1,6 +1,6 @@
 import { Players } from "@rbxts/services";
 import { PlayerDataService } from "../shared/common-data-service";
-import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "./player-store";
+import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "../shared/player-store";
 
 Players.PlayerAdded.Connect(async (player) => {
 	const store = PlayerDataService.getInstance(PLAYER_STORE_NAME, defaultPlayerStoreData);

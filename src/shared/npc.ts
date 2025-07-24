@@ -1,4 +1,9 @@
+import { RunService, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
+import { NPCType, useAssetId } from "./module";
+import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
+import { PlayerDataService } from "./common-data-service";
+import { PathfindingService } from "@rbxts/services";
 
 export class NPC {
 	displayName: string;
@@ -7,10 +12,10 @@ export class NPC {
 	type: NPCType;
 	model!: Model;
 
-	constructor(modelClone: Model, name: string, type: NPCType) {
+	constructor(modelClone: Model, name: string, npcType: NPCType) {
 		modelClone.Parent = Workspace;
 		modelClone.Name = name;
-		this.type = type;
+		this.type = npcType;
 
 		this.displayName = name;
 		this.seed = this.getSeedFromName(name);
@@ -21,6 +26,92 @@ export class NPC {
 
 		this.humanoid = setHumanoid;
 		this.model = modelClone;
+		this.addTalkPrompt(this.model, "");
+	}
+
+	public async patrol(routePoints: BasePart[]) {
+		let activeRouteIndex = 0;
+
+		while (true) {
+			if (activeRouteIndex >= routePoints.size() - 1) {
+				activeRouteIndex = 0;
+			} else {
+				activeRouteIndex++;
+			}
+			await this.navigate(routePoints[activeRouteIndex].Position);
+			await Promise.delay(math.random(2, 5)); // Add a noble pause
+		}
+	}
+
+	private async navigate(goal: Vector3): Promise<void> {
+		const animator = this.humanoid.WaitForChild("Animator") as Animator;
+
+		const walkAnim = new Instance("Animation");
+		walkAnim.Name = "Walk";
+		walkAnim.AnimationId = useAssetId("133708367021932");
+
+		const idleAnim = new Instance("Animation");
+		idleAnim.Name = "Idle";
+		idleAnim.AnimationId = useAssetId("507766951");
+
+		const walkTrack = animator.LoadAnimation(walkAnim);
+		walkTrack.Priority = Enum.AnimationPriority.Movement;
+		walkTrack.Looped = true;
+
+		const idleTrack = animator.LoadAnimation(idleAnim);
+		idleTrack.Priority = Enum.AnimationPriority.Movement;
+		idleTrack.Looped = true;
+
+		const startPosition = this.model.PrimaryPart!.Position;
+		const goalPosition = goal;
+
+		const path = PathfindingService.CreatePath({
+			AgentRadius: 2,
+			AgentHeight: 5,
+			AgentCanJump: true,
+			AgentCanClimb: true,
+			Costs: {
+				Water: 100,
+			},
+		});
+
+		path.ComputeAsync(startPosition, goalPosition);
+
+		if (path.Status === Enum.PathStatus.Success) {
+			const waypoints = path.GetWaypoints();
+			let current = 0;
+
+			idleTrack.Stop();
+			walkTrack.Play();
+
+			const moveToNextWaypoint = async () => {
+				current++;
+				if (current >= waypoints.size()) {
+					walkTrack.Stop();
+					idleTrack.Play();
+					return;
+				}
+
+				const wp = waypoints[current];
+				this.humanoid.MoveTo(wp.Position);
+				await this.waitForMove();
+
+				if (wp.Action === Enum.PathWaypointAction.Jump) {
+					this.humanoid.Jump = true;
+				}
+				await moveToNextWaypoint();
+			};
+
+			await moveToNextWaypoint();
+		} else {
+			warn("Pathfinding failed, noble Lord!");
+		}
+	}
+
+	private waitForMove(): Promise<void> {
+		return new Promise((resolve) => {
+			this.humanoid.MoveToFinished.Once(() => resolve());
+		});
 	}
 
 	public getRandomnessFromSeed() {
@@ -67,7 +158,7 @@ export class NPC {
 	}
 
 	private setHumanoidDefaults(humanoid: Humanoid): Humanoid | undefined {
-		humanoid.WalkSpeed = 8;
+		humanoid.WalkSpeed = 6;
 		const npcDescription = humanoid.GetAppliedDescription();
 		if (!npcDescription) {
 			log("Appearence unavalialbe for npc spawn", "ERROR");
@@ -75,7 +166,7 @@ export class NPC {
 		}
 		const rand = this.makeSeededRandom(this.seed);
 		this.randomizeBodyShape(npcDescription, rand);
-		const appearenceDescription = getGenericSeededAppearance(npcDescription, rand);
+		const appearenceDescription = this.getGenericSeededAppearance(npcDescription, rand);
 
 		if (!appearenceDescription) return;
 		humanoid.ApplyDescription(appearenceDescription);
@@ -112,5 +203,37 @@ export class NPC {
 		npcDescription.DepthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
 
 		npcDescription.HeadScale = math.round((0.8 + seed() * 0.4) * 100) / 100; // 0.8 to 1.2
+	}
+
+	private addTalkPrompt(npc: Model, message: string) {
+		const head = npc.FindFirstChild("Head") as BasePart;
+		if (!head) return warn("No head for NPC");
+
+		const prompt = new Instance("ProximityPrompt");
+		prompt.Name = "TalkPrompt";
+		prompt.ObjectText = npc.Name;
+		prompt.ActionText = "Talk";
+		prompt.KeyboardKeyCode = Enum.KeyCode.E;
+		prompt.HoldDuration = 0;
+		prompt.RequiresLineOfSight = false;
+		prompt.MaxActivationDistance = 10;
+		prompt.Parent = head;
+
+		prompt.Triggered.Connect((player) => {
+			// if (!npc.GetTags().includes("Targeted")) {
+			// 	return;
+			// }
+			const store = PlayerDataService.getInstance(PLAYER_STORE_NAME, defaultPlayerStoreData);
+			store.updatePlayerData(player, (state: Partial<StoreData>) => {
+				const currentTitles = state.eliminations ?? [];
+				if (!currentTitles.includes(npc.Name)) {
+					return {
+						eliminations: [...currentTitles, npc.Name],
+					};
+				}
+				return {};
+			});
+			npc.Destroy();
+		});
 	}
 }
