@@ -56,3 +56,18 @@ export function log(message: string, logType: "INFO" | "WARN" | "ERROR" = "INFO"
 		}
 	}
 }
+
+export function applySpeed(speed: SPEEDS, humanoid: Humanoid) {
+	if (humanoid) {
+		humanoid.WalkSpeed = SPEED[speed];
+	}
+}
+
+export const SPEED: Record<SPEEDS, number> = {
+	WALK: 8,
+	RUN: 16,
+};
+export const enum SPEEDS {
+	WALK = "WALK",
+	RUN = "RUN",
+}

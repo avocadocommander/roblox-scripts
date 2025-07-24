@@ -3,7 +3,7 @@ import { Assignment, getRandomMedievalPhrase, isNPCType, MEDIEVAL_NAMES, NPCType
 import { getSeedFromName, makeSeededRandom } from "../shared/seed";
 import { PlayerDataService } from "shared/common-data-service";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "./player-store";
-import { log } from "shared/helpers";
+import { applySpeed, log, SPEEDS } from "shared/helpers";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -31,18 +31,23 @@ function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCTyp
 	addTalkPrompt(npc, getRandomMedievalPhrase());
 
 	const npcHumanoid = npc.FindFirstChildOfClass("Humanoid");
+
 	if (!npcHumanoid) {
 		log("Humanoid not found for npc spawn", "ERROR");
 		return undefined;
 	}
+	applySpeed(SPEEDS.WALK, npcHumanoid);
 
-	const appearence = new Instance("HumanoidDescription");
-	setGenericAppearence(appearence, rand);
-	if (!appearence || !npcHumanoid) {
+	const npcDescription = npcHumanoid.GetAppliedDescription();
+	if (!npcDescription) {
 		log("Appearence unavalialbe for npc spawn", "ERROR");
 		return undefined;
 	}
-	npcHumanoid.ApplyDescriptionReset(appearence);
+	randomizeBodyShape(npcDescription, rand);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand);
+
+	if (!appearenceDescription) return;
+	npcHumanoid.ApplyDescription(appearenceDescription);
 	npc.SetAttribute("Type", npcType);
 	if (routePoints) {
 		patrol(npc, routePoints);
@@ -54,17 +59,34 @@ function patrol(npc: Model, routePoints: BasePart[]) {
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 
+	const animator = humanoid.FindFirstChildOfClass("Animator") as Animator;
+
+	const walkAnim = new Instance("Animation");
+	walkAnim.Name = "Walk";
+	walkAnim.AnimationId = useAssetId("133708367021932");
+
+	const idleAnim = new Instance("Animation");
+	idleAnim.Name = "Idle";
+	idleAnim.AnimationId = useAssetId("507766951");
+
+	const walkTrack = animator.LoadAnimation(walkAnim);
+	walkTrack.Priority = Enum.AnimationPriority.Movement;
+	walkTrack.Looped = true;
+
+	const idleTrack = animator.LoadAnimation(idleAnim);
+	idleTrack.Priority = Enum.AnimationPriority.Movement;
+	idleTrack.Looped = true;
+
 	let activeRouteIndex = 0;
 
 	const startPatrol = () => {
 		if (!npc || !npc.Parent) return;
-		changeAnimationState(npc, AnimationState.WALK);
-
 		humanoid.MoveTo(routePoints[activeRouteIndex].Position);
 		humanoid.MoveToFinished.Once(() => {
-			changeAnimationState(npc, AnimationState.IDLE);
 			if (activeRouteIndex >= routePoints.size() - 1) {
 				activeRouteIndex = 0;
+				humanoid.Move(Vector3.zero);
+				idleTrack.Play();
 				task.delay(math.random(0, 10), startPatrol);
 			} else {
 				activeRouteIndex++;
@@ -74,6 +96,31 @@ function patrol(npc: Model, routePoints: BasePart[]) {
 	};
 
 	startPatrol();
+	humanoid.StateChanged.Connect((oldState, newState) => {
+		walkTrack.Stop();
+		idleTrack.Stop();
+
+		print(`${oldState}	->	${newState} `);
+		switch (newState) {
+			case Enum.HumanoidStateType.Running:
+				walkTrack.Play();
+				break;
+			default:
+				idleTrack.Play();
+				break;
+		}
+	});
+}
+
+function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number) {
+	npcDescription.BodyTypeScale = math.round(seed() * 100) / 100; // 0.0 to 1.0
+	npcDescription.ProportionScale = math.round(seed() * 100) / 100;
+
+	npcDescription.HeightScale = math.round((0.9 + seed() * 0.15) * 100) / 100; // 0.9 to 1.05
+	npcDescription.WidthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
+	npcDescription.DepthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
+
+	npcDescription.HeadScale = math.round((0.8 + seed() * 0.4) * 100) / 100; // 0.8 to 1.2
 }
 
 function changeAnimationState(npc: Model, state: AnimationState) {
@@ -99,13 +146,8 @@ function changeAnimationState(npc: Model, state: AnimationState) {
 			break;
 		}
 		case AnimationState.IDLE: {
-			const animator = humanoid.FindFirstChildOfClass("Animator");
-			if (animator) {
-				const tracks = animator.GetPlayingAnimationTracks();
-				for (const track of tracks) {
-					track.Stop();
-				}
-			}
+			humanoid.ChangeState(Enum.HumanoidStateType.None);
+
 			break;
 		}
 		default: {
@@ -144,10 +186,10 @@ function getNPCRoutes(): Folder[] {
 	return routes;
 }
 
-function setGenericAppearence(appearence: HumanoidDescription, seed: () => number): HumanoidDescription {
-	const Players = game.GetService("Players");
-	const boyDesc = Players.GetHumanoidDescriptionFromUserId(85968952); // Boy avatar
-
+function getGenericSeededAppearance(
+	humanoidDescription: HumanoidDescription,
+	seed: () => number,
+): HumanoidDescription | undefined {
 	const faces = [
 		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
 		406001167, 7317765, 616381207,
@@ -169,20 +211,18 @@ function setGenericAppearence(appearence: HumanoidDescription, seed: () => numbe
 	const skinIndex = math.floor(seed() * realisticSkinTones.size()) + 1;
 	const skinColor: Color3 = realisticSkinTones[skinIndex - 1];
 
-	appearence.HeadColor = skinColor;
-	appearence.LeftArmColor = skinColor;
-	appearence.RightArmColor = skinColor;
-	appearence.LeftLegColor = skinColor;
-	appearence.RightLegColor = skinColor;
-	appearence.TorsoColor = skinColor;
+	humanoidDescription.HeadColor = skinColor;
+	humanoidDescription.LeftArmColor = skinColor;
+	humanoidDescription.RightArmColor = skinColor;
+	humanoidDescription.LeftLegColor = skinColor;
+	humanoidDescription.RightLegColor = skinColor;
+	humanoidDescription.TorsoColor = skinColor;
 
-	appearence.Face = faces[math.floor(seed() * faces.size())];
-	appearence.HairAccessory = hair[math.floor(seed() * hair.size())];
+	humanoidDescription.Face = faces[math.floor(seed() * faces.size())];
+	humanoidDescription.Head = 746767604;
+	humanoidDescription.HairAccessory = hair[math.floor(seed() * hair.size())];
 
-	appearence.BodyTypeScale = boyDesc.BodyTypeScale;
-	appearence.ProportionScale = boyDesc.ProportionScale;
-
-	return appearence;
+	return humanoidDescription;
 }
 
 function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart): BasePart | undefined {
@@ -317,4 +357,5 @@ async function main() {
 		}
 	});
 }
+
 main();

@@ -1,4 +1,5 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { ReplicatedStorage, UserInputService } from "@rbxts/services";
+import { applySpeed, SPEED, SPEEDS } from "shared/helpers";
 import { playSound } from "shared/sounds";
 
 const Players = game.GetService("Players");
@@ -7,6 +8,9 @@ const [character] = player.Character ? [player.Character] : player.CharacterAdde
 const root = character.WaitForChild("HumanoidRootPart") as Part;
 
 function initCharacter() {
+	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	if (!humanoid) return;
+	applySpeed(SPEEDS.WALK, humanoid);
 	createTool("Axe");
 }
 
@@ -73,3 +77,20 @@ function createTool(toolReplicatedStorageName: string) {
 }
 
 initCharacter();
+
+// Input handlers
+UserInputService.InputBegan.Connect((input, gameProcessed) => {
+	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	if (gameProcessed || !humanoid) return;
+	if (input.KeyCode === Enum.KeyCode.LeftShift) {
+		applySpeed(SPEEDS.RUN, humanoid);
+	}
+});
+
+UserInputService.InputEnded.Connect((input, gameProcessed) => {
+	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	if (gameProcessed || !humanoid) return;
+	if (input.KeyCode === Enum.KeyCode.LeftShift) {
+		applySpeed(SPEEDS.WALK, humanoid);
+	}
+});
