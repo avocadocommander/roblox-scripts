@@ -1,58 +1,45 @@
-import { Players, ReplicatedStorage, Workspace } from "@rbxts/services";
-import { Assignment, getRandomMedievalPhrase, isNPCType, MEDIEVAL_NAMES, NPCType, useAssetId } from "shared/module";
-import { getSeedFromName, makeSeededRandom } from "../shared/seed";
+import { ReplicatedStorage, Workspace } from "@rbxts/services";
+import { Assignment, isNPCType, MEDIEVAL_NAMES, NPCType, useAssetId } from "shared/module";
 import { PlayerDataService } from "shared/common-data-service";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "./player-store";
-import { applySpeed, log, SPEEDS } from "shared/helpers";
+import { log } from "shared/helpers";
+import { NPC } from "shared/npc";
 
 export const enum AnimationState {
 	WALK = "WALK",
 	IDLE = "IDLE",
 }
 
+export enum NPCState {
+	Idle,
+	Patrol,
+	Alert,
+	Talk,
+	Stunned,
+	Dead,
+}
+
+// interface NPC {
+// 	model: Model;
+// 	name: string;
+// 	seed: number;
+// 	humanoid?: Humanoid;
+// 	animator?: Animator;
+// 	stateStack?: NPCState[];
+// 	stateTick?: number;
+// 	activeTracks?: AnimationTrack[];
+// }
+
 function spawnNPC(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCType): Model | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 
-	const npc = npcTemplate.Clone();
-	const name = MEDIEVAL_NAMES[math.random(0, MEDIEVAL_NAMES.size())];
-	const seed = getSeedFromName(name);
+	const npc = new NPC(npcTemplate.Clone(), MEDIEVAL_NAMES[math.random(0, MEDIEVAL_NAMES.size())], npcType);
+	npc.model.PivotTo(new CFrame(spawnPoint.Position));
 
-	if (!seed) {
-		log("Bad seed", "ERROR");
-		return undefined;
-	}
-
-	const rand = makeSeededRandom(seed);
-
-	npc.Name = `(${npcType}) ${name}`;
-	npc.PivotTo(new CFrame(spawnPoint.Position));
-	npc.Parent = Workspace;
-
-	addTalkPrompt(npc, getRandomMedievalPhrase());
-
-	const npcHumanoid = npc.FindFirstChildOfClass("Humanoid");
-
-	if (!npcHumanoid) {
-		log("Humanoid not found for npc spawn", "ERROR");
-		return undefined;
-	}
-	applySpeed(SPEEDS.WALK, npcHumanoid);
-
-	const npcDescription = npcHumanoid.GetAppliedDescription();
-	if (!npcDescription) {
-		log("Appearence unavalialbe for npc spawn", "ERROR");
-		return undefined;
-	}
-	randomizeBodyShape(npcDescription, rand);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand);
-
-	if (!appearenceDescription) return;
-	npcHumanoid.ApplyDescription(appearenceDescription);
-	npc.SetAttribute("Type", npcType);
 	if (routePoints) {
-		patrol(npc, routePoints);
+		patrol(npc.model, routePoints);
 	}
-	return npc;
+	return npc.model;
 }
 
 function patrol(npc: Model, routePoints: BasePart[]) {
@@ -119,17 +106,6 @@ function patrol(npc: Model, routePoints: BasePart[]) {
 	startPatrol();
 }
 
-function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number) {
-	npcDescription.BodyTypeScale = math.round(seed() * 100) / 100; // 0.0 to 1.0
-	npcDescription.ProportionScale = math.round(seed() * 100) / 100;
-
-	npcDescription.HeightScale = math.round((0.9 + seed() * 0.15) * 100) / 100; // 0.9 to 1.05
-	npcDescription.WidthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
-	npcDescription.DepthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
-
-	npcDescription.HeadScale = math.round((0.8 + seed() * 0.4) * 100) / 100; // 0.8 to 1.2
-}
-
 function changeAnimationState(npc: Model, state: AnimationState) {
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
@@ -191,45 +167,6 @@ function getNPCRoutes(): Folder[] {
 	}
 
 	return routes;
-}
-
-function getGenericSeededAppearance(
-	humanoidDescription: HumanoidDescription,
-	seed: () => number,
-): HumanoidDescription | undefined {
-	const faces = [
-		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
-		406001167, 7317765, 616381207,
-	];
-	const hair = ["63690008", "16630147", "2956239660", "2956239660", "5891039736", "4875445470", "6441556987"];
-	const realisticSkinTones: Color3[] = [
-		Color3.fromRGB(255, 224, 189), // Fair
-		Color3.fromRGB(241, 194, 125), // Light
-		Color3.fromRGB(224, 172, 105), // Light tan
-		Color3.fromRGB(198, 134, 66), // Olive
-		Color3.fromRGB(141, 85, 36), // Brown
-		Color3.fromRGB(101, 67, 33), // Dark brown
-		Color3.fromRGB(77, 51, 25), // Very dark
-		Color3.fromRGB(232, 190, 172), // Rosy fair
-		Color3.fromRGB(203, 144, 102), // Warm tan
-		Color3.fromRGB(160, 114, 77), // Deep tan
-	];
-
-	const skinIndex = math.floor(seed() * realisticSkinTones.size()) + 1;
-	const skinColor: Color3 = realisticSkinTones[skinIndex - 1];
-
-	humanoidDescription.HeadColor = skinColor;
-	humanoidDescription.LeftArmColor = skinColor;
-	humanoidDescription.RightArmColor = skinColor;
-	humanoidDescription.LeftLegColor = skinColor;
-	humanoidDescription.RightLegColor = skinColor;
-	humanoidDescription.TorsoColor = skinColor;
-
-	humanoidDescription.Face = faces[math.floor(seed() * faces.size())];
-	humanoidDescription.Head = 746767604;
-	humanoidDescription.HairAccessory = hair[math.floor(seed() * hair.size())];
-
-	return humanoidDescription;
 }
 
 function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart): BasePart | undefined {
