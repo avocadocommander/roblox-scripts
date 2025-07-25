@@ -5,12 +5,18 @@ import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/pla
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
 
+export type NPCStateKeys = "WALKING" | "IDLE";
+export type NPCStateRecord = Record<NPCStateKeys, AnimationTrack>;
+
 export class NPC {
 	displayName: string;
 	seed: number;
 	humanoid!: Humanoid;
 	type: NPCType;
 	model!: Model;
+	state: NPCStateKeys = "IDLE";
+
+	animationInstances!: NPCStateRecord;
 
 	constructor(modelClone: Model, name: string, npcType: NPCType) {
 		modelClone.Parent = Workspace;
@@ -27,6 +33,56 @@ export class NPC {
 		this.humanoid = setHumanoid;
 		this.model = modelClone;
 		this.addTalkPrompt(this.model, "");
+
+		const animator = this.humanoid.WaitForChild("Animator") as Animator;
+		this.animationInstances = this.getAnimationTracks(animator);
+
+		RunService.Heartbeat.Connect(() => {
+			if (!this.animationInstances[this.state].IsPlaying) {
+				this.playAnimation(this.state);
+			}
+		});
+	}
+
+	private getAnimationTracks(animator: Animator): NPCStateRecord {
+		const walkAnim = new Instance("Animation");
+		walkAnim.Name = "WALKING";
+		walkAnim.AnimationId = useAssetId("133708367021932");
+
+		const idleAnim = new Instance("Animation");
+		idleAnim.Name = "IDLE";
+		idleAnim.AnimationId = useAssetId("507766951");
+
+		const walkTrack = animator.LoadAnimation(walkAnim);
+		walkTrack.Priority = Enum.AnimationPriority.Movement;
+		walkTrack.Looped = true;
+
+		const idleTrack = animator.LoadAnimation(idleAnim);
+		idleTrack.Priority = Enum.AnimationPriority.Movement;
+		idleTrack.Looped = true;
+
+		return {
+			WALKING: walkTrack,
+			IDLE: idleTrack,
+		};
+	}
+
+	private playAnimation(animation: NPCStateKeys) {
+		const keys = ["WALKING", "IDLE"] as const;
+		const entries = keys.map((key) => [key, this.animationInstances[key]]);
+
+		const unitPowerMap = keys.reduce(
+			(acc, key) => {
+				acc[key] = this.animationInstances[key];
+				return acc;
+			},
+			{} as Record<NPCStateKeys, AnimationTrack>,
+		);
+		// for (const key of this.animationInstances) {
+		// 	if (key !== animation) {
+		// 		this.animationInstances[key].Stop();
+		// 	}
+		// }
 	}
 
 	public async patrol(routePoints: BasePart[]) {
@@ -44,24 +100,6 @@ export class NPC {
 	}
 
 	private async navigate(goal: Vector3): Promise<void> {
-		const animator = this.humanoid.WaitForChild("Animator") as Animator;
-
-		const walkAnim = new Instance("Animation");
-		walkAnim.Name = "Walk";
-		walkAnim.AnimationId = useAssetId("133708367021932");
-
-		const idleAnim = new Instance("Animation");
-		idleAnim.Name = "Idle";
-		idleAnim.AnimationId = useAssetId("507766951");
-
-		const walkTrack = animator.LoadAnimation(walkAnim);
-		walkTrack.Priority = Enum.AnimationPriority.Movement;
-		walkTrack.Looped = true;
-
-		const idleTrack = animator.LoadAnimation(idleAnim);
-		idleTrack.Priority = Enum.AnimationPriority.Movement;
-		idleTrack.Looped = true;
-
 		const startPosition = this.model.PrimaryPart!.Position;
 		const goalPosition = goal;
 
