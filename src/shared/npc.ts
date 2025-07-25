@@ -38,19 +38,26 @@ export class NPC {
 		this.animationInstances = this.getAnimationTracks(animator);
 
 		RunService.Heartbeat.Connect(() => {
-			if (!this.animationInstances[this.state].IsPlaying) {
-				this.playAnimation(this.state);
+			print(this.state);
+			print("anim state: " + this.animationInstances[this.state]);
+			print("anim state: is playing " + this.animationInstances[this.state].IsPlaying);
+
+			const currentTrack = this.animationInstances[this.state];
+			const otherTrack = this.animationInstances[this.state === "IDLE" ? "WALKING" : "IDLE"];
+			if (!currentTrack.IsPlaying) {
+				otherTrack.Stop();
+				currentTrack.Play();
 			}
 		});
 	}
 
 	private getAnimationTracks(animator: Animator): NPCStateRecord {
 		const walkAnim = new Instance("Animation");
-		walkAnim.Name = "WALKING";
+		walkAnim.Name = "Walking Animation";
 		walkAnim.AnimationId = useAssetId("133708367021932");
 
 		const idleAnim = new Instance("Animation");
-		idleAnim.Name = "IDLE";
+		idleAnim.Name = "Idle Animation";
 		idleAnim.AnimationId = useAssetId("507766951");
 
 		const walkTrack = animator.LoadAnimation(walkAnim);
@@ -69,8 +76,6 @@ export class NPC {
 
 	private playAnimation(animation: NPCStateKeys) {
 		const keys = ["WALKING", "IDLE"] as const;
-		const entries = keys.map((key) => [key, this.animationInstances[key]]);
-
 		const unitPowerMap = keys.reduce(
 			(acc, key) => {
 				acc[key] = this.animationInstances[key];
@@ -78,11 +83,7 @@ export class NPC {
 			},
 			{} as Record<NPCStateKeys, AnimationTrack>,
 		);
-		// for (const key of this.animationInstances) {
-		// 	if (key !== animation) {
-		// 		this.animationInstances[key].Stop();
-		// 	}
-		// }
+		unitPowerMap[animation].Play();
 	}
 
 	public async patrol(routePoints: BasePart[]) {
@@ -119,14 +120,14 @@ export class NPC {
 			const waypoints = path.GetWaypoints();
 			let current = 0;
 
-			idleTrack.Stop();
-			walkTrack.Play();
+			this.state = "WALKING";
 
 			const moveToNextWaypoint = async () => {
 				current++;
 				if (current >= waypoints.size()) {
-					walkTrack.Stop();
-					idleTrack.Play();
+					this.state = "IDLE";
+					this.humanoid.MoveTo(this.model.PrimaryPart!.Position); // Force MoveDirection = zero
+					await this.waitForMove();
 					return;
 				}
 

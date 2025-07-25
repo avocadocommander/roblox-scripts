@@ -71,12 +71,3 @@ export const enum SPEEDS {
 	WALK = "WALK",
 	RUN = "RUN",
 }
-function entries<T extends Record<string, unknown>>(obj: T): [keyof T, T[keyof T]][] {
-	const result = [] as [keyof T, T[keyof T]][];
-	for (const key of obj) {
-		if (obj[key] !== undefined) {
-			result.push([key, obj[key]]);
-		}
-	}
-	return result;
-}
