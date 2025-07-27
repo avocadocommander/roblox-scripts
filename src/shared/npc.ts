@@ -1,6 +1,6 @@
 import { RunService, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCType, useAssetId } from "./module";
+import { NPCData, NPCType, useAssetId } from "./module";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
@@ -12,13 +12,13 @@ export class NPC {
 	displayName: string;
 	seed: number;
 	humanoid!: Humanoid;
-	type: NPCType;
+	type: NPCData;
 	model!: Model;
 	state: NPCStateKeys = "IDLE";
 
 	animationInstances!: NPCStateRecord;
 
-	constructor(modelClone: Model, name: string, npcType: NPCType) {
+	constructor(modelClone: Model, name: string, npcType: NPCData) {
 		modelClone.Parent = Workspace;
 		modelClone.Name = name;
 		this.type = npcType;
@@ -38,10 +38,6 @@ export class NPC {
 		this.animationInstances = this.getAnimationTracks(animator);
 
 		RunService.Heartbeat.Connect(() => {
-			print(this.state);
-			print("anim state: " + this.animationInstances[this.state]);
-			print("anim state: is playing " + this.animationInstances[this.state].IsPlaying);
-
 			const currentTrack = this.animationInstances[this.state];
 			const otherTrack = this.animationInstances[this.state === "IDLE" ? "WALKING" : "IDLE"];
 			if (!currentTrack.IsPlaying) {
@@ -49,41 +45,6 @@ export class NPC {
 				currentTrack.Play();
 			}
 		});
-	}
-
-	private getAnimationTracks(animator: Animator): NPCStateRecord {
-		const walkAnim = new Instance("Animation");
-		walkAnim.Name = "Walking Animation";
-		walkAnim.AnimationId = useAssetId("133708367021932");
-
-		const idleAnim = new Instance("Animation");
-		idleAnim.Name = "Idle Animation";
-		idleAnim.AnimationId = useAssetId("507766951");
-
-		const walkTrack = animator.LoadAnimation(walkAnim);
-		walkTrack.Priority = Enum.AnimationPriority.Movement;
-		walkTrack.Looped = true;
-
-		const idleTrack = animator.LoadAnimation(idleAnim);
-		idleTrack.Priority = Enum.AnimationPriority.Movement;
-		idleTrack.Looped = true;
-
-		return {
-			WALKING: walkTrack,
-			IDLE: idleTrack,
-		};
-	}
-
-	private playAnimation(animation: NPCStateKeys) {
-		const keys = ["WALKING", "IDLE"] as const;
-		const unitPowerMap = keys.reduce(
-			(acc, key) => {
-				acc[key] = this.animationInstances[key];
-				return acc;
-			},
-			{} as Record<NPCStateKeys, AnimationTrack>,
-		);
-		unitPowerMap[animation].Play();
 	}
 
 	public async patrol(routePoints: BasePart[]) {
@@ -155,6 +116,41 @@ export class NPC {
 
 	public getRandomnessFromSeed() {
 		return this.makeSeededRandom(this.seed);
+	}
+
+	private getAnimationTracks(animator: Animator): NPCStateRecord {
+		const walkAnim = new Instance("Animation");
+		walkAnim.Name = "Walking Animation";
+		walkAnim.AnimationId = useAssetId("133708367021932");
+
+		const idleAnim = new Instance("Animation");
+		idleAnim.Name = "Idle Animation";
+		idleAnim.AnimationId = useAssetId("507766951");
+
+		const walkTrack = animator.LoadAnimation(walkAnim);
+		walkTrack.Priority = Enum.AnimationPriority.Movement;
+		walkTrack.Looped = true;
+
+		const idleTrack = animator.LoadAnimation(idleAnim);
+		idleTrack.Priority = Enum.AnimationPriority.Movement;
+		idleTrack.Looped = true;
+
+		return {
+			WALKING: walkTrack,
+			IDLE: idleTrack,
+		};
+	}
+
+	private playAnimation(animation: NPCStateKeys) {
+		const keys = ["WALKING", "IDLE"] as const;
+		const unitPowerMap = keys.reduce(
+			(acc, key) => {
+				acc[key] = this.animationInstances[key];
+				return acc;
+			},
+			{} as Record<NPCStateKeys, AnimationTrack>,
+		);
+		unitPowerMap[animation].Play();
 	}
 
 	private getGenericSeededAppearance(

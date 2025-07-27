@@ -1,5 +1,5 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
-import { Assignment, isNPCType, MEDIEVAL_NAMES, NPCType } from "shared/module";
+import { Assignment, isNPCType, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, NPCData, NPCModel, NPCType } from "shared/module";
 import { log } from "shared/helpers";
 import { NPC } from "shared/npc";
 
@@ -17,10 +17,15 @@ export enum NPCState {
 	Dead,
 }
 
-function spawnNPCAndReturnModel(spawnPoint: BasePart, routePoints: BasePart[], npcType: NPCType): Model {
+function spawnNPCAndReturnModel(
+	spawnPoint: BasePart,
+	routePoints: BasePart[],
+	npcName: string,
+	npcData: NPCData,
+): Model {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 
-	const npc = new NPC(npcTemplate.Clone(), MEDIEVAL_NAMES[math.random(0, MEDIEVAL_NAMES.size())], npcType);
+	const npc = new NPC(npcTemplate.Clone(), npcName, npcData);
 	npc.model.PivotTo(new CFrame(spawnPoint.Position));
 
 	if (routePoints) {
@@ -28,39 +33,6 @@ function spawnNPCAndReturnModel(spawnPoint: BasePart, routePoints: BasePart[], n
 	}
 	return npc.model;
 }
-
-// function changeAnimationState(npc: Model, state: AnimationState) {
-// 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
-// 	if (!humanoid) return;
-
-// 	switch (state) {
-// 		case AnimationState.WALK: {
-// 			let animator = humanoid.FindFirstChildOfClass("Animator");
-// 			if (!animator) {
-// 				animator = new Instance("Animator");
-// 				animator.Parent = humanoid;
-// 			}
-// 			const walkAnimation = new Instance("Animation");
-// 			walkAnimation.Name = "Walk";
-// 			walkAnimation.AnimationId = useAssetId("133708367021932");
-
-// 			const track = animator.LoadAnimation(walkAnimation);
-// 			track.Priority = Enum.AnimationPriority.Movement;
-// 			track.Looped = true;
-// 			track.Play();
-
-// 			break;
-// 		}
-// 		case AnimationState.IDLE: {
-// 			humanoid.ChangeState(Enum.HumanoidStateType.None);
-
-// 			break;
-// 		}
-// 		default: {
-// 			print("ERROR UNKNOWN ANIMATION STATE");
-// 		}
-// 	}
-// }
 
 function getNPCSpawnPoints(): BasePart[] {
 	const spawnPoints = Workspace.WaitForChild("NPCSpawnPoints")
@@ -111,15 +83,12 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 	return nearestSpawn;
 }
 
-function updateAssignments(assigned: Map<string, Assignment>) {
+function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string[]) {
 	const npcRoutes: Folder[] = getNPCRoutes();
 
 	npcRoutes.forEach((npcRoute: Folder) => {
 		if (!assigned.has(npcRoute.Name)) {
 			try {
-				const npcTypeAttribute = npcRoute.GetAttribute("NPCType") as string;
-				const isNPC = isNPCType(npcTypeAttribute);
-				const npcType: NPCType = isNPC ? npcTypeAttribute : "COMMONER";
 				log("Route Names for: " + npcRoute.Name);
 				const routePoints = npcRoute.GetChildren().filter((route) => route.Name === "Route") as Part[];
 				if (routePoints.size() === 0) {
@@ -129,8 +98,27 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
-
-				const npc = spawnNPCAndReturnModel(closestSpawnPointRelativeToRoute, routePoints, npcType);
+				let chosenNpc: NPCData | undefined = undefined;
+				let chosenNpcName: string | undefined = undefined;
+				const getNpc = () => {
+					const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
+					if (!activeNpcs.includes(npcName)) {
+						chosenNpc = MEDIEVAL_NPCS[npcName];
+						chosenNpcName = npcName;
+					} else {
+						getNpc();
+					}
+				};
+				getNpc();
+				if (!chosenNpc || !chosenNpcName) {
+					return;
+				}
+				const npc = spawnNPCAndReturnModel(
+					closestSpawnPointRelativeToRoute,
+					routePoints,
+					chosenNpcName,
+					chosenNpc,
+				);
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				npc.AddTag("Targeted");
 				log(`⚜️ ${npc.Name} assigned to ${npcRoute.Name}`);
@@ -148,11 +136,12 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 }
 
 async function main() {
-	const assigned: Map<string, Assignment> = new Map();
+	const assignedRoutes: Map<string, Assignment> = new Map();
+	const assignedNPCs: string[] = [];
 
 	task.spawn(() => {
 		while (true) {
-			updateAssignments(assigned);
+			updateAssignments(assignedRoutes, assignedNPCs);
 			task.wait(5);
 		}
 	});

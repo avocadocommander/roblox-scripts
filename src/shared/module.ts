@@ -6,7 +6,7 @@ export function useAssetId(id: string) {
 	return `rbxassetid://${id}`;
 }
 
-export const MEDIEVAL_NAMES: string[] = [
+export const MEDIEVAL_NPC_NAMES = [
 	"Alaric Thornblade",
 	"Cedric Ironhart",
 	"Ealdred Crowmere",
@@ -17,25 +17,61 @@ export const MEDIEVAL_NAMES: string[] = [
 	"Leofric Ashenford",
 	"Theobald Vexmere",
 	"Wymond Duskwharf",
-
 	"Faelan Windglen",
 	"Thalion Brightshade",
 	"Elandor Moonvale",
 	"Caerwyn Duskwhisper",
 	"Aerendyl Silversong",
-
 	"Merien Candlewick",
 	"Rowan Emberhollow",
 	"Orren Grimquill",
 	"Thessaly Nightglen",
 	"Vareth Hollowmantle",
-
 	"Tobias Mudfoot",
 	"Edda Barleyroot",
 	"Hamlin Wainwright",
 	"Greta Millstone",
 	"Brenna Woodwhistle",
-];
+] as const;
+export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
+
+export type Position = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
+
+export interface NPCData {
+	gender: "M" | "F";
+	position: Position;
+}
+
+export type NPCModel = Record<MedievalNPCName, NPCData>;
+
+export const MEDIEVAL_NPCS: NPCModel = {
+	"Alaric Thornblade": { gender: "M", position: "Serf" },
+	"Cedric Ironhart": { gender: "M", position: "Royalty" },
+	"Ealdred Crowmere": { gender: "M", position: "Serf" },
+	"Godfrey Blackmoor": { gender: "M", position: "Nobility" },
+	"Aldwyn Ravenshield": { gender: "F", position: "Nobility" },
+	"Baldric Stonehelm": { gender: "M", position: "Merchant" },
+	"Osric Greydawn": { gender: "M", position: "Serf" },
+	"Leofric Ashenford": { gender: "M", position: "Serf" },
+	"Theobald Vexmere": { gender: "M", position: "Serf" },
+	"Wymond Duskwharf": { gender: "M", position: "Serf" },
+	"Faelan Windglen": { gender: "F", position: "Serf" },
+	"Thalion Brightshade": { gender: "M", position: "Serf" },
+	"Elandor Moonvale": { gender: "F", position: "Commoner" },
+	"Caerwyn Duskwhisper": { gender: "M", position: "Commoner" },
+	"Aerendyl Silversong": { gender: "F", position: "Royalty" },
+	"Merien Candlewick": { gender: "F", position: "Serf" },
+	"Rowan Emberhollow": { gender: "F", position: "Serf" },
+	"Orren Grimquill": { gender: "M", position: "Serf" },
+	"Thessaly Nightglen": { gender: "F", position: "Merchant" },
+	"Vareth Hollowmantle": { gender: "M", position: "Nobility" },
+
+	"Tobias Mudfoot": { gender: "M", position: "Serf" },
+	"Edda Barleyroot": { gender: "F", position: "Merchant" },
+	"Hamlin Wainwright": { gender: "M", position: "Serf" },
+	"Greta Millstone": { gender: "F", position: "Serf" },
+	"Brenna Woodwhistle": { gender: "F", position: "Serf" },
+};
 
 export const NPC_TYPE_VALUES = ["GUARD", "TARGET", "MERCHANT", "COMMONER"] as const;
 export type NPCType = (typeof NPC_TYPE_VALUES)[number];
@@ -70,7 +106,6 @@ export function getRandomMedievalPhrase(): string {
 	const index = math.random(1, MEDIEVAL_PHRASES.size());
 	return MEDIEVAL_PHRASES[index - 1];
 }
-
 
 export interface Assignment {
 	npc: Model;
