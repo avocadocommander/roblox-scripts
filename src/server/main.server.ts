@@ -17,23 +17,6 @@ export enum NPCState {
 	Dead,
 }
 
-function spawnNPCAndReturnModel(
-	spawnPoint: BasePart,
-	routePoints: BasePart[],
-	npcName: string,
-	npcData: NPCData,
-): Model {
-	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
-
-	const npc = new NPC(npcTemplate.Clone(), npcName, npcData);
-	npc.model.PivotTo(new CFrame(spawnPoint.Position));
-
-	if (routePoints) {
-		npc.patrol(routePoints);
-	}
-	return npc.model;
-}
-
 function getNPCSpawnPoints(): BasePart[] {
 	const spawnPoints = Workspace.WaitForChild("NPCSpawnPoints")
 		.GetChildren()
@@ -83,46 +66,43 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 	return nearestSpawn;
 }
 
-function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string[]) {
+function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string[], testing = false) {
 	const npcRoutes: Folder[] = getNPCRoutes();
 
 	npcRoutes.forEach((npcRoute: Folder) => {
-		if (!assigned.has(npcRoute.Name)) {
+		if (testing || !assigned.has(npcRoute.Name)) {
 			try {
 				log("Route Names for: " + npcRoute.Name);
 				const routePoints = npcRoute.GetChildren().filter((route) => route.Name === "Route") as Part[];
 				if (routePoints.size() === 0) {
 					throw "No routePoints avaliable under parent route folder";
 				}
-				const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(routePoints[0]);
+				const startingRoutePosition = routePoints[0];
+				const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(startingRoutePosition);
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
 				let chosenNpc: NPCData | undefined = undefined;
 				let chosenNpcName: string | undefined = undefined;
-				const getNpc = () => {
+				const pickAvaliableNameForNPC = () => {
 					const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
 					if (!activeNpcs.includes(npcName)) {
 						chosenNpc = MEDIEVAL_NPCS[npcName];
 						chosenNpcName = npcName;
 					} else {
-						getNpc();
+						pickAvaliableNameForNPC();
 					}
 				};
-				getNpc();
+				pickAvaliableNameForNPC();
 				if (!chosenNpc || !chosenNpcName) {
 					return;
 				}
-				const npc = spawnNPCAndReturnModel(
-					closestSpawnPointRelativeToRoute,
-					routePoints,
-					chosenNpcName,
-					chosenNpc,
-				);
-				assigned.set(npcRoute.Name, { npc, route: npcRoute });
-				npc.AddTag("Targeted");
-				log(`⚜️ ${npc.Name} assigned to ${npcRoute.Name}`);
-				npc.AncestryChanged.Connect((child, parent) => {
+				const npc = new NPC(chosenNpcName, chosenNpc, closestSpawnPointRelativeToRoute.Position, routePoints);
+				npc.model.AddTag("Targeted");
+				if (testing) return;
+				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
+				log(`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name}`);
+				npc.model.AncestryChanged.Connect((child, parent) => {
 					if (!parent) {
 						log(`💀 ${child.Name} was removed from this life and from ${npcRoute.Name}`);
 						assigned.delete(npcRoute.Name);
@@ -136,15 +116,15 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 }
 
 async function main() {
+	const assignmentsActive: boolean = true;
 	const assignedRoutes: Map<string, Assignment> = new Map();
 	const assignedNPCs: string[] = [];
 
 	task.spawn(() => {
-		while (true) {
-			updateAssignments(assignedRoutes, assignedNPCs);
+		while (assignmentsActive) {
+			updateAssignments(assignedRoutes, assignedNPCs, true);
 			task.wait(5);
 		}
 	});
 }
-
 main();

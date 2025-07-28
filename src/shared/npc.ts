@@ -1,4 +1,4 @@
-import { RunService, Workspace } from "@rbxts/services";
+import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
 import { NPCData, NPCType, useAssetId } from "./module";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
@@ -15,31 +15,38 @@ export class NPC {
 	type: NPCData;
 	model!: Model;
 	state: NPCStateKeys = "IDLE";
+	patrolling = true;
 
 	animationInstances!: NPCStateRecord;
 
-	constructor(modelClone: Model, name: string, npcType: NPCData) {
-		modelClone.Parent = Workspace;
+	constructor(name: string, npcType: NPCData, spawnPoint: Vector3, routePoints: BasePart[]) {
+		const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
+		const modelClone = npcTemplate.Clone();
+
 		modelClone.Name = name;
 		this.type = npcType;
-
 		this.displayName = name;
 		this.seed = this.getSeedFromName(name);
-		const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
+		modelClone.Parent = Workspace;
+		this.model = modelClone;
+		this.model.PivotTo(new CFrame(spawnPoint));
+
+		const humanoid = this.model.FindFirstChildOfClass("Humanoid");
 		if (!humanoid) return;
 		const setHumanoid = this.setHumanoidDefaults(humanoid);
 		if (!setHumanoid) return;
 
 		this.humanoid = setHumanoid;
-		this.model = modelClone;
 		this.addTalkPrompt(this.model, "");
 
 		const animator = this.humanoid.WaitForChild("Animator") as Animator;
 		this.animationInstances = this.getAnimationTracks(animator);
 
+		this.patrolLoop(routePoints);
+
 		RunService.Heartbeat.Connect(() => {
 			const currentTrack = this.animationInstances[this.state];
-			const otherTrack = this.animationInstances[this.state === "IDLE" ? "WALKING" : "IDLE"];
+			const otherTrack = this.animationInstances[this.state === "IDLE" ? "WALKING" : "IDLE"]; // TODO WTF is this
 			if (!currentTrack.IsPlaying) {
 				otherTrack.Stop();
 				currentTrack.Play();
@@ -47,19 +54,31 @@ export class NPC {
 		});
 	}
 
-	public async patrol(routePoints: BasePart[]) {
+	private patrolLoop = async (routePoints: BasePart[]) => {
 		let activeRouteIndex = 0;
 
-		while (true) {
+		if (this.patrolling) {
 			if (activeRouteIndex >= routePoints.size() - 1) {
 				activeRouteIndex = 0;
 			} else {
 				activeRouteIndex++;
 			}
 			await this.navigate(routePoints[activeRouteIndex].Position);
-			await Promise.delay(math.random(2, 5)); // Add a noble pause
+			await Promise.delay(math.random(2, 5)); // Noble pause
+			this.patrolLoop(routePoints); // Continue the loop
 		}
-	}
+	};
+
+	// private async startMovementPatterns(routePoints: BasePart[]) {
+	// 	while (true) {
+	// 		if (activeRouteIndex >= routePoints.size() - 1) {
+	// 			activeRouteIndex = 0;
+	// 		} else {
+	// 			activeRouteIndex++;
+	// 		}
+	// 		await Promise.delay(math.random(2, 5)); // Add a noble pause
+	// 	}
+	// }
 
 	private async navigate(goal: Vector3): Promise<void> {
 		const startPosition = this.model.PrimaryPart!.Position;
@@ -142,6 +161,7 @@ export class NPC {
 	}
 
 	private playAnimation(animation: NPCStateKeys) {
+		// TODO Figur eout
 		const keys = ["WALKING", "IDLE"] as const;
 		const unitPowerMap = keys.reduce(
 			(acc, key) => {
