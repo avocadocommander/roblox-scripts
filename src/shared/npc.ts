@@ -19,6 +19,9 @@ export class NPC {
 
 	animationInstances!: NPCStateRecord;
 
+	private previousState: NPCStateKeys | undefined = undefined;
+	private activeRouteIndex = 0;
+
 	constructor(name: string, npcType: NPCData, spawnPoint: Vector3, routePoints: BasePart[]) {
 		const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 		const modelClone = npcTemplate.Clone();
@@ -47,38 +50,26 @@ export class NPC {
 		RunService.Heartbeat.Connect(() => {
 			const currentTrack = this.animationInstances[this.state];
 			const otherTrack = this.animationInstances[this.state === "IDLE" ? "WALKING" : "IDLE"]; // TODO WTF is this
-			if (!currentTrack.IsPlaying) {
+			if (this.state !== this.previousState) {
 				otherTrack.Stop();
 				currentTrack.Play();
+				this.previousState = this.state;
 			}
 		});
 	}
 
 	private patrolLoop = async (routePoints: BasePart[]) => {
-		let activeRouteIndex = 0;
-
 		if (this.patrolling) {
-			if (activeRouteIndex >= routePoints.size() - 1) {
-				activeRouteIndex = 0;
+			if (this.activeRouteIndex >= routePoints.size() - 1) {
+				this.activeRouteIndex = 0;
 			} else {
-				activeRouteIndex++;
+				this.activeRouteIndex++;
 			}
-			await this.navigate(routePoints[activeRouteIndex].Position);
+			await this.navigate(routePoints[this.activeRouteIndex].Position);
 			await Promise.delay(math.random(2, 5)); // Noble pause
 			this.patrolLoop(routePoints); // Continue the loop
 		}
 	};
-
-	// private async startMovementPatterns(routePoints: BasePart[]) {
-	// 	while (true) {
-	// 		if (activeRouteIndex >= routePoints.size() - 1) {
-	// 			activeRouteIndex = 0;
-	// 		} else {
-	// 			activeRouteIndex++;
-	// 		}
-	// 		await Promise.delay(math.random(2, 5)); // Add a noble pause
-	// 	}
-	// }
 
 	private async navigate(goal: Vector3): Promise<void> {
 		const startPosition = this.model.PrimaryPart!.Position;
@@ -160,19 +151,6 @@ export class NPC {
 		};
 	}
 
-	private playAnimation(animation: NPCStateKeys) {
-		// TODO Figur eout
-		const keys = ["WALKING", "IDLE"] as const;
-		const unitPowerMap = keys.reduce(
-			(acc, key) => {
-				acc[key] = this.animationInstances[key];
-				return acc;
-			},
-			{} as Record<NPCStateKeys, AnimationTrack>,
-		);
-		unitPowerMap[animation].Play();
-	}
-
 	private getGenericSeededAppearance(
 		humanoidDescription: HumanoidDescription,
 		seed: () => number,
@@ -182,6 +160,10 @@ export class NPC {
 			8560971, 406001167, 7317765, 616381207,
 		];
 		const hair = ["63690008", "16630147", "2956239660", "2956239660", "5891039736", "4875445470", "6441556987"];
+
+		const hats = ["617605556"];
+		const backs = [];
+
 		const realisticSkinTones: Color3[] = [
 			Color3.fromRGB(255, 224, 189), // Fair
 			Color3.fromRGB(241, 194, 125), // Light
@@ -198,6 +180,8 @@ export class NPC {
 		const skinIndex = math.floor(seed() * realisticSkinTones.size()) + 1;
 		const skinColor: Color3 = realisticSkinTones[skinIndex - 1];
 
+		humanoidDescription.Head = 746767604;
+
 		humanoidDescription.HeadColor = skinColor;
 		humanoidDescription.LeftArmColor = skinColor;
 		humanoidDescription.RightArmColor = skinColor;
@@ -205,11 +189,16 @@ export class NPC {
 		humanoidDescription.RightLegColor = skinColor;
 		humanoidDescription.TorsoColor = skinColor;
 
-		humanoidDescription.Face = faces[math.floor(seed() * faces.size())];
-		humanoidDescription.Head = 746767604;
-		humanoidDescription.HairAccessory = hair[math.floor(seed() * hair.size())];
-
+		humanoidDescription.Face = this.getRandomAssetFromListBasedOnSeed(faces, seed());
+		humanoidDescription.HairAccessory = this.getRandomAssetFromListBasedOnSeed(hair, seed());
+		humanoidDescription.HatAccessory = this.getRandomAssetFromListBasedOnSeed(hats, seed());
+		humanoidDescription.BackAccessory = this.getRandomAssetFromListBasedOnSeed(backs, seed());
+		humanoidDescription.access
 		return humanoidDescription;
+	}
+
+	private getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
+		return list[math.floor(seed * list.size())];
 	}
 
 	private setHumanoidDefaults(humanoid: Humanoid): Humanoid | undefined {

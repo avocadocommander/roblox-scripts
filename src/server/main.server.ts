@@ -70,7 +70,7 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 	const npcRoutes: Folder[] = getNPCRoutes();
 
 	npcRoutes.forEach((npcRoute: Folder) => {
-		if (testing || !assigned.has(npcRoute.Name)) {
+		if (!assigned.has(npcRoute.Name)) {
 			try {
 				log("Route Names for: " + npcRoute.Name);
 				const routePoints = npcRoute.GetChildren().filter((route) => route.Name === "Route") as Part[];
@@ -99,7 +99,6 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				}
 				const npc = new NPC(chosenNpcName, chosenNpc, closestSpawnPointRelativeToRoute.Position, routePoints);
 				npc.model.AddTag("Targeted");
-				if (testing) return;
 				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
 				log(`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name}`);
 				npc.model.AncestryChanged.Connect((child, parent) => {
@@ -122,7 +121,7 @@ async function main() {
 
 	task.spawn(() => {
 		while (assignmentsActive) {
-			updateAssignments(assignedRoutes, assignedNPCs, true);
+			updateAssignments(assignedRoutes, assignedNPCs);
 			task.wait(5);
 		}
 	});
