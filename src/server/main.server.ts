@@ -1,7 +1,7 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { Assignment, isNPCType, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, NPCData, NPCModel, NPCType } from "shared/module";
 import { log } from "shared/helpers";
-import { NPC } from "shared/npc";
+import { createNPCModelAndGenerateHumanoid, NPC, patrolLoop } from "shared/npc";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -97,7 +97,13 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				if (!chosenNpc || !chosenNpcName) {
 					return;
 				}
-				const npc = new NPC(chosenNpcName, chosenNpc, closestSpawnPointRelativeToRoute.Position, routePoints);
+				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(chosenNpcName, "Commoner");
+
+				if (!npc) {
+					error("Not able to create NPC");
+				}
+
+				patrolLoop(npc.humanoid, npc.model.PrimaryPart!.Position, routePoints);
 				npc.model.AddTag("Targeted");
 				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
 				log(`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name}`);
