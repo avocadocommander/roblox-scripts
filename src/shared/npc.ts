@@ -162,7 +162,6 @@ export class NPC {
 		const hair = ["63690008", "16630147", "2956239660", "2956239660", "5891039736", "4875445470", "6441556987"];
 
 		const hats = ["617605556"];
-		const backs = [];
 
 		const realisticSkinTones: Color3[] = [
 			Color3.fromRGB(255, 224, 189), // Fair
@@ -192,8 +191,7 @@ export class NPC {
 		humanoidDescription.Face = this.getRandomAssetFromListBasedOnSeed(faces, seed());
 		humanoidDescription.HairAccessory = this.getRandomAssetFromListBasedOnSeed(hair, seed());
 		humanoidDescription.HatAccessory = this.getRandomAssetFromListBasedOnSeed(hats, seed());
-		humanoidDescription.BackAccessory = this.getRandomAssetFromListBasedOnSeed(backs, seed());
-		humanoidDescription.access
+		//humanoidDescription.BackAccessory = this.getRandomAssetFromListBasedOnSeed(backs, seed());
 		return humanoidDescription;
 	}
 
