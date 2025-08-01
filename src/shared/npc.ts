@@ -1,6 +1,6 @@
-import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
+import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCData, NPCType, Position, useAssetId } from "./module";
+import { Position, useAssetId } from "./module";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
@@ -64,13 +64,13 @@ export function getGenericSeededAppearance(
 		"2956239660",
 	];
 
-	const hats = ["617605556", "3403874988", "607702162", "417457461", "48474313", "607700713"];
-	const backs = ["98752422639730"];
-	const legs = [398634487, 398635338, 382538503, 382537950];
+	// const hats = ["617605556", "3403874988", "607702162", "417457461", "48474313", "607700713"];
+	// const backs = ["98752422639730"];
+	// const legs = [398634487, 398635338, 382538503, 382537950];
 
-	const torsos = [607785314, 398634295, 382537085, 382538059, 144076358];
-	const waist = ["7957171682", "7074727236", "7074727585", "7074727897"];
-	const pants = [398634487, 398635338, 382538503, 382537950];
+	// const torsos = [607785314, 398634295, 382537085, 382538059, 144076358];
+	// const waist = ["7957171682", "7074727236", "7074727585", "7074727897"];
+	// const pants = [398634487, 398635338, 382538503, 382537950];
 
 	const realisticSkinTones: Color3[] = [
 		Color3.fromRGB(255, 224, 189), // Fair
@@ -253,13 +253,13 @@ export async function navigate(goal: Vector3, startPosition: Vector3, npc: NPC):
 		const waypoints = path.GetWaypoints();
 		let current = 0;
 
-		setState("WALKING", npc);
+		setState("WALKING", npc); // TODO animation is wonk
 
 		const moveToNextWaypoint = async () => {
 			current++;
 			if (current >= waypoints.size()) {
-				setState("IDLE", npc);
-				npc.humanoid.MoveTo(startPosition); // Force MoveDirection = zero
+				setState("IDLE", npc); // TODO Should not idle while walking
+				npc.humanoid.MoveTo(startPosition); // TODO this is bringing npcs back to their spanw
 				await waitForMove(npc.humanoid);
 				return;
 			}

@@ -1,14 +1,7 @@
-import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
-import { Assignment, isNPCType, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, NPCData, NPCModel, NPCType } from "shared/module";
+import { Workspace } from "@rbxts/services";
+import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "shared/module";
 import { log } from "shared/helpers";
-import {
-	addTalkPrompt,
-	createNPCModelAndGenerateHumanoid,
-	NPC,
-	assignNpcToRoute,
-	getAnimationTracks,
-	NPCStateKeys,
-} from "shared/npc";
+import { createNPCModelAndGenerateHumanoid, NPC, assignNpcToRoute } from "shared/npc";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -85,11 +78,14 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 					throw "No routePoints avaliable under parent route folder";
 				}
 				const startingRoutePosition = routePoints[0];
-				const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(startingRoutePosition);
+				const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(startingRoutePosition); // TODO somethings up here
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
 				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
+				// TODO
+				//   14:47:16.858  ServerScriptService.TS.main:108: ReplicatedStorage.TS.helpers:59: 🚨 Spawn failed for NPC: ServerScriptService.TS.main:134: attempt to index nil with 'gender'  -  Server - RuntimeLib:228
+
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 					npcName,
 					MEDIEVAL_NPCS[npcName].gender,
