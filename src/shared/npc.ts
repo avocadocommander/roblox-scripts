@@ -1,6 +1,6 @@
 import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCData, NPCType, useAssetId } from "./module";
+import { NPCData, NPCType, Position, useAssetId } from "./module";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
@@ -10,50 +10,56 @@ export interface NPC {
 	seed: number;
 	rarity: Rarity;
 	humanoid: Humanoid;
-	// state: NPCStateKeys;
-	// animationInstances: NPCStateRecord;
+	state: NPCStateKeys;
+	previousState: NPCStateKeys;
+	animationInstances: NPCStateRecord;
 	model: Model;
 }
 
-export function createNPCModelAndGenerateHumanoid(name: string, rarity: Rarity): NPC | undefined {
+export function createNPCModelAndGenerateHumanoid(name: string, gender: Gender, position: Position): NPC | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
 	modelClone.Name = name;
+
 	modelClone.Parent = Workspace;
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
-	const setHumanoid = setHumanoidDefaults(humanoid, getSeedFromName(name));
-	if (!setHumanoid) return;
+	setHumanoidDefaults(humanoid, getSeedFromName(name), gender);
+	addTalkPrompt(modelClone, "");
+
+	const animator = humanoid.WaitForChild("Animator") as Animator;
+	const animationInstances = getAnimationTracks(animator);
 
 	return {
 		name,
 		seed: getSeedFromName(name),
-		rarity,
+		rarity: position,
 		humanoid,
 		model: modelClone,
+		state: "IDLE",
+		previousState: "IDLE",
+		animationInstances,
 	};
 }
 
 export function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
+	gender: Gender,
 ): HumanoidDescription | undefined {
 	const faces = [
 		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
 		406001167, 7317765, 616381207,
 	];
-	const hair = [
-		"63690008",
+	const femaleHair = ["451220849", "2956239660"];
+	const malehair = [
 		"16630147",
-		"2956239660",
-		"2956239660",
 		"5891039736",
 		"4875445470",
 		"6441556987",
 		"63690008",
 		"451221329",
-		"451220849",
 		"376548738",
 		"2956239660",
 	];
@@ -79,6 +85,31 @@ export function getGenericSeededAppearance(
 		Color3.fromRGB(160, 114, 77), // Deep tan
 	];
 
+	const shirtColors: Color3[] = [
+		Color3.fromRGB(139, 69, 19), // Saddle Brown
+		Color3.fromRGB(160, 82, 45), // Sienna
+		Color3.fromRGB(205, 133, 63), // Peru
+		Color3.fromRGB(222, 184, 135), // Burlywood
+		Color3.fromRGB(245, 245, 220), // Beige Linen
+		Color3.fromRGB(112, 128, 144), // Slate Gray
+		Color3.fromRGB(119, 136, 153), // Light Slate
+		Color3.fromRGB(47, 79, 79), // Dark Slate Gray
+		Color3.fromRGB(255, 248, 220), // Cornsilk (soft cream)
+		Color3.fromRGB(150, 111, 51), // Raw Umber
+	];
+	const pantColors: Color3[] = [
+		Color3.fromRGB(54, 42, 28), // Leather Brown
+		Color3.fromRGB(70, 53, 34), // Mudstone
+		Color3.fromRGB(105, 89, 72), // Faded Earth
+		Color3.fromRGB(80, 80, 80), // Charcoal Gray
+		Color3.fromRGB(30, 30, 30), // Soot Black
+		Color3.fromRGB(102, 51, 0), // Chestnut
+		Color3.fromRGB(85, 107, 47), // Olive Drab
+		Color3.fromRGB(89, 74, 60), // Bark
+		Color3.fromRGB(67, 56, 47), // Ashen Clay
+		Color3.fromRGB(153, 101, 21), // Golden Oak
+	];
+
 	const skinIndex = math.floor(seed() * realisticSkinTones.size()) + 1;
 	const skinColor: Color3 = realisticSkinTones[skinIndex - 1];
 
@@ -92,12 +123,16 @@ export function getGenericSeededAppearance(
 	humanoidDescription.TorsoColor = skinColor;
 
 	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(faces, seed());
-	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(hair, seed());
-	humanoidDescription.HatAccessory = getRandomAssetFromListBasedOnSeed(hats, seed());
-	humanoidDescription.BackAccessory = getRandomAssetFromListBasedOnSeed(backs, seed());
-	humanoidDescription.Torso = getRandomAssetFromListBasedOnSeed(torsos, seed());
-	humanoidDescription.WaistAccessory = getRandomAssetFromListBasedOnSeed(waist, seed());
-	humanoidDescription.Pants = getRandomAssetFromListBasedOnSeed(pants, seed());
+	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
+		gender === "F" ? femaleHair : malehair,
+		seed(),
+	);
+	humanoidDescription.TorsoColor = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
+	humanoidDescription.RightArmColor = humanoidDescription.TorsoColor;
+	humanoidDescription.LeftArmColor = humanoidDescription.TorsoColor;
+
+	humanoidDescription.RightLegColor = getRandomAssetFromListBasedOnSeed(pantColors, seed());
+	humanoidDescription.LeftLegColor = humanoidDescription.RightLegColor;
 
 	return humanoidDescription;
 }
@@ -106,7 +141,7 @@ export function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T
 	return list[math.floor(seed * list.size())];
 }
 
-export function setHumanoidDefaults(humanoid: Humanoid, seed: number): Humanoid | undefined {
+export function setHumanoidDefaults(humanoid: Humanoid, seed: number, gender: Gender): Humanoid | undefined {
 	humanoid.WalkSpeed = 6;
 	const npcDescription = humanoid.GetAppliedDescription();
 	if (!npcDescription) {
@@ -115,7 +150,7 @@ export function setHumanoidDefaults(humanoid: Humanoid, seed: number): Humanoid 
 	}
 	const rand = makeSeededRandom(seed);
 	randomizeBodyShape(npcDescription, rand);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, gender);
 
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
@@ -183,8 +218,8 @@ export function addTalkPrompt(npc: Model, message: string) {
 	});
 }
 
-export const patrolLoop = async (
-	humanoid: Humanoid,
+export const assignNpcToRoute = async (
+	npc: NPC,
 	startingPosition: Vector3,
 	routePoints: BasePart[],
 	activeRouteIndex = 0,
@@ -194,12 +229,12 @@ export const patrolLoop = async (
 	} else {
 		activeRouteIndex++;
 	}
-	await navigate(routePoints[activeRouteIndex].Position, startingPosition, humanoid);
+	await navigate(routePoints[activeRouteIndex].Position, startingPosition, npc);
 	await Promise.delay(math.random(2, 5));
-	patrolLoop(humanoid, startingPosition, routePoints, activeRouteIndex); // TODO idk about that activeRouteIndex
+	assignNpcToRoute(npc, startingPosition, routePoints, activeRouteIndex);
 };
 
-export async function navigate(goal: Vector3, startPosition: Vector3, humanoid: Humanoid): Promise<void> {
+export async function navigate(goal: Vector3, startPosition: Vector3, npc: NPC): Promise<void> {
 	const goalPosition = goal;
 
 	const path = PathfindingService.CreatePath({
@@ -218,20 +253,23 @@ export async function navigate(goal: Vector3, startPosition: Vector3, humanoid: 
 		const waypoints = path.GetWaypoints();
 		let current = 0;
 
+		setState("WALKING", npc);
+
 		const moveToNextWaypoint = async () => {
 			current++;
 			if (current >= waypoints.size()) {
-				humanoid.MoveTo(startPosition); // Force MoveDirection = zero
-				await waitForMove(humanoid);
+				setState("IDLE", npc);
+				npc.humanoid.MoveTo(startPosition); // Force MoveDirection = zero
+				await waitForMove(npc.humanoid);
 				return;
 			}
 
 			const wp = waypoints[current];
-			humanoid.MoveTo(wp.Position);
-			await waitForMove(humanoid);
+			npc.humanoid.MoveTo(wp.Position);
+			await waitForMove(npc.humanoid);
 
 			if (wp.Action === Enum.PathWaypointAction.Jump) {
-				humanoid.Jump = true;
+				npc.humanoid.Jump = true;
 			}
 			await moveToNextWaypoint();
 		};
@@ -240,6 +278,37 @@ export async function navigate(goal: Vector3, startPosition: Vector3, humanoid: 
 	} else {
 		warn("Pathfinding failed, noble Lord!");
 	}
+}
+
+export function setState(newState: NPCStateKeys, npc: NPC) {
+	if (npc.state === newState) return;
+
+	npc.animationInstances[npc.state].Stop(); // Stop current
+	npc.state = newState;
+	npc.animationInstances[npc.state].Play(); // Play new
+}
+
+export function getAnimationTracks(animator: Animator): NPCStateRecord {
+	const walkAnim = new Instance("Animation");
+	walkAnim.Name = "Walking Animation";
+	walkAnim.AnimationId = useAssetId("133708367021932");
+
+	const idleAnim = new Instance("Animation");
+	idleAnim.Name = "Idle Animation";
+	idleAnim.AnimationId = useAssetId("507766951");
+
+	const walkTrack = animator.LoadAnimation(walkAnim);
+	walkTrack.Priority = Enum.AnimationPriority.Movement;
+	walkTrack.Looped = true;
+
+	const idleTrack = animator.LoadAnimation(idleAnim);
+	idleTrack.Priority = Enum.AnimationPriority.Movement;
+	idleTrack.Looped = true;
+
+	return {
+		WALKING: walkTrack,
+		IDLE: idleTrack,
+	};
 }
 
 export function waitForMove(humanoid: Humanoid): Promise<void> {

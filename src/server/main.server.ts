@@ -1,7 +1,14 @@
-import { ReplicatedStorage, Workspace } from "@rbxts/services";
+import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
 import { Assignment, isNPCType, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, NPCData, NPCModel, NPCType } from "shared/module";
 import { log } from "shared/helpers";
-import { createNPCModelAndGenerateHumanoid, NPC, patrolLoop } from "shared/npc";
+import {
+	addTalkPrompt,
+	createNPCModelAndGenerateHumanoid,
+	NPC,
+	assignNpcToRoute,
+	getAnimationTracks,
+	NPCStateKeys,
+} from "shared/npc";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -82,31 +89,21 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
-				let chosenNpc: NPCData | undefined = undefined;
-				let chosenNpcName: string | undefined = undefined;
-				const pickAvaliableNameForNPC = () => {
-					const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
-					if (!activeNpcs.includes(npcName)) {
-						chosenNpc = MEDIEVAL_NPCS[npcName];
-						chosenNpcName = npcName;
-					} else {
-						pickAvaliableNameForNPC();
-					}
-				};
-				pickAvaliableNameForNPC();
-				if (!chosenNpc || !chosenNpcName) {
-					return;
-				}
-				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(chosenNpcName, "Commoner");
+				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
+				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
+					npcName,
+					MEDIEVAL_NPCS[npcName].gender,
+					MEDIEVAL_NPCS[npcName].position,
+				);
 
 				if (!npc) {
 					error("Not able to create NPC");
 				}
 
-				patrolLoop(npc.humanoid, npc.model.PrimaryPart!.Position, routePoints);
-				npc.model.AddTag("Targeted");
+				assignNpcToRoute(npc, npc.model.PrimaryPart!.Position, routePoints);
 				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
 				log(`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name}`);
+
 				npc.model.AncestryChanged.Connect((child, parent) => {
 					if (!parent) {
 						log(`💀 ${child.Name} was removed from this life and from ${npcRoute.Name}`);

@@ -36,9 +36,9 @@ export const MEDIEVAL_NPC_NAMES = [
 export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
 
 export type Position = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
-
+export type Gender = "M" | "F";
 export interface NPCData {
-	gender: "M" | "F";
+	gender: Gender;
 	position: Position;
 }
 
@@ -65,7 +65,6 @@ export const MEDIEVAL_NPCS: NPCModel = {
 	"Orren Grimquill": { gender: "M", position: "Serf" },
 	"Thessaly Nightglen": { gender: "F", position: "Merchant" },
 	"Vareth Hollowmantle": { gender: "M", position: "Nobility" },
-
 	"Tobias Mudfoot": { gender: "M", position: "Serf" },
 	"Edda Barleyroot": { gender: "F", position: "Merchant" },
 	"Hamlin Wainwright": { gender: "M", position: "Serf" },
