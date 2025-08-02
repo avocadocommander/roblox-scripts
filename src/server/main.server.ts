@@ -53,6 +53,7 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 		return undefined;
 	}
 	const spawnPoints = getNPCSpawnPoints();
+	print(`Spawn points: count ${spawnPoints.size()}`);
 	let nearestSpawn: BasePart = spawnPoints[0];
 	let shortestDistance = math.huge;
 
@@ -77,15 +78,19 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				if (routePoints.size() === 0) {
 					throw "No routePoints avaliable under parent route folder";
 				}
-				const startingRoutePosition = routePoints[0];
-				const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(startingRoutePosition); // TODO somethings up here
+				const firstPositionInRoutePoints = routePoints[0];
+				const closestSpawnPointRelativeToRoute =
+					getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints); // TODO somethings up here
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
-				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size())];
+				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size() - 1)];
 				// TODO
 				//   14:47:16.858  ServerScriptService.TS.main:108: ReplicatedStorage.TS.helpers:59: 🚨 Spawn failed for NPC: ServerScriptService.TS.main:134: attempt to index nil with 'gender'  -  Server - RuntimeLib:228
 
+				if (!MEDIEVAL_NPCS[npcName]) {
+					error(`Not able to frekin get das gendra ${npcName}`);
+				}
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 					npcName,
 					MEDIEVAL_NPCS[npcName].gender,

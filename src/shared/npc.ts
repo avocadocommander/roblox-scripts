@@ -123,10 +123,10 @@ export function getGenericSeededAppearance(
 	humanoidDescription.TorsoColor = skinColor;
 
 	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(faces, seed());
-	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
-		gender === "F" ? femaleHair : malehair,
-		seed(),
-	);
+	// humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
+	// 	gender === "F" ? femaleHair : malehair,
+	// 	seed(),
+	// );
 	humanoidDescription.TorsoColor = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
 	humanoidDescription.RightArmColor = humanoidDescription.TorsoColor;
 	humanoidDescription.LeftArmColor = humanoidDescription.TorsoColor;
