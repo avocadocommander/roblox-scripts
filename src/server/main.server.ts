@@ -21,7 +21,7 @@ function getNPCSpawnPoints(): BasePart[] {
 	const spawnPoints = Workspace.WaitForChild("NPCSpawnPoints")
 		.GetChildren()
 		.filter((child): child is BasePart => {
-			return child.IsA("BasePart") && child.Name === "NPCSpawn";
+			return child.IsA("BasePart");
 		});
 
 	if (spawnPoints.size() === 0) {
@@ -53,8 +53,7 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 		return undefined;
 	}
 	const spawnPoints = getNPCSpawnPoints();
-	print(`Spawn points: count ${spawnPoints.size()}`);
-	let nearestSpawn: BasePart = spawnPoints[0];
+	let nearestSpawn: BasePart | undefined = undefined;
 	let shortestDistance = math.huge;
 
 	spawnPoints.forEach((spawnPoint: BasePart) => {
@@ -73,7 +72,6 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 	npcRoutes.forEach((npcRoute: Folder) => {
 		if (!assigned.has(npcRoute.Name)) {
 			try {
-				log("Route Names for: " + npcRoute.Name);
 				const routePoints = npcRoute.GetChildren().filter((route) => route.Name === "Route") as Part[];
 				if (routePoints.size() === 0) {
 					throw "No routePoints avaliable under parent route folder";
@@ -85,9 +83,6 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 					throw "Close spawnpoint not located";
 				}
 				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size() - 1)];
-				// TODO
-				//   14:47:16.858  ServerScriptService.TS.main:108: ReplicatedStorage.TS.helpers:59: 🚨 Spawn failed for NPC: ServerScriptService.TS.main:134: attempt to index nil with 'gender'  -  Server - RuntimeLib:228
-
 				if (!MEDIEVAL_NPCS[npcName]) {
 					error(`Not able to frekin get das gendra ${npcName}`);
 				}
@@ -101,9 +96,13 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 					error("Not able to create NPC");
 				}
 
-				assignNpcToRoute(npc, npc.model.PrimaryPart!.Position, routePoints);
+				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position));
+
+				assignNpcToRoute(npc, closestSpawnPointRelativeToRoute.Position, routePoints);
 				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
-				log(`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name}`);
+				log(
+					`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`,
+				);
 
 				npc.model.AncestryChanged.Connect((child, parent) => {
 					if (!parent) {

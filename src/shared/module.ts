@@ -110,3 +110,5 @@ export interface Assignment {
 	npc: Model;
 	route: Folder;
 }
+
+export type RoutePace = "None" | "Smell the Roses" | "Dilly" | "Journey" | "No Chill";
