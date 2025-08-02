@@ -1,3 +1,11 @@
+// NNEDS: README for this
+// FEATURE: Day night mode
+// FEATURE: Routes having different speeds and behaviors
+// FEATURE: Merchants
+// FEATURE: UI Kill Book
+// FEATURE: UI Wanted Poster
+// FEATURE:
+
 import { Workspace } from "@rbxts/services";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "shared/module";
 import { log } from "shared/helpers";
