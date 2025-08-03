@@ -1,13 +1,5 @@
-// NNEDS: README for this
-// FEATURE: Day night mode
-// FEATURE: Routes having different speeds and behaviors
-// FEATURE: Merchants
-// FEATURE: UI Kill Book
-// FEATURE: UI Wanted Poster
-// FEATURE:
-
 import { Workspace } from "@rbxts/services";
-import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "shared/module";
+import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, RoutePace } from "shared/module";
 import { log } from "shared/helpers";
 import { createNPCModelAndGenerateHumanoid, NPC, assignNpcToRoute } from "shared/npc";
 
@@ -74,7 +66,7 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 	return nearestSpawn;
 }
 
-function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string[], testing = false) {
+function updateAssignments(assigned: Map<string, Assignment>) {
 	const npcRoutes: Folder[] = getNPCRoutes();
 
 	npcRoutes.forEach((npcRoute: Folder) => {
@@ -84,9 +76,10 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				if (routePoints.size() === 0) {
 					throw "No routePoints avaliable under parent route folder";
 				}
+				const routePace: RoutePace = (npcRoute.GetAttribute("Pace") as RoutePace) ?? "Medium";
 				const firstPositionInRoutePoints = routePoints[0];
 				const closestSpawnPointRelativeToRoute =
-					getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints); // TODO somethings up here
+					getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints);
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
@@ -94,18 +87,20 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 				if (!MEDIEVAL_NPCS[npcName]) {
 					error(`Not able to frekin get das gendra ${npcName}`);
 				}
+
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
+					// Create NPCs
 					npcName,
 					MEDIEVAL_NPCS[npcName].gender,
 					MEDIEVAL_NPCS[npcName].position,
+					routePace,
 				);
 
 				if (!npc) {
 					error("Not able to create NPC");
 				}
 
-				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position));
-
+				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position)); // Spawn
 				assignNpcToRoute(npc, closestSpawnPointRelativeToRoute.Position, routePoints);
 				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
 				log(
@@ -128,11 +123,10 @@ function updateAssignments(assigned: Map<string, Assignment>, activeNpcs: string
 async function main() {
 	const assignmentsActive: boolean = true;
 	const assignedRoutes: Map<string, Assignment> = new Map();
-	const assignedNPCs: string[] = [];
 
 	task.spawn(() => {
 		while (assignmentsActive) {
-			updateAssignments(assignedRoutes, assignedNPCs);
+			updateAssignments(assignedRoutes);
 			task.wait(5);
 		}
 	});

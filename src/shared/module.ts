@@ -151,4 +151,4 @@ export interface Assignment {
 	route: Folder;
 }
 
-export type RoutePace = "None" | "Smell the Roses" | "Dilly" | "Journey" | "No Chill";
+export type RoutePace = "Slow" | "Medium" | "Fast";

@@ -1,6 +1,6 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { Position, useAssetId } from "./module";
+import { Position, RoutePace, useAssetId } from "./module";
 import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
@@ -16,7 +16,12 @@ export interface NPC {
 	model: Model;
 }
 
-export function createNPCModelAndGenerateHumanoid(name: string, gender: Gender, position: Position): NPC | undefined {
+export function createNPCModelAndGenerateHumanoid(
+	name: string,
+	gender: Gender,
+	position: Position,
+	pace: RoutePace,
+): NPC | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
 	modelClone.Name = name;
@@ -26,6 +31,7 @@ export function createNPCModelAndGenerateHumanoid(name: string, gender: Gender, 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 	setHumanoidDefaults(humanoid, getSeedFromName(name), gender);
+	setHumanoidPace(humanoid, pace);
 	addTalkPrompt(modelClone, "");
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
@@ -141,6 +147,15 @@ export function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T
 	return list[math.floor(seed * list.size())];
 }
 
+function setHumanoidPace(humanoid: Humanoid, pace: RoutePace) {
+	const paceSpeedMap: Record<RoutePace, number> = {
+		Slow: math.random(3, 4),
+		Medium: math.random(5, 6),
+		Fast: math.random(7, 8),
+	};
+	humanoid.WalkSpeed = paceSpeedMap[pace];
+}
+
 export function setHumanoidDefaults(humanoid: Humanoid, seed: number, gender: Gender): Humanoid | undefined {
 	humanoid.WalkSpeed = 6;
 	const npcDescription = humanoid.GetAppliedDescription();
@@ -237,7 +252,7 @@ export const assignNpcToRoute = async (
 		activeRouteIndex++;
 	}
 	await navigate(routePoints[activeRouteIndex].Position, startingPosition, npc, routePoints[0].Position);
-	await Promise.delay(math.random(10, 200));
+	await Promise.delay(math.random(5, 50));
 
 	assignNpcToRoute(npc, routePoints[activeRouteIndex].Position, routePoints, activeRouteIndex);
 };
@@ -253,7 +268,7 @@ export async function navigate(
 		AgentRadius: 2,
 		AgentHeight: 5,
 		AgentCanJump: true,
-		AgentCanClimb: true,
+		AgentCanClimb: false,
 		Costs: {
 			Water: 100,
 		},
@@ -278,7 +293,7 @@ export async function navigate(
 		};
 		await moveToNextWaypoint();
 	} else {
-		warn("Pathfinding failed, noble Lord!");
+		// warn("Pathfinding failed, noble Lord!");
 	}
 }
 
