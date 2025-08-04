@@ -26,6 +26,7 @@
   "dependencies": {
     "@rbxts/rx": "^7.8.2-rc.1",
     "@rbxts/services": "^1.5.5",
+    "@rbxts/signal": "^1.1.1",
     "rojo": "^1.0.2"
   }
 }

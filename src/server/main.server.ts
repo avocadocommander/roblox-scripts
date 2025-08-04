@@ -1,7 +1,8 @@
 import { Workspace } from "@rbxts/services";
-import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, RoutePace } from "shared/module";
-import { log } from "shared/helpers";
+import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, MedievalNPCName, RoutePace } from "shared/module";
+import { getActiveNPCNames, log } from "shared/helpers";
 import { createNPCModelAndGenerateHumanoid, NPC, assignNpcToRoute } from "shared/npc";
+import { bountyService } from "shared/bounty";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -69,6 +70,11 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 function updateAssignments(assigned: Map<string, Assignment>) {
 	const npcRoutes: Folder[] = getNPCRoutes();
 
+	if (npcRoutes.size() > [...MEDIEVAL_NPC_NAMES].size()) {
+		error(`Route Size: ${npcRoutes.size()} > NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`);
+	}
+	print(`Route Size: ${npcRoutes.size()} | NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`);
+
 	npcRoutes.forEach((npcRoute: Folder) => {
 		if (!assigned.has(npcRoute.Name)) {
 			try {
@@ -83,13 +89,15 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
 				}
-				const npcName = MEDIEVAL_NPC_NAMES[math.random(0, MEDIEVAL_NPC_NAMES.size() - 1)];
-				if (!MEDIEVAL_NPCS[npcName]) {
-					error(`Not able to frekin get das gendra ${npcName}`);
-				}
 
+				const takenNames: string[] = getActiveNPCNames(assigned);
+				const avaliableNames = MEDIEVAL_NPC_NAMES.filter((name: string) => !takenNames.includes(name));
+				const npcName = avaliableNames[math.random(0, avaliableNames.size() - 1)];
+
+				if (!npcName) {
+					error(`${npcName} name is bad`);
+				}
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
-					// Create NPCs
 					npcName,
 					MEDIEVAL_NPCS[npcName].gender,
 					MEDIEVAL_NPCS[npcName].position,
@@ -102,7 +110,7 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 
 				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position)); // Spawn
 				assignNpcToRoute(npc, closestSpawnPointRelativeToRoute.Position, routePoints);
-				assigned.set(npcRoute.Name, { npc: npc.model, route: npcRoute });
+				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				log(
 					`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`,
 				);
@@ -120,6 +128,20 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 	});
 }
 
+function getNames(names: typeof MEDIEVAL_NPC_NAMES, max: number): string[] {
+	const uniqueNames = new Set<string>();
+	const available = [...names];
+
+	while (uniqueNames.size() < max && available.size() > 0) {
+		const index = math.random(0, available.size() - 1);
+		const name = available[index];
+		uniqueNames.add(name);
+		available.remove(index);
+	}
+
+	return [...uniqueNames];
+}
+
 async function main() {
 	const assignmentsActive: boolean = true;
 	const assignedRoutes: Map<string, Assignment> = new Map();
@@ -130,5 +152,26 @@ async function main() {
 			task.wait(5);
 		}
 	});
+
+	task.spawn(() => {
+		while (assignmentsActive) {
+			task.wait(10);
+
+			updateBounty(assignedRoutes);
+		}
+	});
+}
+export function updateBounty(assignedRoutes: Map<string, Assignment>) {
+	const activeNPCs = getActiveNPCNames(assignedRoutes);
+	const randomNPCTarget = activeNPCs[math.random(0, activeNPCs.size() - 1)];
+	for (const [key, val] of assignedRoutes) {
+		warn(`Key: ${key}`);
+	}
+	const npc: NPC | undefined = assignedRoutes.get(randomNPCTarget)?.npc;
+
+	if (npc) {
+		warn("setting bounty");
+		bountyService.setBountyOnNPC(npc);
+	}
 }
 main();

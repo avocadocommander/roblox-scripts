@@ -1,3 +1,5 @@
+import { Assignment } from "./module";
+
 export function isArray(value: unknown): boolean {
 	if (typeOf(value) === "table") {
 		const tbl = value as Record<number, unknown>;
@@ -70,4 +72,12 @@ export const SPEED: Record<SPEEDS, number> = {
 export const enum SPEEDS {
 	WALK = "WALK",
 	RUN = "RUN",
+}
+
+export function getActiveNPCNames(assignedRoutes: Map<string, Assignment>): string[] {
+	const activeNPCs: string[] = [];
+	assignedRoutes.forEach((route) => {
+		activeNPCs.push(route.npc.model.Name);
+	});
+	return activeNPCs;
 }

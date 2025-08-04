@@ -1,6 +1,6 @@
 import { Lighting, RunService } from "@rbxts/services";
 
-let time = 0;
+let time = 17;
 const desiredDayLengthInMinutes = 20; // 5 minutes real time
 const daySpeed = 24 / (desiredDayLengthInMinutes * 60);
 

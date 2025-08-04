@@ -1,3 +1,5 @@
+import { NPC } from "./npc";
+
 export function makeHello(name: string) {
 	return `Hello from ${name}!`;
 }
@@ -62,7 +64,7 @@ export interface NPCData {
 	position: Position;
 }
 
-export type NPCModel = Record<MedievalNPCName, NPCData>;
+export type NPCModel = Record<string, NPCData>;
 
 export const MEDIEVAL_NPCS: NPCModel = {
 	"Alaric Thornblade": { gender: "M", position: "Serf" },
@@ -147,7 +149,7 @@ export function getRandomMedievalPhrase(): string {
 }
 
 export interface Assignment {
-	npc: Model;
+	npc: NPC;
 	route: Folder;
 }
 
