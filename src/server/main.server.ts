@@ -151,8 +151,7 @@ async function main() {
 
 	task.spawn(() => {
 		while (assignmentsActive) {
-			task.wait(10);
-
+			task.wait(1);
 			updateBounty(assignedRoutes);
 		}
 	});
@@ -160,7 +159,7 @@ async function main() {
 export function updateBounty(assignedRoutes: Map<string, Assignment>) {
 	const activeNPCs = getActiveNPCNames(assignedRoutes);
 	const randomNPCTarget = activeNPCs[math.random(0, activeNPCs.size() - 1)];
-	let npc: NPC | undefined = undefined;
+	let npc: NPC | undefined;
 	assignedRoutes.forEach((route) => {
 		if (route.npc.name === randomNPCTarget) {
 			npc = route.npc;
@@ -168,6 +167,12 @@ export function updateBounty(assignedRoutes: Map<string, Assignment>) {
 	});
 	if (npc) {
 		bountyService.setBountyOnNPC(npc);
+		npc.model.AncestryChanged.Connect((child, parent) => {
+			if (!parent) {
+				warn(`💀 ${child.Name} was slain`);
+				bountyService.clearBounty(npc!);
+			}
+		});
 	}
 }
 main();
