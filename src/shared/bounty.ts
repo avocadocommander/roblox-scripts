@@ -21,7 +21,9 @@ export class BountyService {
 		}
 	}
 
-	changed = this.activeBounty;
+	public onBountyChanged(callback: (npc: NPC | undefined) => void) {
+		return this.bountyCrier.Connect(callback);
+	}
 }
 
 export const bountyService = new BountyService();

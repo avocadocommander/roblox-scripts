@@ -157,7 +157,7 @@ function setHumanoidPace(humanoid: Humanoid, pace: RoutePace) {
 }
 
 export function setHumanoidDefaults(humanoid: Humanoid, seed: number, gender: Gender): Humanoid | undefined {
-	humanoid.WalkSpeed = 6;
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	const npcDescription = humanoid.GetAppliedDescription();
 	if (!npcDescription) {
 		log("Appearence unavalialbe for npc spawn", "ERROR");

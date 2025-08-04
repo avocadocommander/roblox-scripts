@@ -111,9 +111,19 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position)); // Spawn
 				assignNpcToRoute(npc, closestSpawnPointRelativeToRoute.Position, routePoints);
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
-				log(
-					`⚜️ ${npc.model.Name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`,
-				);
+				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
+
+				bountyService.onBountyChanged((bounty: NPC | undefined) => {
+					if (bounty && bounty === npc) {
+						npc.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer;
+					}
+				});
+				npc.model.AncestryChanged.Connect((child, parent) => {
+					if (!parent) {
+						log(`💀 ${child.Name} was removed from this life and from ${npcRoute.Name}`);
+						assigned.delete(npcRoute.Name);
+					}
+				});
 
 				npc.model.AncestryChanged.Connect((child, parent) => {
 					if (!parent) {
@@ -126,20 +136,6 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 			}
 		}
 	});
-}
-
-function getNames(names: typeof MEDIEVAL_NPC_NAMES, max: number): string[] {
-	const uniqueNames = new Set<string>();
-	const available = [...names];
-
-	while (uniqueNames.size() < max && available.size() > 0) {
-		const index = math.random(0, available.size() - 1);
-		const name = available[index];
-		uniqueNames.add(name);
-		available.remove(index);
-	}
-
-	return [...uniqueNames];
 }
 
 async function main() {
@@ -164,13 +160,13 @@ async function main() {
 export function updateBounty(assignedRoutes: Map<string, Assignment>) {
 	const activeNPCs = getActiveNPCNames(assignedRoutes);
 	const randomNPCTarget = activeNPCs[math.random(0, activeNPCs.size() - 1)];
-	for (const [key, val] of assignedRoutes) {
-		warn(`Key: ${key}`);
-	}
-	const npc: NPC | undefined = assignedRoutes.get(randomNPCTarget)?.npc;
-
+	let npc: NPC | undefined = undefined;
+	assignedRoutes.forEach((route) => {
+		if (route.npc.name === randomNPCTarget) {
+			npc = route.npc;
+		}
+	});
 	if (npc) {
-		warn("setting bounty");
 		bountyService.setBountyOnNPC(npc);
 	}
 }
