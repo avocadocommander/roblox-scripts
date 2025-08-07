@@ -221,13 +221,14 @@ export function addTalkPrompt(npc: Model, message: string) {
 	prompt.Triggered.Connect(async (player) => {
 		const store = PlayerDataService.getInstance(PLAYER_STORE_NAME, defaultPlayerStoreData);
 		store.updatePlayerData(player, (state: Partial<StoreData>) => {
-			const currentTitles = state.eliminations ?? [];
-			if (!currentTitles.includes(npc.Name)) {
-				return {
-					eliminations: [...currentTitles, npc.Name],
-				};
+			const currentTitles = state.eliminations ?? {};
+			if (currentTitles[npc.Name] === undefined) {
+				currentTitles[npc.Name] = 1;
 			}
-			return {};
+			currentTitles[npc.Name] = currentTitles[npc.Name]++;
+			return {
+				eliminations: currentTitles,
+			};
 		});
 
 		npc.GetDescendants().forEach((descendant) => {

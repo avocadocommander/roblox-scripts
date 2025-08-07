@@ -3,7 +3,7 @@ export interface StoreData {
 	xp: number;
 	kills: number;
 	gold: number;
-	eliminations: string[];
+	eliminations: Record<string, number>;
 }
 
 export const defaultPlayerStoreData: StoreData = {
@@ -11,7 +11,7 @@ export const defaultPlayerStoreData: StoreData = {
 	kills: 0,
 	level: 1,
 	xp: 0,
-	eliminations: [],
+	eliminations: {},
 };
 
 export const PLAYER_STORE_NAME = "PlayerStore";
