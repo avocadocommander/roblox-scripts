@@ -13,13 +13,14 @@ export function init(torchModel: TextLabel) {
 			return;
 		}
 		torchModel.Text = npc.name;
-		createMugshotInViewPortFrame(npc.model, mugShotFront, "FRONT");
-		createMugshotInViewPortFrame(npc.model, mugShotSide, "SIDE");
+		createMugshotInViewPortFrame(npc, mugShotFront, "FRONT");
+		createMugshotInViewPortFrame(npc, mugShotSide, "SIDE");
 	});
 }
 
-function createMugshotInViewPortFrame(npcModel: Model, frame: ViewportFrame, position: "FRONT" | "SIDE" = "FRONT") {
-	const npcClone = npcModel.Clone();
+function createMugshotInViewPortFrame(npc: NPC, frame: ViewportFrame, position: "FRONT" | "SIDE" = "FRONT") {
+	npc.state = "IDLE";
+	const npcClone = npc.model.Clone();
 	npcClone.Parent = frame;
 
 	const npcRoot = npcClone.PrimaryPart!;

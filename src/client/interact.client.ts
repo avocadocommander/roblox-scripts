@@ -13,8 +13,8 @@ function initCharacter() {
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 	applySpeed(SPEEDS.WALK, humanoid);
-	createWantedPoster();
-	createTool("Axe");
+	//createWantedPoster();
+	//createTool("Axe");
 }
 
 function createWantedPoster() {
@@ -32,31 +32,48 @@ function createWantedPoster() {
 		return;
 	}
 
-	clonedWantedPoster.Grip = new CFrame(0, 2, -3);
+	clonedWantedPoster.Grip = new CFrame(0, -2, 0);
 
 	const handle = clonedWantedPoster.WaitForChild("Handle") as BasePart;
 	const surfaceGui = handle.WaitForChild("SurfaceGui") as SurfaceGui;
-	handle.Size = new Vector3(10, 10, 1);
+	handle.Size = new Vector3(5, 5, 1);
 	surfaceGui.Face = Enum.NormalId.Front;
 	surfaceGui.AlwaysOnTop = true;
 
+	let npc: NPC | undefined = undefined;
+
+	/**
+	 * When creating the poster init set to undefined (who cares)
+	 * When showing the poster do a GET
+	 * When ever the poster is equipted we only care about a sub
+	 *
+	 */
+
+	let onBountyChangedConnection: RBXScriptConnection | undefined = undefined;
+
 	clonedWantedPoster.Equipped.Connect(() => {
-		print("Equipped a wanted poster!");
-		// Clear SurfaceGui contents at the start
-		surfaceGui.ClearAllChildren();
-		// Set Adornee each time
-		surfaceGui.Adornee = handle;
-		// Add debug red cube for visibility reference in the viewport frame and mugshot
-		const npc = clientBountyService.getBounty();
-		if (npc) {
-			createMugshotInViewPortFrame(npc.model, surfaceGui);
-		}
-		clientBountyService.onBountyChanged((npc: NPC | undefined) => {
-			if (!npc) {
+		npc = clientBountyService.getBounty();
+		onBountyChangedConnection = clientBountyService.onBountyChanged((npcFromEvent: NPC | undefined) => {
+			if (!npcFromEvent) {
 				return;
 			}
+			warn(`GOT npc from EVENT ${npcFromEvent.name}`);
+			npc = npcFromEvent;
 			createMugshotInViewPortFrame(npc.model, surfaceGui);
 		});
+		if (!npc) {
+			warn("NPC NOT GOTTED");
+		}
+		warn(`GOT npc ${npc!.name}`);
+		print("Equipped a wanted poster!");
+		if (!npc) {
+			return;
+		}
+		createMugshotInViewPortFrame(npc.model, surfaceGui);
+	});
+
+	clonedWantedPoster.Unequipped.Connect(() => {
+		onBountyChangedConnection?.Disconnect();
 	});
 
 	clonedWantedPoster.Activated.Connect(() => {
@@ -67,75 +84,15 @@ function createWantedPoster() {
 }
 
 function createMugshotInViewPortFrame(npcModel: Model, surfaceGui: SurfaceGui) {
-	// Clear all previous GUI content
-	surfaceGui.ClearAllChildren();
-	surfaceGui.Adornee = surfaceGui.Parent as BasePart; // Ensure Adornee is set AFTER ViewportFrame
-	// Create ViewportFrame fresh
-	const frame = new Instance("ViewportFrame");
-	frame.Size = UDim2.fromScale(1, 1);
-	frame.BackgroundTransparency = 0;
-	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
-	frame.Parent = surfaceGui;
+	const viewportFrame = surfaceGui.WaitForChild("ViewportFrame") as ViewportFrame;
+
+	viewportFrame.BackgroundTransparency = 0;
+	viewportFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+	viewportFrame.Parent = surfaceGui;
 
 	// Clone NPC model
 	const npcClone = npcModel.Clone();
-	npcClone.Parent = frame;
-
-	// Set PrimaryPart if missing
-	if (!npcClone.PrimaryPart) {
-		const root = npcClone.FindFirstChild("HumanoidRootPart") as BasePart;
-		if (root) {
-			npcClone.PrimaryPart = root;
-		} else {
-			warn("NPC has no HumanoidRootPart!");
-			return;
-		}
-	}
-
-	// Scale down the NPC model uniformly
-	const scaleFactor = 0.4;
-	for (const part of npcClone.GetDescendants()) {
-		if (part.IsA("BasePart")) {
-			part.Size = part.Size.mul(scaleFactor);
-		}
-	}
-
-	// Move NPC forward along Z-axis to ensure it's in front of the camera
-	npcClone.PivotTo(new CFrame(0, 0, -1)); // Offset NPC forward for better camera view
-	// Force transparency 0 for all parts in npcClone
-	for (const part of npcClone.GetDescendants()) {
-		if (part.IsA("BasePart")) {
-			part.Transparency = 0;
-			part.Color = Color3.fromRGB(0, 0, 255); // Blue
-		}
-	}
-
-	// Create camera
-	const camera = new Instance("Camera");
-	camera.CFrame = CFrame.lookAt(new Vector3(0, 0, 2), new Vector3(0, 0, -1)); // Move camera closer and target NPC
-	camera.FieldOfView = 70;
-	camera.Parent = frame;
-	frame.CurrentCamera = camera;
-	frame.BackgroundTransparency = 0;
-	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
-	// Add lighting
-	const pointLight = new Instance("PointLight");
-	pointLight.Brightness = 2;
-	pointLight.Range = 15;
-	pointLight.Parent = npcClone.PrimaryPart;
-
-	const dirLight = new Instance("SpotLight");
-	dirLight.Brightness = 1;
-	dirLight.Parent = camera;
-
-	// Add debug red cube for visibility reference
-	const debugCube = new Instance("Part");
-	debugCube.Size = new Vector3(4, 4, 4); // Increased size for better visibility
-	debugCube.Color = Color3.fromRGB(255, 0, 0);
-	debugCube.Anchored = true;
-	debugCube.Position = new Vector3(0, 0, -2);
-	debugCube.Transparency = 0;
-	debugCube.Parent = frame;
+	// npcClone.Parent = surfaceGui;
 
 	// Optional: Add title label back
 	const label = new Instance("TextLabel");
@@ -146,7 +103,19 @@ function createMugshotInViewPortFrame(npcModel: Model, surfaceGui: SurfaceGui) {
 	label.BackgroundColor3 = Color3.fromRGB(204, 140, 107);
 	label.Parent = surfaceGui;
 
-	print("Added NPC model to viewport frame with transparency set to 0.");
+	const ViewportCamera = new Instance("Camera");
+	ViewportCamera.Parent = viewportFrame;
+	ViewportCamera.Name = "ViewportCamera";
+	ViewportCamera.CameraType = Enum.CameraType.Scriptable;
+
+	ViewportCamera.CFrame = new CFrame(new Vector3(0, 0, 5), npcClone.PrimaryPart!.Position);
+	viewportFrame.CurrentCamera = ViewportCamera;
+
+	const ViewportLight = new Instance("PointLight");
+	ViewportLight.Brightness = 1;
+	ViewportLight.Color = new Color3(1, 1, 1);
+	ViewportLight.Range = 10;
+	ViewportLight.Parent = viewportFrame;
 }
 
 function createTool(toolReplicatedStorageName: string) {
