@@ -2,7 +2,7 @@ import { Workspace } from "@rbxts/services";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, MedievalNPCName, RoutePace } from "shared/module";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { createNPCModelAndGenerateHumanoid, NPC, assignNpcToRoute } from "shared/npc";
-import { bountyService } from "shared/bounty";
+import { Bounty, bountyService } from "shared/bounty";
 
 export const enum AnimationState {
 	WALK = "WALK",
@@ -113,8 +113,8 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
 
-				bountyService.onBountyChanged((bounty: NPC | undefined) => {
-					if (bounty && bounty === npc) {
+				bountyService.onBountyChanged((bounty: Bounty | undefined) => {
+					if (bounty && bounty.npc === npc) {
 						npc.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer;
 					}
 				});
@@ -152,7 +152,9 @@ async function main() {
 	task.spawn(() => {
 		while (assignmentsActive) {
 			task.wait(1);
-			updateBounty(assignedRoutes);
+			if (bountyService.getBounty() === undefined) {
+				updateBounty(assignedRoutes);
+			}
 		}
 	});
 }

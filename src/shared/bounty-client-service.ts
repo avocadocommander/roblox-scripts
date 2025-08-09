@@ -1,25 +1,25 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import Signal from "@rbxts/signal";
-import { NPC } from "shared/npc";
+import { Bounty } from "./bounty";
 
 export class ClientBountyService {
-	private activeBounty: NPC | undefined = undefined;
-	private readonly bountyChanged = new Signal<(npc: NPC | undefined) => void>();
+	private activeBounty: Bounty | undefined = undefined;
+	private readonly bountyChanged = new Signal<(npc: Bounty | undefined) => void>();
 
 	constructor() {
 		const event = ReplicatedStorage.WaitForChild("BountyChanged") as RemoteEvent;
-		event.OnClientEvent.Connect((npc: NPC) => {
-			this.activeBounty = npc;
-			this.bountyChanged.Fire(npc);
+		event.OnClientEvent.Connect((bounty: Bounty) => {
+			this.activeBounty = bounty;
+			this.bountyChanged.Fire(bounty);
 		});
 		this.activeBounty = undefined;
 	}
 
-	public getBounty(): NPC | undefined {
+	public getBounty(): Bounty | undefined {
 		return this.activeBounty;
 	}
 
-	public onBountyChanged(callback: (npc: NPC | undefined) => void) {
+	public onBountyChanged(callback: (npc: Bounty | undefined) => void) {
 		return this.bountyChanged.Connect(callback);
 	}
 }

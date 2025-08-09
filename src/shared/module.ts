@@ -143,6 +143,39 @@ export const MEDIEVAL_PHRASES = [
 	"A good cloak and a sharp dagger—every rogue's kit.",
 ];
 
+export const SATIRICAL_BOUNTY_OFFENSES: string[] = [
+	"Whispered 'Nice Hat' to the King. The king hasn't recovered emotionally.",
+	"Milked the tavern goat without a permit. The goat is pressing charges.",
+	"Played the lute poorly… thrice. The instrument begged for mercy.",
+	"Insisted the earth is round—while in the presence of flatlanders. Caused a riot at the cartography guild.",
+	"Sold invisible swords to children. Surprisingly effective, but still illegal.",
+	"Laughed during a public execution (too soon). The condemned was offended.",
+	"Challenged a guard to a duel, then immediately ran away. Was heard yelling 'psych!' mid-sprint.",
+	"Used a healing potion recreationally. Claimed it 'enhanced vibes'.",
+	"Attempted to bribe a pigeon for state secrets. The pigeon accepted.",
+	"Declared themselves 'King of the Alley' without proper lineage. The rats were not impressed.",
+	"Drew a mustache on the royal statue. The likeness was uncanny.",
+	"Brewed tea using necromantic herbs. Now the teacup whispers at night.",
+	"Held a staring contest with the sun. Lost. Twice.",
+	"Filed a noise complaint against thunder. Nature did not respond kindly.",
+	"Illegally enchanted a spoon to sing sea shanties. It won't stop. Please make it stop.",
+	"Claimed to be a dragon slayer but only had chicken bones. Excellent storytelling, poor evidence.",
+	"Stole a noble’s shadow and refused to give it back. The noble is now only visible at night.",
+	"Fed the town’s ducks experimental bread. Ducks now float three inches above water.",
+	"Said 'Yeet' in a court of law. Confused the magistrate and enraged the bailiff.",
+	"Held an unlicensed beard-growing contest. The winner was promptly arrested.",
+	"Grew suspiciously tall overnight. Villagers demand to know what fertilizer was used.",
+	"Painted fake doors around town. Citizens now trapped in elaborate mime routines.",
+	"Attempted to marry a ghost for land rights. The ghost declined.",
+	"Summoned rain indoors 'for ambiance'. Tavern owner still drying mugs.",
+	"Declared war on a scarecrow. Victory was swift but unnecessary.",
+	"Built a ladder to eavesdrop on the moon. The moon said nothing.",
+	"Spoke only in riddles for a week. Was eventually thrown in a well.",
+	"Put googly eyes on the royal guard’s helmets. Morale has never been higher. Still treason.",
+	"Attempted to patent 'breathing'. The town exhaled in protest.",
+	"Formed a cult worshipping bread crusts. Surprisingly well attended.",
+];
+
 export function getRandomMedievalPhrase(): string {
 	const index = math.random(1, MEDIEVAL_PHRASES.size());
 	return MEDIEVAL_PHRASES[index - 1];

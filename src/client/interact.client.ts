@@ -1,4 +1,5 @@
 import { ReplicatedStorage, UserInputService } from "@rbxts/services";
+import { Bounty } from "shared/bounty";
 import { clientBountyService } from "shared/bounty-client-service";
 import { applySpeed, SPEED, SPEEDS } from "shared/helpers";
 import { NPC } from "shared/npc";
@@ -13,8 +14,6 @@ function initCharacter() {
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 	applySpeed(SPEEDS.WALK, humanoid);
-	//createWantedPoster();
-	//createTool("Axe");
 }
 
 function createWantedPoster() {
@@ -40,7 +39,7 @@ function createWantedPoster() {
 	surfaceGui.Face = Enum.NormalId.Front;
 	surfaceGui.AlwaysOnTop = true;
 
-	let npc: NPC | undefined = undefined;
+	let bounty: Bounty | undefined = undefined;
 
 	/**
 	 * When creating the poster init set to undefined (who cares)
@@ -52,24 +51,19 @@ function createWantedPoster() {
 	let onBountyChangedConnection: RBXScriptConnection | undefined = undefined;
 
 	clonedWantedPoster.Equipped.Connect(() => {
-		npc = clientBountyService.getBounty();
-		onBountyChangedConnection = clientBountyService.onBountyChanged((npcFromEvent: NPC | undefined) => {
-			if (!npcFromEvent) {
+		bounty = clientBountyService.getBounty();
+		onBountyChangedConnection = clientBountyService.onBountyChanged((bountyFromEvent: Bounty | undefined) => {
+			if (!bountyFromEvent) {
 				return;
 			}
-			warn(`GOT npc from EVENT ${npcFromEvent.name}`);
-			npc = npcFromEvent;
-			createMugshotInViewPortFrame(npc.model, surfaceGui);
+			warn(`GOT npc from EVENT ${bountyFromEvent?.npc.name}`);
+			bounty = bountyFromEvent;
+			createMugshotInViewPortFrame(bountyFromEvent!.npc.model, surfaceGui);
 		});
-		if (!npc) {
-			warn("NPC NOT GOTTED");
-		}
-		warn(`GOT npc ${npc!.name}`);
-		print("Equipped a wanted poster!");
-		if (!npc) {
+		if (!bounty) {
 			return;
 		}
-		createMugshotInViewPortFrame(npc.model, surfaceGui);
+		createMugshotInViewPortFrame(bounty!.npc.model, surfaceGui);
 	});
 
 	clonedWantedPoster.Unequipped.Connect(() => {

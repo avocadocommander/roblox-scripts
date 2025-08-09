@@ -1,7 +1,13 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
 import { Position, RoutePace, useAssetId } from "./module";
-import { defaultPlayerStoreData, PLAYER_STORE_NAME, StoreData } from "shared/player-store";
+import {
+	captureBountyOnNpcByPlayer,
+	defaultPlayerStoreData,
+	murderNpcByPlayer,
+	PLAYER_STORE_NAME,
+	StoreData,
+} from "shared/player-store";
 import { PlayerDataService } from "./common-data-service";
 import { PathfindingService } from "@rbxts/services";
 
@@ -219,17 +225,8 @@ export function addTalkPrompt(npc: Model, message: string) {
 	prompt.Parent = head;
 
 	prompt.Triggered.Connect(async (player) => {
-		const store = PlayerDataService.getInstance(PLAYER_STORE_NAME, defaultPlayerStoreData);
-		store.updatePlayerData(player, (state: Partial<StoreData>) => {
-			const currentTitles = state.eliminations ?? {};
-			if (currentTitles[npc.Name] === undefined) {
-				currentTitles[npc.Name] = 1;
-			}
-			currentTitles[npc.Name] = currentTitles[npc.Name]++;
-			return {
-				eliminations: currentTitles,
-			};
-		});
+		prompt.Enabled = false;
+		murderNpcByPlayer(player, npc);
 
 		npc.GetDescendants().forEach((descendant) => {
 			if (descendant.IsA("JointInstance")) {

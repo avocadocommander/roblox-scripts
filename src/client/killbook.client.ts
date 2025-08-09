@@ -1,6 +1,44 @@
-import { Players } from "@rbxts/services";
+import { Players, Workspace } from "@rbxts/services";
+import { Bounty } from "shared/bounty";
 import { clientBountyService } from "shared/bounty-client-service";
-import { NPC } from "shared/npc";
+
+function createMugshotInViewPortFrame(bounty: Bounty, frame: ViewportFrame) {
+	const npcName = activeTab.WaitForChild("npcName") as TextLabel;
+	npcName.Text = `${bounty.npc.name}`;
+	const goldReward = activeTab.WaitForChild("goldReward") as TextLabel;
+	goldReward.Text = `${bounty.goldReward}`;
+	const xpReward = activeTab.WaitForChild("xpReward") as TextLabel;
+	xpReward.Text = `${bounty.xpReward}`;
+	const description = activeTab.WaitForChild("description") as TextLabel;
+	description.Text = `${bounty.offence}`;
+
+	const stagingArea = Workspace.WaitForChild("Staging Area") as Folder;
+	const existingNPC = stagingArea.FindFirstChild("NPC") as Model | undefined;
+	if (existingNPC) {
+		existingNPC.Destroy();
+	}
+
+	const stage = stagingArea.WaitForChild("Stage") as Part;
+	const cameraPosition = stagingArea.WaitForChild("Camera Position") as Part;
+	const npcLookPosition = stagingArea.WaitForChild("NPCLookPosition") as Part;
+
+	const npcClone = bounty.npc.model.Clone();
+	npcClone.Name = "NPC";
+	const npcPostion = CFrame.lookAt(stage.Position, npcLookPosition.Position);
+
+	const lookPosition = new Vector3(stage.Position.X, stage.Position.Y + 3, stage.Position.Z);
+	const stageCamera = new Instance("Camera");
+	stageCamera.Name = "StageCamera";
+	stageCamera.CFrame = CFrame.lookAt(cameraPosition.Position, lookPosition);
+	stageCamera.Parent = stagingArea;
+
+	npcClone.PivotTo(npcPostion);
+
+	npcClone.Parent = stagingArea;
+	const set = stagingArea.Clone();
+	set.Parent = frame;
+	frame.CurrentCamera = stageCamera;
+}
 
 const playerGui = Players.LocalPlayer!.WaitForChild("PlayerGui") as PlayerGui;
 const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
@@ -37,35 +75,14 @@ historyTabButton.MouseButton1Click.Connect(() => {
 	activeTab.Visible = false;
 });
 
-const npc = clientBountyService.getBounty();
-if (npc) {
-	createMugshotInViewPortFrame(npc, portrait, "FRONT");
+const bounty: Bounty | undefined = clientBountyService.getBounty();
+if (bounty) {
+	createMugshotInViewPortFrame(bounty, portrait);
 }
 
-clientBountyService.onBountyChanged((npc: NPC | undefined) => {
-	if (!npc) {
+clientBountyService.onBountyChanged((bounty: Bounty | undefined) => {
+	if (!bounty) {
 		return;
 	}
-	createMugshotInViewPortFrame(npc, portrait, "FRONT");
+	createMugshotInViewPortFrame(bounty, portrait);
 });
-
-function createMugshotInViewPortFrame(npc: NPC, frame: ViewportFrame, position: "FRONT" | "SIDE" = "FRONT") {
-	npc.state = "IDLE";
-	const npcClone = npc.model.Clone();
-	npcClone.Parent = frame;
-
-	const npcRoot = npcClone.PrimaryPart!;
-	const npcPosition = npcRoot.Position;
-	const npcLookDirection = position === "FRONT" ? npcRoot.CFrame.LookVector : npcRoot.CFrame.RightVector;
-
-	const distance = 5;
-	const offset = npcLookDirection.mul(distance);
-
-	const cameraPosition = npcPosition.add(offset);
-
-	const camera = new Instance("Camera");
-	camera.CFrame = CFrame.lookAt(cameraPosition, npcPosition);
-	camera.Parent = frame;
-
-	frame.CurrentCamera = camera;
-}
