@@ -1,14 +1,7 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
 import { Position, RoutePace, useAssetId } from "./module";
-import {
-	captureBountyOnNpcByPlayer,
-	defaultPlayerStoreData,
-	murderNpcByPlayer,
-	PLAYER_STORE_NAME,
-	StoreData,
-} from "shared/player-store";
-import { PlayerDataService } from "./common-data-service";
+import { murderNpcByPlayer } from "shared/player-store";
 import { PathfindingService } from "@rbxts/services";
 
 export interface NPC {
@@ -36,9 +29,9 @@ export function createNPCModelAndGenerateHumanoid(
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
-	setHumanoidDefaults(humanoid, getSeedFromName(name), gender);
+	setHumanoidDefaults(humanoid, getSeedFromName(name), gender, position);
 	setHumanoidPace(humanoid, pace);
-	addTalkPrompt(modelClone, "");
+	addPromptToEndNpc(modelClone, "");
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
 	const animationInstances = getAnimationTracks(animator);
@@ -59,12 +52,26 @@ export function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
 	gender: Gender,
+	position: Position,
 ): HumanoidDescription | undefined {
 	const faces = [
-		20418658, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971,
-		406001167, 7317765, 616381207,
+		17448541918, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080,
+		8560971, 406001167, 7317765, 616381207,
 	];
-	const femaleHair = ["451220849", "2956239660"];
+	const femaleFaces = [7046036136, 12064732367, 12361152003];
+	const femaleHair = [
+		"451220849",
+		"2956239660",
+		"7429019921",
+		"7565118471",
+		"6134532324",
+		"9244095135",
+		"9244097555",
+		"7193448988",
+		"9244148336",
+		"7193455510",
+		"9244150641",
+	];
 	const malehair = [
 		"16630147",
 		"5891039736",
@@ -134,14 +141,24 @@ export function getGenericSeededAppearance(
 	humanoidDescription.RightLegColor = skinColor;
 	humanoidDescription.TorsoColor = skinColor;
 
-	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(faces, seed());
+	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(gender === "F" ? femaleFaces : faces, seed());
+
 	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
 		gender === "F" ? femaleHair : malehair,
 		seed(),
 	);
+	if (position === "Merchant") {
+		humanoidDescription.HatAccessory = "617605556";
+		humanoidDescription.HairAccessory = "";
+	}
+
 	humanoidDescription.TorsoColor = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
 	humanoidDescription.RightArmColor = humanoidDescription.TorsoColor;
 	humanoidDescription.LeftArmColor = humanoidDescription.TorsoColor;
+
+	if (gender === "F") {
+		//humanoidDescription.Shirt = 126515050129801;
+	}
 
 	humanoidDescription.RightLegColor = getRandomAssetFromListBasedOnSeed(pantColors, seed());
 	humanoidDescription.LeftLegColor = humanoidDescription.RightLegColor;
@@ -162,7 +179,12 @@ function setHumanoidPace(humanoid: Humanoid, pace: RoutePace) {
 	humanoid.WalkSpeed = paceSpeedMap[pace];
 }
 
-export function setHumanoidDefaults(humanoid: Humanoid, seed: number, gender: Gender): Humanoid | undefined {
+export function setHumanoidDefaults(
+	humanoid: Humanoid,
+	seed: number,
+	gender: Gender,
+	position: Position,
+): Humanoid | undefined {
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	const npcDescription = humanoid.GetAppliedDescription();
 	if (!npcDescription) {
@@ -171,7 +193,7 @@ export function setHumanoidDefaults(humanoid: Humanoid, seed: number, gender: Ge
 	}
 	const rand = makeSeededRandom(seed);
 	randomizeBodyShape(npcDescription, rand);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, gender);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, gender, position);
 
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
@@ -210,11 +232,12 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 	npcDescription.HeadScale = math.round((0.8 + seed() * 0.4) * 100) / 100; // 0.8 to 1.2
 }
 
-export function addTalkPrompt(npc: Model, message: string) {
+export function addPromptToEndNpc(npc: Model, message: string) {
 	const head = npc.FindFirstChild("Head") as BasePart;
 	if (!head) return warn("No head for NPC");
 
 	const prompt = new Instance("ProximityPrompt");
+	prompt.Enabled = false;
 	prompt.Name = "TalkPrompt";
 	prompt.ObjectText = npc.Name;
 	prompt.ActionText = "Talk";
@@ -224,8 +247,17 @@ export function addTalkPrompt(npc: Model, message: string) {
 	prompt.MaxActivationDistance = 10;
 	prompt.Parent = head;
 
+	// prompt.PromptShown.Connect(() => {
+	// 	warn("GMMMM");
+	// 	const player = game.GetService("Players").LocalPlayer;
+	// 	if (player.GetAttribute("state") === undefined || player.GetAttribute("state") !== "warmingUp") {
+	// 		prompt.Enabled = false;
+	// 	}
+	// 	prompt.Enabled = true;
+	// });
+
 	prompt.Triggered.Connect(async (player) => {
-		prompt.Enabled = false;
+		warn(`${player.GetAttribute("state")} state`);
 		murderNpcByPlayer(player, npc);
 
 		npc.GetDescendants().forEach((descendant) => {

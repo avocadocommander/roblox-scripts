@@ -24,8 +24,9 @@ function addToolToBackpack(toolNameFromReplicatedStorage: string) {
 	let stanceTrack: AnimationTrack | undefined;
 
 	clonedTool.Equipped.Connect(() => {
+		player.SetAttribute("state", "warmingUp");
 		const actionAnimationId = tool.GetAttribute("ActionId");
-		if (!actionAnimationId) {
+		if (actionAnimationId === undefined) {
 			warn("No action animation for this tool");
 			return;
 		}
@@ -38,12 +39,13 @@ function addToolToBackpack(toolNameFromReplicatedStorage: string) {
 
 	clonedTool.Unequipped.Connect(() => {
 		print("nim quit");
+		player.SetAttribute("state", undefined);
 		stopStance(stanceTrack);
 	});
 
 	clonedTool.AncestryChanged.Connect(() => {
 		print("nim aefea");
-
+		player.SetAttribute("state", undefined);
 		if (!clonedTool.IsDescendantOf(game)) stopStance(stanceTrack);
 	});
 }
@@ -71,4 +73,4 @@ function stopStance(stanceTrack: AnimationTrack | undefined) {
 }
 
 addToolToBackpack("Dagger");
-addToolToBackpack("Dagger");
+addToolToBackpack("Hammer");

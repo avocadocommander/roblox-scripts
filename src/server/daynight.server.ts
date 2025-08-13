@@ -1,6 +1,6 @@
 import { Lighting, RunService } from "@rbxts/services";
 
-const time = 17.75;
+const time = 20;
 const desiredDayLengthInMinutes = 20; // 5 minutes real time
 const daySpeed = 24 / (desiredDayLengthInMinutes * 60);
 Lighting.ClockTime = time;
