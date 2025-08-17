@@ -10,7 +10,10 @@ function addToolToBackpack(toolNameFromReplicatedStorage: string) {
 	}
 	const [character] = player.Character ? [player.Character] : player.CharacterAdded.Wait();
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
-	if (!humanoid) return;
+	if (!humanoid) {
+		print(`NOT humanoid for tool`);
+		return;
+	}
 
 	tool.Name = toolNameFromReplicatedStorage;
 	const clonedTool = tool.Clone();
@@ -25,12 +28,12 @@ function addToolToBackpack(toolNameFromReplicatedStorage: string) {
 
 	clonedTool.Equipped.Connect(() => {
 		player.SetAttribute("state", "warmingUp");
-		const actionAnimationId = tool.GetAttribute("ActionId");
-		if (actionAnimationId === undefined) {
-			warn("No action animation for this tool");
-			return;
-		}
-		stanceTrack = playStance(humanoid, clonedTool, `${actionAnimationId}`);
+		const actionAnimationId = clonedTool.GetAttribute("ActionId");
+		// if (actionAnimationId === undefined) {
+		// 	warn("No action animation for this tool");
+		// 	return;
+		// }
+		//stanceTrack = playStance(humanoid, clonedTool, undefined);
 	});
 
 	clonedTool.Activated.Connect(() => {
@@ -72,5 +75,4 @@ function stopStance(stanceTrack: AnimationTrack | undefined) {
 	}
 }
 
-addToolToBackpack("Dagger");
-addToolToBackpack("Hammer");
+// /addToolToBackpack("Scroll");

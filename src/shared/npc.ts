@@ -55,10 +55,9 @@ export function getGenericSeededAppearance(
 	position: Position,
 ): HumanoidDescription | undefined {
 	const faces = [
-		17448541918, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080,
-		8560971, 406001167, 7317765, 616381207,
+		12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971, 406001167,
+		7317765, 616381207,
 	];
-	const femaleFaces = [7046036136, 12064732367, 12361152003];
 	const femaleHair = [
 		"451220849",
 		"2956239660",
@@ -141,7 +140,7 @@ export function getGenericSeededAppearance(
 	humanoidDescription.RightLegColor = skinColor;
 	humanoidDescription.TorsoColor = skinColor;
 
-	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(gender === "F" ? femaleFaces : faces, seed());
+	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(gender === "F" ? faces : faces, seed());
 
 	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
 		gender === "F" ? femaleHair : malehair,
@@ -194,7 +193,10 @@ export function setHumanoidDefaults(
 	const rand = makeSeededRandom(seed);
 	randomizeBodyShape(npcDescription, rand);
 	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, gender, position);
-
+	if (position === "Nobility") {
+		const lantern = ReplicatedStorage.WaitForChild("Lantern") as Tool;
+		humanoid.EquipTool(lantern.Clone());
+	}
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
 	return humanoid;
