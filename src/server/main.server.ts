@@ -1,4 +1,4 @@
-import { Workspace } from "@rbxts/services";
+import { CollectionService, Workspace } from "@rbxts/services";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, MedievalNPCName, RoutePace } from "shared/module";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { createNPCModelAndGenerateHumanoid, NPC, assignNpcToRoute } from "shared/npc";
@@ -18,12 +18,10 @@ export enum NPCState {
 	Dead,
 }
 
-function getNPCSpawnPoints(): BasePart[] {
-	const spawnPoints = Workspace.WaitForChild("NPCSpawnPoints")
-		.GetChildren()
-		.filter((child): child is BasePart => {
-			return child.IsA("BasePart");
-		});
+function getNPCSpawnPoints(): Attachment[] {
+	const spawnPoints = CollectionService.GetTagged("NPCSpawnPoint").filter((spawnPoint): spawnPoint is Attachment => {
+		return spawnPoint.IsA("Attachment");
+	});
 
 	if (spawnPoints.size() === 0) {
 		warn("⚠️ No spawn points named 'NPCSpawn' found!");
@@ -48,22 +46,23 @@ function getNPCRoutes(): Folder[] {
 	return routes;
 }
 
-function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart): BasePart | undefined {
+function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart): Attachment | undefined {
 	if (!firstRoutePointToCompare) {
 		log("No basepart used as fist index", "ERROR");
 		return undefined;
 	}
-	const spawnPoints = getNPCSpawnPoints();
-	let nearestSpawn: BasePart | undefined = undefined;
+	const spawnPoints: Attachment[] = getNPCSpawnPoints();
+	let nearestSpawn: Attachment | undefined = undefined;
 	let shortestDistance = math.huge;
 
-	spawnPoints.forEach((spawnPoint: BasePart) => {
-		const distance = spawnPoint.Position.sub(firstRoutePointToCompare.Position).Magnitude;
+	spawnPoints.forEach((spawnPoint: Attachment) => {
+		const distance = spawnPoint.WorldPosition.sub(firstRoutePointToCompare.Position).Magnitude;
 		if (distance < shortestDistance) {
 			shortestDistance = distance;
 			nearestSpawn = spawnPoint;
 		}
 	});
+
 	return nearestSpawn;
 }
 
@@ -84,7 +83,7 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				}
 				const routePace: RoutePace = (npcRoute.GetAttribute("Pace") as RoutePace) ?? "Medium";
 				const firstPositionInRoutePoints = routePoints[0];
-				const closestSpawnPointRelativeToRoute =
+				const closestSpawnPointRelativeToRoute: Attachment | undefined =
 					getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints);
 				if (!closestSpawnPointRelativeToRoute) {
 					throw "Close spawnpoint not located";
@@ -107,8 +106,10 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 					error("Not able to create NPC");
 				}
 
-				npc.model.PivotTo(new CFrame(closestSpawnPointRelativeToRoute.Position)); // Spawn
-				assignNpcToRoute(npc, closestSpawnPointRelativeToRoute.Position, routePoints);
+				const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
+
+				npc.model.PivotTo(new CFrame(npcSpawnPoint));
+				assignNpcToRoute(npc, npcSpawnPoint, routePoints);
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
 
