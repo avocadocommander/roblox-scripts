@@ -99,8 +99,7 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 				}
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 					npcName,
-					MEDIEVAL_NPCS[npcName].gender,
-					MEDIEVAL_NPCS[npcName].position,
+					MEDIEVAL_NPCS[npcName],
 					routePace,
 				);
 
@@ -118,13 +117,6 @@ function updateAssignments(assigned: Map<string, Assignment>) {
 						npc.humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer;
 					}
 				});
-				npc.model.AncestryChanged.Connect((child, parent) => {
-					if (!parent) {
-						log(`💀 ${child.Name} was removed from this life and from ${npcRoute.Name}`);
-						assigned.delete(npcRoute.Name);
-					}
-				});
-
 				npc.model.AncestryChanged.Connect((child, parent) => {
 					if (!parent) {
 						log(`💀 ${child.Name} was removed from this life and from ${npcRoute.Name}`);

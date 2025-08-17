@@ -72,5 +72,5 @@ function stopStance(stanceTrack: AnimationTrack | undefined) {
 	}
 }
 
-addToolToBackpack("Dagger");
+addToolToBackpack("Scroll");
 addToolToBackpack("Hammer");

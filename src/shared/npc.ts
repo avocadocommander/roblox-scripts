@@ -1,6 +1,6 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { Position, RoutePace, useAssetId } from "./module";
+import { NPCData, Position, Race, RoutePace, useAssetId } from "./module";
 import { murderNpcByPlayer } from "shared/player-store";
 import { PathfindingService } from "@rbxts/services";
 
@@ -13,14 +13,10 @@ export interface NPC {
 	previousState: NPCStateKeys;
 	animationInstances: NPCStateRecord;
 	model: Model;
+	race: Race;
 }
 
-export function createNPCModelAndGenerateHumanoid(
-	name: string,
-	gender: Gender,
-	position: Position,
-	pace: RoutePace,
-): NPC | undefined {
+export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, pace: RoutePace): NPC | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
 	modelClone.Name = name;
@@ -29,7 +25,7 @@ export function createNPCModelAndGenerateHumanoid(
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
-	setHumanoidDefaults(humanoid, getSeedFromName(name), gender, position);
+	setHumanoidDefaults(humanoid, getSeedFromName(name), data);
 	setHumanoidPace(humanoid, pace);
 	addPromptToEndNpc(modelClone, "");
 
@@ -38,8 +34,9 @@ export function createNPCModelAndGenerateHumanoid(
 
 	return {
 		name,
+		race: data.race,
 		seed: getSeedFromName(name),
-		rarity: position,
+		rarity: data.position,
 		humanoid,
 		model: modelClone,
 		state: "IDLE",
@@ -48,11 +45,52 @@ export function createNPCModelAndGenerateHumanoid(
 	};
 }
 
+// Lore-true skin tones by race
+const RACE_SKIN_TONES: Record<Race, Color3[]> = {
+	Human: [
+		Color3.fromRGB(255, 224, 189), // fair
+		Color3.fromRGB(241, 194, 125), // light
+		Color3.fromRGB(224, 172, 105), // light tan
+		Color3.fromRGB(198, 134, 66), // olive
+		Color3.fromRGB(141, 85, 36), // brown
+		Color3.fromRGB(101, 67, 33), // dark brown
+		Color3.fromRGB(77, 51, 25), // very dark
+	],
+	Elf: [
+		Color3.fromRGB(245, 245, 240), // porcelain
+		Color3.fromRGB(235, 245, 238), // pale with green tint
+		Color3.fromRGB(235, 238, 255), // pale with blue tint
+		Color3.fromRGB(250, 235, 245), // pale rose
+	],
+	Dwarf: [
+		Color3.fromRGB(255, 220, 190), // ruddy fair
+		Color3.fromRGB(232, 190, 172), // rosy
+		Color3.fromRGB(203, 144, 102), // warm tan
+		Color3.fromRGB(160, 114, 77), // deep tan
+		Color3.fromRGB(141, 85, 36), // brown
+	],
+	Hobbit: [
+		Color3.fromRGB(255, 230, 200), // rosy fair
+		Color3.fromRGB(241, 200, 150), // warm light
+		Color3.fromRGB(224, 172, 105), // light tan
+		Color3.fromRGB(198, 134, 66), // olive
+	],
+	Goblin: [
+		Color3.fromRGB(60, 100, 60), // moss green
+		Color3.fromRGB(80, 110, 70), // olive green
+		Color3.fromRGB(90, 90, 90), // slate gray
+		Color3.fromRGB(50, 70, 50), // dark green
+	],
+};
+
+function getRaceSkinTones(race: Race): Color3[] {
+	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
+}
+
 export function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
-	gender: Gender,
-	position: Position,
+	data: NPCData,
 ): HumanoidDescription | undefined {
 	const faces = [
 		17448541918, 12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080,
@@ -83,27 +121,6 @@ export function getGenericSeededAppearance(
 		"2956239660",
 	];
 
-	// const hats = ["617605556", "3403874988", "607702162", "417457461", "48474313", "607700713"];
-	// const backs = ["98752422639730"];
-	// const legs = [398634487, 398635338, 382538503, 382537950];
-
-	// const torsos = [607785314, 398634295, 382537085, 382538059, 144076358];
-	// const waist = ["7957171682", "7074727236", "7074727585", "7074727897"];
-	// const pants = [398634487, 398635338, 382538503, 382537950];
-
-	const realisticSkinTones: Color3[] = [
-		Color3.fromRGB(255, 224, 189), // Fair
-		Color3.fromRGB(241, 194, 125), // Light
-		Color3.fromRGB(224, 172, 105), // Light tan
-		Color3.fromRGB(198, 134, 66), // Olive
-		Color3.fromRGB(141, 85, 36), // Brown
-		Color3.fromRGB(101, 67, 33), // Dark brown
-		Color3.fromRGB(77, 51, 25), // Very dark
-		Color3.fromRGB(232, 190, 172), // Rosy fair
-		Color3.fromRGB(203, 144, 102), // Warm tan
-		Color3.fromRGB(160, 114, 77), // Deep tan
-	];
-
 	const shirtColors: Color3[] = [
 		Color3.fromRGB(139, 69, 19), // Saddle Brown
 		Color3.fromRGB(160, 82, 45), // Sienna
@@ -129,8 +146,8 @@ export function getGenericSeededAppearance(
 		Color3.fromRGB(153, 101, 21), // Golden Oak
 	];
 
-	const skinIndex = math.floor(seed() * realisticSkinTones.size()) + 1;
-	const skinColor: Color3 = realisticSkinTones[skinIndex - 1];
+	const raceSkinTones = getRaceSkinTones(data.race);
+	const skinColor = getRandomAssetFromListBasedOnSeed(raceSkinTones, seed());
 
 	humanoidDescription.Head = 746767604;
 
@@ -141,13 +158,13 @@ export function getGenericSeededAppearance(
 	humanoidDescription.RightLegColor = skinColor;
 	humanoidDescription.TorsoColor = skinColor;
 
-	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(gender === "F" ? femaleFaces : faces, seed());
+	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(data.gender === "F" ? femaleFaces : faces, seed());
 
 	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
-		gender === "F" ? femaleHair : malehair,
+		data.gender === "F" ? femaleHair : malehair,
 		seed(),
 	);
-	if (position === "Merchant") {
+	if (data.position === "Merchant") {
 		humanoidDescription.HatAccessory = "617605556";
 		humanoidDescription.HairAccessory = "";
 	}
@@ -156,7 +173,7 @@ export function getGenericSeededAppearance(
 	humanoidDescription.RightArmColor = humanoidDescription.TorsoColor;
 	humanoidDescription.LeftArmColor = humanoidDescription.TorsoColor;
 
-	if (gender === "F") {
+	if (data.gender === "F") {
 		//humanoidDescription.Shirt = 126515050129801;
 	}
 
@@ -179,12 +196,7 @@ function setHumanoidPace(humanoid: Humanoid, pace: RoutePace) {
 	humanoid.WalkSpeed = paceSpeedMap[pace];
 }
 
-export function setHumanoidDefaults(
-	humanoid: Humanoid,
-	seed: number,
-	gender: Gender,
-	position: Position,
-): Humanoid | undefined {
+export function setHumanoidDefaults(humanoid: Humanoid, seed: number, data: NPCData): Humanoid | undefined {
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	const npcDescription = humanoid.GetAppliedDescription();
 	if (!npcDescription) {
@@ -192,8 +204,8 @@ export function setHumanoidDefaults(
 		return undefined;
 	}
 	const rand = makeSeededRandom(seed);
-	randomizeBodyShape(npcDescription, rand);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, gender, position);
+	randomizeBodyShape(npcDescription, rand, data.race);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data);
 
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
@@ -221,15 +233,75 @@ export function getSeedFromName(name: string): number {
 	return seed;
 }
 
-export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number) {
-	npcDescription.BodyTypeScale = math.round(seed() * 100) / 100; // 0.0 to 1.0
-	npcDescription.ProportionScale = math.round(seed() * 100) / 100;
+export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number, race: Race) {
+	function randRange(min: number, max: number, seed: () => number) {
+		return min + (max - min) * seed();
+	}
 
-	npcDescription.HeightScale = math.round((0.9 + seed() * 0.15) * 100) / 100; // 0.9 to 1.05
-	npcDescription.WidthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
-	npcDescription.DepthScale = math.round((0.9 + seed() * 0.15) * 100) / 100;
+	const raceScale: Record<
+		Race,
+		{
+			height: [number, number];
+			width: [number, number];
+			depth: [number, number];
+			head: [number, number];
+			bodyType: [number, number];
+			proportion: [number, number];
+		}
+	> = {
+		Human: {
+			height: [0.95, 1.05],
+			width: [0.95, 1.05],
+			depth: [0.95, 1.05],
+			head: [0.9, 1.1],
+			bodyType: [0.3, 0.7],
+			proportion: [0.45, 0.65],
+		},
+		Elf: {
+			height: [1.05, 1.15],
+			width: [0.9, 1.0],
+			depth: [0.95, 1.05],
+			head: [0.85, 1.0],
+			bodyType: [0.2, 0.5],
+			proportion: [0.55, 0.75],
+		},
+		Dwarf: {
+			height: [0.8, 0.9],
+			width: [1.05, 1.2],
+			depth: [1.05, 1.2],
+			head: [1.0, 1.15],
+			bodyType: [0.6, 0.9],
+			proportion: [0.4, 0.6],
+		},
+		Hobbit: {
+			height: [0.7, 0.8],
+			width: [0.9, 1.0],
+			depth: [0.9, 1.0],
+			head: [0.95, 1.1],
+			bodyType: [0.3, 0.6],
+			proportion: [0.45, 0.65],
+		},
+		Goblin: {
+			height: [0.75, 0.9],
+			width: [0.85, 0.95],
+			depth: [0.85, 0.95],
+			head: [0.9, 1.05],
+			bodyType: [0.25, 0.55],
+			proportion: [0.4, 0.6],
+		},
+	};
 
-	npcDescription.HeadScale = math.round((0.8 + seed() * 0.4) * 100) / 100; // 0.8 to 1.2
+	const scales = raceScale[race];
+
+	npcDescription.HeightScale = math.round(randRange(scales.height[0], scales.height[1], seed) * 100) / 100;
+	npcDescription.WidthScale = math.round(randRange(scales.width[0], scales.width[1], seed) * 100) / 100;
+	npcDescription.DepthScale = math.round(randRange(scales.depth[0], scales.depth[1], seed) * 100) / 100;
+
+	npcDescription.HeadScale = math.round(randRange(scales.head[0], scales.head[1], seed) * 100) / 100;
+
+	npcDescription.BodyTypeScale = math.round(randRange(scales.bodyType[0], scales.bodyType[1], seed) * 100) / 100;
+	npcDescription.ProportionScale =
+		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
 export function addPromptToEndNpc(npc: Model, message: string) {
