@@ -156,7 +156,6 @@ export function getGenericSeededAppearance(
 	humanoidDescription.LeftLegColor = skinColor;
 	humanoidDescription.RightLegColor = skinColor;
 	humanoidDescription.TorsoColor = skinColor;
-
 	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(data.gender === "F" ? faces : faces, seed());
 
 	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
