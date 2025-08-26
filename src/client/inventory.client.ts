@@ -27,16 +27,16 @@ function applyFull(list: InventoryList) {
 }
 
 task.defer(() => {
-	const snap = GetInventory.InvokeServer() as InventoryList;
-	applyFull(snap);
+	const inventory = GetInventory.InvokeServer() as InventoryList;
+	applyFull(inventory);
 	print("[Inventory] Snapshot received.");
 
-	InventoryUpdated.OnClientEvent.Connect((list: InventoryList) => applyFull(list));
+	InventoryUpdated.OnClientEvent.Connect((inventory: InventoryList) => applyFull(inventory));
 });
 
 export function requestAdd(defId: number, rarity = 1) {
-	const ok = RequestAddItem.InvokeServer(defId, rarity) as boolean;
-	if (!ok) warn(`[Inventory] Add denied for defId=${defId}`);
+	const addResponse = RequestAddItem.InvokeServer(defId, rarity) as boolean;
+	if (!addResponse) warn(`[Inventory] Add denied for defId=${defId}`);
 }
 
 game.GetService("UserInputService").InputBegan.Connect((io, gp) => {
