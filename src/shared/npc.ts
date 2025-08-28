@@ -207,6 +207,17 @@ export function setHumanoidDefaults(humanoid: Humanoid, seed: number, data: NPCD
 
 	if (data.position === "Nobility") {
 		const lantern = ReplicatedStorage.WaitForChild("Lantern") as Tool;
+		const animator = humanoid.FindFirstChildOfClass("Animator") ?? (humanoid.WaitForChild("Animator") as Animator);
+
+		const anim = new Instance("Animation");
+		anim.AnimationId = `rbxassetid://74875540932204`;
+
+		const track = animator.LoadAnimation(anim);
+		track.Priority = Enum.AnimationPriority.Action2;
+		track.Looped = true;
+
+		track.Play();
+
 		humanoid.EquipTool(lantern.Clone());
 	}
 

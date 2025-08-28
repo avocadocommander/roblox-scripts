@@ -39,7 +39,7 @@ export function requestAdd(defId: number, rarity = 1) {
 	if (!addResponse) warn(`[Inventory] Add denied for defId=${defId}`);
 }
 
-game.GetService("UserInputService").InputBegan.Connect((io, gp) => {
-	if (gp) return;
-	if (io.KeyCode === Enum.KeyCode.A) requestAdd(1234, 2);
-});
+// game.GetService("UserInputService").InputBegan.Connect((io, gp) => {
+// 	if (gp) return;
+// 	if (io.KeyCode === Enum.KeyCode.A) requestAdd(1234, 2);
+// });
