@@ -35,6 +35,13 @@ const GetLevel = ((): RemoteFunction => {
 	return rf;
 })();
 
+const GetCoins = ((): RemoteFunction => {
+	const rf = (playerStateFolder.FindFirstChild("GetCoins") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "GetCoins";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+
 const ExpierenceUpdated = ((): RemoteEvent => {
 	const re = (playerStateFolder.FindFirstChild("ExpierenceUpdated") as RemoteEvent) ?? new Instance("RemoteEvent");
 	re.Name = "ExpierenceUpdated";
@@ -45,6 +52,13 @@ const ExpierenceUpdated = ((): RemoteEvent => {
 const LevelUpdated = ((): RemoteEvent => {
 	const re = (playerStateFolder.FindFirstChild("LevelUpdated") as RemoteEvent) ?? new Instance("RemoteEvent");
 	re.Name = "LevelUpdated";
+	re.Parent = playerStateFolder;
+	return re;
+})();
+
+const CoinsUpdated = ((): RemoteEvent => {
+	const re = (playerStateFolder.FindFirstChild("CoinsUpdated") as RemoteEvent) ?? new Instance("RemoteEvent");
+	re.Name = "CoinsUpdated";
 	re.Parent = playerStateFolder;
 	return re;
 })();
@@ -60,6 +74,13 @@ const RequestAddLevel = ((): RemoteFunction => {
 	const rf =
 		(playerStateFolder.FindFirstChild("RequestAddLevel") as RemoteFunction) ?? new Instance("RemoteFunction");
 	rf.Name = "RequestAddLevel";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+const RequestAddCoins = ((): RemoteFunction => {
+	const rf =
+		(playerStateFolder.FindFirstChild("RequestAddCoins") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "RequestAddCoins";
 	rf.Parent = playerStateFolder;
 	return rf;
 })();
@@ -100,7 +121,7 @@ Players.PlayerAdded.Connect(async (player) => {
 	PLAYER_STATES.set(player, { ...DEFAULT_STATE, name: player.Name });
 });
 Players.PlayerRemoving.Connect((player) => {
-	// TODO: PUSH UP DIRTY CHANGES
+	// TODO: PUSH UP DIRTY CHANGES FOR PERSISTANCE
 	PLAYER_STATES.delete(player);
 });
 
@@ -117,9 +138,27 @@ GetLevel.OnServerInvoke = (player: Player) => {
 GetTitle.OnServerInvoke = (player: Player) => {
 	return PLAYER_STATES.get(player)?.title ?? DEFAULT_STATE.title;
 };
+GetCoins.OnServerInvoke = (player: Player) => {
+	return PLAYER_STATES.get(player)?.coins ?? DEFAULT_STATE.coins;
+};
 
 RequestAddLevel.OnServerInvoke = (player: Player, ...args: unknown[]) => {
 	LevelUpdated.FireClient(player, PLAYER_STATES.get(player)?.level ?? DEFAULT_STATE.level);
+};
+
+RequestAddCoins.OnServerInvoke = (player: Player, ...args: unknown[]) => {
+	const playerState = PLAYER_STATES.get(player);
+	const [coinsToAddFromArgs] = args;
+	if (typeOf(coinsToAddFromArgs) !== "number" || !playerState) {
+		return false;
+	}
+	const coinsToAdd = coinsToAddFromArgs as number;
+	const currentPlayerCoins: number = playerState?.coins ?? 0;
+	const newCoinTotal: number = currentPlayerCoins + coinsToAdd;
+
+	PLAYER_STATES.set(player, { ...playerState, coins: newCoinTotal });
+
+	CoinsUpdated.FireClient(player, PLAYER_STATES.get(player)?.coins ?? DEFAULT_STATE.coins);
 };
 
 RequestAddExpierence.OnServerInvoke = (player, ...args: unknown[]) => {
@@ -137,7 +176,7 @@ RequestAddExpierence.OnServerInvoke = (player, ...args: unknown[]) => {
 	PLAYER_STATES.set(player, { ...playerState, expierence: newExpierenceTotal });
 	pushExpierenceUpdate(player);
 
-	const playerLevelAccoringToCurrentXP = math.ceil(newExpierenceTotal / 10);
+	const playerLevelAccoringToCurrentXP = math.ceil(newExpierenceTotal / 1000);
 	if (playerLevelAccoringToCurrentXP !== playerState.level) {
 		PLAYER_STATES.set(player, { ...playerState, level: playerLevelAccoringToCurrentXP });
 		pushLevelUpdate(player);

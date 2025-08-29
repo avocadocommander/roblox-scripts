@@ -5,6 +5,9 @@ const GetPlayerTitle = playerState.WaitForChild("GetTitle") as RemoteFunction;
 const GetPlayerName = playerState.WaitForChild("GetName") as RemoteFunction;
 const GetPlayerLevel = playerState.WaitForChild("GetLevel") as RemoteFunction;
 
+const GetCoins = playerState.WaitForChild("GetCoins") as RemoteFunction;
+const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
+
 const ExpierenceUpdated = playerState.WaitForChild("ExpierenceUpdated") as RemoteEvent;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 
@@ -29,7 +32,19 @@ const playerNameLabel = screenGui
 	.WaitForChild("NameFrame")
 	.WaitForChild("playerNameLabel") as TextLabel;
 
-function refreshLabels(playerName?: string, playerTitle?: string, playerLevel?: number, playerExpierence?: number) {
+const playerCoinsLabel = screenGui
+	.WaitForChild("PlayerInfoImage")
+	.WaitForChild("PlayerFrame")
+	.WaitForChild("XPFrame")
+	.WaitForChild("coinAmountLabel") as TextLabel;
+
+function refreshLabels(
+	playerName?: string,
+	playerTitle?: string,
+	playerLevel?: number,
+	playerExpierence?: number,
+	playerCoins?: number,
+) {
 	if (playerName !== undefined) {
 		playerNameLabel.Text = `${playerName}`;
 	}
@@ -39,6 +54,9 @@ function refreshLabels(playerName?: string, playerTitle?: string, playerLevel?: 
 	if (playerLevel !== undefined) {
 		playerLevelLabel.Text = `Level ${playerLevel}`;
 	}
+	if (playerCoins !== undefined) {
+		playerCoinsLabel.Text = `${playerCoins}`;
+	}
 }
 
 function main() {
@@ -46,14 +64,19 @@ function main() {
 	const playerTitle: string = GetPlayerTitle.InvokeServer() as string;
 	const playerName: string = GetPlayerName.InvokeServer() as string;
 	const playerLevel: number = GetPlayerLevel.InvokeServer() as number;
-	refreshLabels(playerName, playerTitle, playerLevel, playerExpierence);
+	const playerCoins: number = GetCoins.InvokeServer() as number;
+	refreshLabels(playerName, playerTitle, playerLevel, playerExpierence, playerCoins);
 
 	ExpierenceUpdated.OnClientEvent.Connect((newTotalexpierence: number) => {
-		refreshLabels(undefined, undefined, undefined, newTotalexpierence);
+		refreshLabels(undefined, undefined, undefined, newTotalexpierence, undefined);
 	});
 
 	LevelUpdated.OnClientEvent.Connect((newLevel: number) => {
-		refreshLabels(undefined, undefined, newLevel, undefined);
+		refreshLabels(undefined, undefined, newLevel, undefined, undefined);
+	});
+
+	CoinsUpdated.OnClientEvent.Connect((newTotalCoinsAmount: number) => {
+		refreshLabels(undefined, undefined, undefined, undefined, newTotalCoinsAmount);
 	});
 }
 

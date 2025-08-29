@@ -1,6 +1,9 @@
 import { CollectionService, ReplicatedStorage, UserInputService } from "@rbxts/services";
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const RequestAddExpierence = playerState.WaitForChild("RequestAddExpierence") as RemoteFunction;
+const RequestAddLevel = playerState.WaitForChild("RequestAddLevel") as RemoteFunction;
+const RequestAddCoins = playerState.WaitForChild("RequestAddCoins") as RemoteFunction;
+
 const GetPlayerLevel = playerState.WaitForChild("GetLevel") as RemoteFunction;
 
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
@@ -25,15 +28,19 @@ function modelChecks(level: number) {
 		warn(`level ${level} | required ${requiredLevel}`);
 		if (level >= requiredLevel) {
 			const sparkles = getAllSparkles(accessModelInstance);
+			const wall: Part = accessModelInstance.FindFirstChild("Wall") as Part;
+
 			sparkles.forEach((sparkle) => {
 				sparkle.SparkleColor = new Color3(0.54, 0.78, 0.46);
-				const wall: Part = accessModelInstance.FindFirstChild("Wall") as Part;
-				wall.Anchored = false;
 				wall.CanCollide = false;
 				wall.CanTouch = false;
 				wall.CanQuery = false;
 			});
-			task.delay(10, () => {
+			for (let i = 0; i <= 50; i++) {
+				wall.Transparency += i * 0.01;
+				wait(0.1);
+			}
+			task.delay(5, () => {
 				accessModelInstance.Destroy();
 			});
 		} else {
@@ -65,15 +72,11 @@ function main() {
 	});
 }
 
-// TESTS
-
-export function requestAdd(xp: number) {
-	const addResponse = RequestAddExpierence.InvokeServer(xp) as boolean;
-	if (!addResponse) warn(`[FAILED] to add xp ${xp}`);
-}
 UserInputService.InputBegan.Connect((io, gp) => {
 	if (gp) return;
-	if (io.KeyCode === Enum.KeyCode.R) requestAdd(1);
+	if (io.KeyCode === Enum.KeyCode.Z) RequestAddLevel.InvokeServer(1);
+	if (io.KeyCode === Enum.KeyCode.X) RequestAddExpierence.InvokeServer(100);
+	if (io.KeyCode === Enum.KeyCode.C) RequestAddCoins.InvokeServer(20);
 });
 
 main();
