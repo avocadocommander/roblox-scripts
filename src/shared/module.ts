@@ -59,7 +59,7 @@ export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
 
 export type Position = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
 export type Gender = "M" | "F";
-export type Race = "Human" | "Elf" | "Dwarf" | "Hobbit" | "Goblin";
+export type Race = "Human" | "Elf" | "Goblin";
 export interface NPCData {
 	gender: Gender;
 	race: Race;
@@ -70,28 +70,28 @@ export type NPCModel = Record<string, NPCData>;
 
 export const MEDIEVAL_NPCS: NPCModel = {
 	"Alaric Thornblade": { gender: "M", race: "Human", position: "Serf" },
-	"Cedric Ironhart": { gender: "M", race: "Dwarf", position: "Royalty" },
+	"Cedric Ironhart": { gender: "M", race: "Goblin", position: "Royalty" },
 	"Ealdred Crowmere": { gender: "M", race: "Human", position: "Serf" },
 	"Godfrey Blackmoor": { gender: "M", race: "Human", position: "Nobility" },
-	"Aldwyn Ravenshield": { gender: "F", race: "Elf", position: "Nobility" },
-	"Baldric Stonehelm": { gender: "M", race: "Dwarf", position: "Merchant" },
+	"Aldwyn Ravenshield": { gender: "F", race: "Goblin", position: "Nobility" },
+	"Baldric Stonehelm": { gender: "M", race: "Goblin", position: "Merchant" },
 	"Osric Greydawn": { gender: "M", race: "Human", position: "Serf" },
 	"Leofric Ashenford": { gender: "M", race: "Human", position: "Serf" },
 	"Theobald Vexmere": { gender: "M", race: "Human", position: "Serf" },
 	"Wymond Duskwharf": { gender: "M", race: "Human", position: "Serf" },
 	"Faelan Windglen": { gender: "F", race: "Elf", position: "Serf" },
 	"Thalion Brightshade": { gender: "M", race: "Elf", position: "Serf" },
-	"Elandor Moonvale": { gender: "F", race: "Elf", position: "Commoner" },
-	"Caerwyn Duskwhisper": { gender: "M", race: "Elf", position: "Commoner" },
+	"Elandor Moonvale": { gender: "F", race: "Goblin", position: "Commoner" },
+	"Caerwyn Duskwhisper": { gender: "M", race: "Goblin", position: "Commoner" },
 	"Aerendyl Silversong": { gender: "F", race: "Elf", position: "Royalty" },
 	"Merien Candlewick": { gender: "F", race: "Human", position: "Serf" },
 	"Rowan Emberhollow": { gender: "F", race: "Human", position: "Serf" },
 	"Orren Grimquill": { gender: "M", race: "Goblin", position: "Serf" },
 	"Thessaly Nightglen": { gender: "F", race: "Elf", position: "Merchant" },
 	"Vareth Hollowmantle": { gender: "M", race: "Elf", position: "Nobility" },
-	"Tobias Mudfoot": { gender: "M", race: "Hobbit", position: "Serf" },
-	"Edda Barleyroot": { gender: "F", race: "Hobbit", position: "Merchant" },
-	"Hamlin Wainwright": { gender: "M", race: "Hobbit", position: "Serf" },
+	"Tobias Mudfoot": { gender: "M", race: "Goblin", position: "Serf" },
+	"Edda Barleyroot": { gender: "F", race: "Goblin", position: "Merchant" },
+	"Hamlin Wainwright": { gender: "M", race: "Goblin", position: "Serf" },
 	"Greta Millstone": { gender: "F", race: "Human", position: "Serf" },
 	"Brenna Woodwhistle": { gender: "F", race: "Human", position: "Serf" },
 	"Ulric Fenwatch": { gender: "M", race: "Human", position: "Serf" },
@@ -104,14 +104,14 @@ export const MEDIEVAL_NPCS: NPCModel = {
 	"Moira Blackfen": { gender: "F", race: "Human", position: "Serf" },
 	"Garrick Hollowvale": { gender: "M", race: "Human", position: "Merchant" },
 	"Tamsin Silvermere": { gender: "F", race: "Elf", position: "Royalty" },
-	"Aldon Brightforge": { gender: "M", race: "Dwarf", position: "Merchant" },
+	"Aldon Brightforge": { gender: "M", race: "Goblin", position: "Merchant" },
 	"Yseldra Nightbloom": { gender: "F", race: "Elf", position: "Nobility" },
 	"Halric Stonevein": { gender: "M", race: "Human", position: "Commoner" },
 	"Ansel Ravenwharf": { gender: "M", race: "Human", position: "Serf" },
 	"Elira Frostbrook": { gender: "F", race: "Elf", position: "Commoner" },
 	"Wulfgar Ironwake": { gender: "M", race: "Human", position: "Nobility" },
 	"Thessia Dewmantle": { gender: "F", race: "Human", position: "Serf" },
-	"Brandis Oakshield": { gender: "M", race: "Dwarf", position: "Merchant" },
+	"Brandis Oakshield": { gender: "M", race: "Goblin", position: "Merchant" },
 	"Fiora Thistlewynd": { gender: "F", race: "Elf", position: "Merchant" },
 	"Magnus Coldmere": { gender: "M", race: "Human", position: "Serf" },
 };

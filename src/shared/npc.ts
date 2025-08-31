@@ -62,19 +62,6 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 		Color3.fromRGB(235, 238, 255), // pale with blue tint
 		Color3.fromRGB(250, 235, 245), // pale rose
 	],
-	Dwarf: [
-		Color3.fromRGB(255, 220, 190), // ruddy fair
-		Color3.fromRGB(232, 190, 172), // rosy
-		Color3.fromRGB(203, 144, 102), // warm tan
-		Color3.fromRGB(160, 114, 77), // deep tan
-		Color3.fromRGB(141, 85, 36), // brown
-	],
-	Hobbit: [
-		Color3.fromRGB(255, 230, 200), // rosy fair
-		Color3.fromRGB(241, 200, 150), // warm light
-		Color3.fromRGB(224, 172, 105), // light tan
-		Color3.fromRGB(198, 134, 66), // olive
-	],
 	Goblin: [
 		Color3.fromRGB(60, 100, 60), // moss green
 		Color3.fromRGB(80, 110, 70), // olive green
@@ -91,64 +78,10 @@ export function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
 	data: NPCData,
+	humanoid: Humanoid,
 ): HumanoidDescription | undefined {
-	const faces = [
-		12145366, 25166274, 8329679, 162068415, 10907551, 2222771916, 391496223, 7074893, 15432080, 8560971, 406001167,
-		7317765, 616381207,
-	];
-	const femaleHair = [
-		"451220849",
-		"2956239660",
-		"7429019921",
-		"7565118471",
-		"6134532324",
-		"9244095135",
-		"9244097555",
-		"7193448988",
-		"9244148336",
-		"7193455510",
-		"9244150641",
-	];
-	const malehair = [
-		"16630147",
-		"5891039736",
-		"4875445470",
-		"6441556987",
-		"63690008",
-		"451221329",
-		"376548738",
-		"2956239660",
-	];
-
-	const shirtColors: Color3[] = [
-		Color3.fromRGB(139, 69, 19), // Saddle Brown
-		Color3.fromRGB(160, 82, 45), // Sienna
-		Color3.fromRGB(205, 133, 63), // Peru
-		Color3.fromRGB(222, 184, 135), // Burlywood
-		Color3.fromRGB(245, 245, 220), // Beige Linen
-		Color3.fromRGB(112, 128, 144), // Slate Gray
-		Color3.fromRGB(119, 136, 153), // Light Slate
-		Color3.fromRGB(47, 79, 79), // Dark Slate Gray
-		Color3.fromRGB(255, 248, 220), // Cornsilk (soft cream)
-		Color3.fromRGB(150, 111, 51), // Raw Umber
-	];
-	const pantColors: Color3[] = [
-		Color3.fromRGB(54, 42, 28), // Leather Brown
-		Color3.fromRGB(70, 53, 34), // Mudstone
-		Color3.fromRGB(105, 89, 72), // Faded Earth
-		Color3.fromRGB(80, 80, 80), // Charcoal Gray
-		Color3.fromRGB(30, 30, 30), // Soot Black
-		Color3.fromRGB(102, 51, 0), // Chestnut
-		Color3.fromRGB(85, 107, 47), // Olive Drab
-		Color3.fromRGB(89, 74, 60), // Bark
-		Color3.fromRGB(67, 56, 47), // Ashen Clay
-		Color3.fromRGB(153, 101, 21), // Golden Oak
-	];
-
 	const raceSkinTones = getRaceSkinTones(data.race);
 	const skinColor = getRandomAssetFromListBasedOnSeed(raceSkinTones, seed());
-
-	humanoidDescription.Head = 746767604;
 
 	humanoidDescription.HeadColor = skinColor;
 	humanoidDescription.LeftArmColor = skinColor;
@@ -156,27 +89,30 @@ export function getGenericSeededAppearance(
 	humanoidDescription.LeftLegColor = skinColor;
 	humanoidDescription.RightLegColor = skinColor;
 	humanoidDescription.TorsoColor = skinColor;
-	humanoidDescription.Face = getRandomAssetFromListBasedOnSeed(data.gender === "F" ? faces : faces, seed());
 
-	humanoidDescription.HairAccessory = getRandomAssetFromListBasedOnSeed(
-		data.gender === "F" ? femaleHair : malehair,
-		seed(),
-	);
+	const npc = humanoid.Parent as Model;
+	if (!npc) {
+		error("NOT npc");
+	}
+	const shirtColors: Color3[] = [
+		Color3.fromHex("#9B2E2E"),
+		Color3.fromHex("#556B2F"),
+		Color3.fromHex("#1E2B44"),
+		Color3.fromHex("#6B4C2E"),
+	];
+	if (!shirtColors) {
+		error("NOT shirtColors");
+	}
+	const shirt = npc.WaitForChild("BasicShirt").WaitForChild("Handle") as MeshPart;
+	if (!shirt) {
+		error("NOT SHIRT");
+	}
+	shirt.Color = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
+
 	if (data.position === "Merchant") {
 		humanoidDescription.HatAccessory = "617605556";
 		humanoidDescription.HairAccessory = "";
 	}
-
-	humanoidDescription.TorsoColor = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
-	humanoidDescription.RightArmColor = humanoidDescription.TorsoColor;
-	humanoidDescription.LeftArmColor = humanoidDescription.TorsoColor;
-
-	if (data.gender === "F") {
-		//humanoidDescription.Shirt = 126515050129801;
-	}
-
-	humanoidDescription.RightLegColor = getRandomAssetFromListBasedOnSeed(pantColors, seed());
-	humanoidDescription.LeftLegColor = humanoidDescription.RightLegColor;
 
 	return humanoidDescription;
 }
@@ -203,7 +139,7 @@ export function setHumanoidDefaults(humanoid: Humanoid, seed: number, data: NPCD
 	}
 	const rand = makeSeededRandom(seed);
 	randomizeBodyShape(npcDescription, rand, data.race);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid);
 
 	if (data.position === "Nobility") {
 		const lantern = ReplicatedStorage.WaitForChild("Lantern") as Tool;
@@ -279,22 +215,22 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 			bodyType: [0.2, 0.5],
 			proportion: [0.55, 0.75],
 		},
-		Dwarf: {
-			height: [0.8, 0.9],
-			width: [1.05, 1.2],
-			depth: [1.05, 1.2],
-			head: [1.0, 1.15],
-			bodyType: [0.6, 0.9],
-			proportion: [0.4, 0.6],
-		},
-		Hobbit: {
-			height: [0.7, 0.8],
-			width: [0.9, 1.0],
-			depth: [0.9, 1.0],
-			head: [0.95, 1.1],
-			bodyType: [0.3, 0.6],
-			proportion: [0.45, 0.65],
-		},
+		// Dwarf: {
+		// 	height: [0.8, 0.9],
+		// 	width: [1.05, 1.2],
+		// 	depth: [1.05, 1.2],
+		// 	head: [1.0, 1.15],
+		// 	bodyType: [0.6, 0.9],
+		// 	proportion: [0.4, 0.6],
+		// },
+		// Hobbit: {
+		// 	height: [0.7, 0.8],
+		// 	width: [0.9, 1.0],
+		// 	depth: [0.9, 1.0],
+		// 	head: [0.95, 1.1],
+		// 	bodyType: [0.3, 0.6],
+		// 	proportion: [0.45, 0.65],
+		// },
 		Goblin: {
 			height: [0.75, 0.9],
 			width: [0.85, 0.95],
