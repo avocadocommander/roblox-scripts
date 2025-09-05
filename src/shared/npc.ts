@@ -1,8 +1,9 @@
-import { ReplicatedStorage, Workspace } from "@rbxts/services";
+import { Players, ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCData, Position, Race, RoutePace, useAssetId } from "./module";
+import { NPCData, Race, RoutePace, useAssetId } from "./module";
 import { murderNpcByPlayer } from "shared/player-store";
 import { PathfindingService } from "@rbxts/services";
+import { requestAddView, requestRemoveView } from "./player-visiualization";
 
 export interface NPC {
 	name: string;
@@ -28,6 +29,7 @@ export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, p
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data);
 	setHumanoidPace(humanoid, pace);
 	addPromptToEndNpc(modelClone, "");
+	setUpModelVision(modelClone);
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
 	const animationInstances = getAnimationTracks(animator);
@@ -70,6 +72,62 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	],
 };
 
+function setUpModelVision(npc: Model) {
+	const visionCircle = npc.WaitForChild("Vision").WaitForChild("Ring") as Part;
+	const visionCircleView = npc.WaitForChild("Vision").WaitForChild("ViewRing") as Part;
+
+	visionCircleView.GetDescendants().forEach((descendant) => {
+		if (descendant.IsA("ParticleEmitter") || descendant.IsA("Smoke") || descendant.IsA("SurfaceLight")) {
+			descendant.Enabled = false;
+		}
+	});
+
+	let isTouchingPlayer = false;
+	visionCircleView.Transparency = 1;
+
+	visionCircle.Touched.Connect((part: BasePart) => {
+		isTouchingPlayer = true;
+		if (part.Name !== "HumanoidRootPart") {
+			return;
+		}
+		const parent = part.Parent as Model;
+
+		if (!parent) {
+			warn("NO part.Parent");
+			return;
+		}
+
+		const player = Players.FindFirstChild(parent.Name) as Player | undefined;
+		if (!player) {
+			return;
+		}
+
+		visionCircleView.Transparency = 0;
+
+		requestAddView(player, npc.Name);
+	});
+
+	visionCircle.TouchEnded.Connect((part: BasePart) => {
+		if (part.Name !== "HumanoidRootPart") {
+			return;
+		}
+		const parent = part.Parent as Model;
+
+		if (!parent) {
+			warn("NO part.Parent");
+			return;
+		}
+
+		const player = Players.FindFirstChild(parent.Name) as Player | undefined;
+		if (!player) {
+			return;
+		}
+		visionCircleView.Transparency = 1;
+
+		requestRemoveView(player, npc.Name);
+	});
+}
+
 function getRaceSkinTones(race: Race): Color3[] {
 	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
 }
@@ -100,14 +158,54 @@ export function getGenericSeededAppearance(
 		Color3.fromHex("#1E2B44"),
 		Color3.fromHex("#6B4C2E"),
 	];
+	const pantsColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#556B2F"), Color3.fromHex("#D8C9A8")];
+	const shoeColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#2C2C2C"), Color3.fromHex("#A1886F")];
+
 	if (!shirtColors) {
 		error("NOT shirtColors");
 	}
-	const shirt = npc.WaitForChild("BasicShirt").WaitForChild("Handle") as MeshPart;
+	const shirt = npc
+		.WaitForChild("BasicShirt")
+		.WaitForChild("Handle")
+		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
+
+	const pants = npc.WaitForChild("BasicPants").WaitForChild("Handle") as MeshPart;
+	const shoes = npc
+		.WaitForChild("BasicShoes")
+		.WaitForChild("Handle")
+		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
+
+	let earType: string | undefined = undefined;
+
+	switch (data.race) {
+		case "Elf": {
+			earType = "Elf Ears";
+			break;
+		}
+		case "Goblin": {
+			earType = "Goblin Ears";
+			break;
+		}
+		default: {
+			break;
+		}
+	}
+	if (earType !== undefined) {
+		const replicatedEars = ReplicatedStorage.WaitForChild(earType) as Accessory;
+		const ears = replicatedEars.Clone();
+		const earMesh = ears.WaitForChild("Handle") as MeshPart;
+		earMesh.Color = skinColor;
+		ears.Parent = npc;
+	}
+
 	if (!shirt) {
 		error("NOT SHIRT");
 	}
+
 	shirt.Color = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
+	pants.Color = getRandomAssetFromListBasedOnSeed(pantsColors, seed());
+
+	shoes.Color = getRandomAssetFromListBasedOnSeed(shoeColors, seed());
 
 	if (data.position === "Merchant") {
 		humanoidDescription.HatAccessory = "617605556";
@@ -159,6 +257,7 @@ export function setHumanoidDefaults(humanoid: Humanoid, seed: number, data: NPCD
 
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
+
 	return humanoid;
 }
 
@@ -215,22 +314,6 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 			bodyType: [0.2, 0.5],
 			proportion: [0.55, 0.75],
 		},
-		// Dwarf: {
-		// 	height: [0.8, 0.9],
-		// 	width: [1.05, 1.2],
-		// 	depth: [1.05, 1.2],
-		// 	head: [1.0, 1.15],
-		// 	bodyType: [0.6, 0.9],
-		// 	proportion: [0.4, 0.6],
-		// },
-		// Hobbit: {
-		// 	height: [0.7, 0.8],
-		// 	width: [0.9, 1.0],
-		// 	depth: [0.9, 1.0],
-		// 	head: [0.95, 1.1],
-		// 	bodyType: [0.3, 0.6],
-		// 	proportion: [0.45, 0.65],
-		// },
 		Goblin: {
 			height: [0.75, 0.9],
 			width: [0.85, 0.95],
@@ -268,15 +351,6 @@ export function addPromptToEndNpc(npc: Model, message: string) {
 	prompt.RequiresLineOfSight = false;
 	prompt.MaxActivationDistance = 10;
 	prompt.Parent = head;
-
-	// prompt.PromptShown.Connect(() => {
-	// 	warn("GMMMM");
-	// 	const player = game.GetService("Players").LocalPlayer;
-	// 	if (player.GetAttribute("state") === undefined || player.GetAttribute("state") !== "warmingUp") {
-	// 		prompt.Enabled = false;
-	// 	}
-	// 	prompt.Enabled = true;
-	// });
 
 	prompt.Triggered.Connect(async (player) => {
 		warn(`${player.GetAttribute("state")} state`);

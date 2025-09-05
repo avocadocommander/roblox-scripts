@@ -23,37 +23,36 @@ function addToolToBackpack(toolNameFromReplicatedStorage: string) {
 		return;
 	}
 
+	warn(`Backpack ${backpack}   tool ${clonedTool.Name}`);
 	clonedTool.Parent = backpack;
 	let stanceTrack: AnimationTrack | undefined;
 
 	clonedTool.Equipped.Connect(() => {
-		player.SetAttribute("state", "warmingUp");
-		const actionAnimationId = clonedTool.GetAttribute("ActionId");
-		// if (actionAnimationId === undefined) {
-		// 	warn("No action animation for this tool");
-		// 	return;
-		// }
-		//stanceTrack = playStance(humanoid, clonedTool, undefined);
+		const actionAnimationId = clonedTool.GetAttribute("WalkAnimation");
+		if (actionAnimationId === undefined) {
+			warn("No action animation for this tool");
+			return;
+		}
+		stanceTrack = playStance(humanoid, `${actionAnimationId}`);
 	});
 
-	clonedTool.Activated.Connect(() => {
-		playStance(humanoid, clonedTool, "119925860378560");
-	});
+	// clonedTool.Activated.Connect(() => {
+	// 	playStance(humanoid, clonedTool, "119925860378560");
+	// });
 
 	clonedTool.Unequipped.Connect(() => {
 		print("nim quit");
-		player.SetAttribute("state", undefined);
 		stopStance(stanceTrack);
 	});
 
-	clonedTool.AncestryChanged.Connect(() => {
-		print("nim aefea");
-		player.SetAttribute("state", undefined);
-		if (!clonedTool.IsDescendantOf(game)) stopStance(stanceTrack);
-	});
+	// clonedTool.AncestryChanged.Connect(() => {
+	// 	print("nim aefea");
+	// 	player.SetAttribute("state", undefined);
+	// 	if (!clonedTool.IsDescendantOf(game)) stopStance(stanceTrack);
+	// });
 }
 
-function playStance(humanoid: Humanoid, tool: Tool, actionAnimationId: string): AnimationTrack | undefined {
+function playStance(humanoid: Humanoid, actionAnimationId: string): AnimationTrack | undefined {
 	const animator = humanoid.FindFirstChildOfClass("Animator") ?? (humanoid.WaitForChild("Animator") as Animator);
 
 	const anim = new Instance("Animation");
@@ -61,7 +60,7 @@ function playStance(humanoid: Humanoid, tool: Tool, actionAnimationId: string): 
 
 	const track = animator.LoadAnimation(anim);
 	track.Priority = Enum.AnimationPriority.Action;
-	//track.Looped = true;
+	track.Looped = true;
 
 	track.Play();
 	return track;
@@ -75,4 +74,4 @@ function stopStance(stanceTrack: AnimationTrack | undefined) {
 	}
 }
 
-addToolToBackpack("Scroll");
+addToolToBackpack("Dagger");
