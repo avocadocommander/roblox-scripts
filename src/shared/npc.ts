@@ -28,7 +28,7 @@ export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, p
 	if (!humanoid) return;
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data);
 	setHumanoidPace(humanoid, pace);
-	addPromptToEndNpc(modelClone, "");
+	addKillPrompt(modelClone, "");
 	setUpModelVision(modelClone);
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
@@ -47,7 +47,6 @@ export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, p
 	};
 }
 
-// Lore-true skin tones by race
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
 		Color3.fromRGB(255, 224, 189), // fair
@@ -73,27 +72,14 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 };
 
 function setUpModelVision(npc: Model) {
-	const visionCircle = npc.WaitForChild("Vision").WaitForChild("Ring") as Part;
-	const visionCircleView = npc.WaitForChild("Vision").WaitForChild("ViewRing") as Part;
-
-	visionCircleView.GetDescendants().forEach((descendant) => {
-		if (descendant.IsA("ParticleEmitter") || descendant.IsA("Smoke") || descendant.IsA("SurfaceLight")) {
-			descendant.Enabled = false;
-		}
-	});
-
-	let isTouchingPlayer = false;
-	visionCircleView.Transparency = 1;
-
-	visionCircle.Touched.Connect((part: BasePart) => {
-		isTouchingPlayer = true;
-		if (part.Name !== "HumanoidRootPart") {
+	const visionCircle = npc.WaitForChild("HumanoidRootPart").WaitForChild("Ring") as Part;
+	const getPlayerOnCollision = (connectedPart: BasePart) => {
+		if (connectedPart.Name !== "HumanoidRootPart") {
 			return;
 		}
-		const parent = part.Parent as Model;
 
+		const parent = connectedPart.Parent as Model; // Player
 		if (!parent) {
-			warn("NO part.Parent");
 			return;
 		}
 
@@ -102,29 +88,21 @@ function setUpModelVision(npc: Model) {
 			return;
 		}
 
-		visionCircleView.Transparency = 0;
+		return player;
+	};
 
-		requestAddView(player, npc.Name);
+	visionCircle.Touched.Connect((part: BasePart) => {
+		const player: Player | undefined = getPlayerOnCollision(part);
+		if (player) {
+			requestAddView(player, npc.Name);
+		}
 	});
 
 	visionCircle.TouchEnded.Connect((part: BasePart) => {
-		if (part.Name !== "HumanoidRootPart") {
-			return;
+		const player: Player | undefined = getPlayerOnCollision(part);
+		if (player) {
+			requestRemoveView(player, npc.Name);
 		}
-		const parent = part.Parent as Model;
-
-		if (!parent) {
-			warn("NO part.Parent");
-			return;
-		}
-
-		const player = Players.FindFirstChild(parent.Name) as Player | undefined;
-		if (!player) {
-			return;
-		}
-		visionCircleView.Transparency = 1;
-
-		requestRemoveView(player, npc.Name);
 	});
 }
 
@@ -337,18 +315,18 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
-export function addPromptToEndNpc(npc: Model, message: string) {
+export function addKillPrompt(npc: Model, message: string) {
 	const head = npc.FindFirstChild("Head") as BasePart;
 	if (!head) return warn("No head for NPC");
 
 	const prompt = new Instance("ProximityPrompt");
-	prompt.Enabled = false;
+	prompt.Enabled = true;
 	prompt.Name = "TalkPrompt";
 	prompt.ObjectText = npc.Name;
-	prompt.ActionText = "Talk";
+	prompt.ActionText = "End";
 	prompt.KeyboardKeyCode = Enum.KeyCode.E;
 	prompt.HoldDuration = 0;
-	prompt.RequiresLineOfSight = false;
+	prompt.RequiresLineOfSight = true;
 	prompt.MaxActivationDistance = 10;
 	prompt.Parent = head;
 

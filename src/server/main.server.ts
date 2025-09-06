@@ -153,6 +153,9 @@ async function main() {
 }
 export function updateBounty(assignedRoutes: Map<string, Assignment>) {
 	const activeNPCs = getActiveNPCNames(assignedRoutes);
+	if (activeNPCs.size() <= 0) {
+		error("NO NPCS IN WORKSPACE");
+	}
 	const randomNPCTarget = activeNPCs[math.random(0, activeNPCs.size() - 1)];
 	let npc: NPC | undefined;
 	assignedRoutes.forEach((route) => {

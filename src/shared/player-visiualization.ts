@@ -20,18 +20,6 @@ const ViewsUpdated = ((): RemoteEvent => {
 	re.Parent = npcStateFolder;
 	return re;
 })();
-// const RequestAddView = ((): RemoteFunction => {
-// 	const rf = (npcStateFolder.FindFirstChild("RequestAddView") as RemoteFunction) ?? new Instance("RemoteFunction");
-// 	rf.Name = "RequestAddView";
-// 	rf.Parent = npcStateFolder;
-// 	return rf;
-// })();
-// const RequestRemoveView = ((): RemoteFunction => {
-// 	const rf = (npcStateFolder.FindFirstChild("RequestRemoveView") as RemoteFunction) ?? new Instance("RemoteFunction");
-// 	rf.Name = "RequestRemoveView";
-// 	rf.Parent = npcStateFolder;
-// 	return rf;
-// })();
 
 const NPC_VIEW_STATES = new Map<Player, string[]>();
 
@@ -52,7 +40,6 @@ export function requestAddView(player: Player, npcName: string) {
 	NPC_VIEW_STATES.set(player, newNamesList);
 
 	ViewsUpdated.FireClient(player, NPC_VIEW_STATES.get(player));
-	warn(`Added npc ${npcName}`);
 }
 export function requestRemoveView(player: Player, npcName: string) {
 	const viewStates = NPC_VIEW_STATES.get(player);
@@ -67,5 +54,4 @@ export function requestRemoveView(player: Player, npcName: string) {
 	NPC_VIEW_STATES.set(player, newNamesList);
 
 	ViewsUpdated.FireClient(player, NPC_VIEW_STATES.get(player));
-	warn(`Removed npc ${npcName}`);
 }

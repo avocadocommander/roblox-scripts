@@ -11,14 +11,11 @@ const playerVisibilityFrame = screenGui.WaitForChild("VisionIndicator") as Frame
 const playerVisibilityTextLabel = playerVisibilityFrame.WaitForChild("VisualText") as TextLabel;
 const playerVisibilityTextLabelBoarder = playerVisibilityFrame.WaitForChild("VisualTextborder") as TextLabel;
 
-const playerVisibilityImageLabel = playerVisibilityFrame.WaitForChild("VisualImage") as ImageLabel;
-
 function main() {
 	const playerViewers: string[] = GetViewers.InvokeServer() as string[];
 	setGUIOnChanges(playerViewers);
 
 	ViewsUpdated.OnClientEvent.Connect((newTotalViewers: string[]) => {
-		warn(`Updated npcs watchin me (${newTotalViewers.size()}x): ${[...newTotalViewers]}`);
 		setGUIOnChanges(newTotalViewers);
 	});
 }
