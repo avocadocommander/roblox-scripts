@@ -28,8 +28,6 @@ export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, p
 	if (!humanoid) return;
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data);
 	setHumanoidPace(humanoid, pace);
-	addKillPrompt(modelClone, "");
-	setUpModelVision(modelClone);
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
 	const animationInstances = getAnimationTracks(animator);
@@ -70,41 +68,6 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 		Color3.fromRGB(50, 70, 50), // dark green
 	],
 };
-
-function setUpModelVision(npc: Model) {
-	const visionCircle = npc.WaitForChild("HumanoidRootPart").WaitForChild("Ring") as Part;
-	const getPlayerOnCollision = (connectedPart: BasePart) => {
-		if (connectedPart.Name !== "HumanoidRootPart") {
-			return;
-		}
-
-		const parent = connectedPart.Parent as Model; // Player
-		if (!parent) {
-			return;
-		}
-
-		const player = Players.FindFirstChild(parent.Name) as Player | undefined;
-		if (!player) {
-			return;
-		}
-
-		return player;
-	};
-
-	visionCircle.Touched.Connect((part: BasePart) => {
-		const player: Player | undefined = getPlayerOnCollision(part);
-		if (player) {
-			requestAddView(player, npc.Name);
-		}
-	});
-
-	visionCircle.TouchEnded.Connect((part: BasePart) => {
-		const player: Player | undefined = getPlayerOnCollision(part);
-		if (player) {
-			requestRemoveView(player, npc.Name);
-		}
-	});
-}
 
 function getRaceSkinTones(race: Race): Color3[] {
 	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
@@ -184,11 +147,6 @@ export function getGenericSeededAppearance(
 	pants.Color = getRandomAssetFromListBasedOnSeed(pantsColors, seed());
 
 	shoes.Color = getRandomAssetFromListBasedOnSeed(shoeColors, seed());
-
-	if (data.position === "Merchant") {
-		humanoidDescription.HatAccessory = "617605556";
-		humanoidDescription.HairAccessory = "";
-	}
 
 	return humanoidDescription;
 }
@@ -315,35 +273,6 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
-export function addKillPrompt(npc: Model, message: string) {
-	const head = npc.FindFirstChild("Head") as BasePart;
-	if (!head) return warn("No head for NPC");
-
-	const prompt = new Instance("ProximityPrompt");
-	prompt.Enabled = true;
-	prompt.Name = "TalkPrompt";
-	prompt.ObjectText = npc.Name;
-	prompt.ActionText = "End";
-	prompt.KeyboardKeyCode = Enum.KeyCode.E;
-	prompt.HoldDuration = 0;
-	prompt.RequiresLineOfSight = true;
-	prompt.MaxActivationDistance = 10;
-	prompt.Parent = head;
-
-	prompt.Triggered.Connect(async (player) => {
-		warn(`${player.GetAttribute("state")} state`);
-		murderNpcByPlayer(player, npc);
-
-		npc.GetDescendants().forEach((descendant) => {
-			if (descendant.IsA("JointInstance")) {
-				descendant.Destroy();
-			}
-		});
-		await Promise.delay(10);
-		npc.Destroy();
-	});
-}
-
 export const assignNpcToRoute = async (
 	npc: NPC,
 	startingPosition: Vector3,
@@ -396,8 +325,6 @@ export async function navigate(
 			await moveToNextWaypoint();
 		};
 		await moveToNextWaypoint();
-	} else {
-		// warn("Pathfinding failed, noble Lord!");
 	}
 }
 

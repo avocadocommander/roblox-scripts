@@ -1,4 +1,4 @@
-import { Players, ReplicatedStorage } from "@rbxts/services";
+import { PhysicsService, Players, ReplicatedStorage } from "@rbxts/services";
 
 export interface InventoryItem {
 	id: number;
@@ -78,6 +78,12 @@ function sendUpdate(p: Player) {
 }
 
 Players.PlayerAdded.Connect((p) => {
+	for (const part of p.GetDescendants()) {
+		if (part.IsA("BasePart")) {
+			part.CollisionGroup = "Player";
+		}
+	}
+
 	const starter: InventoryList = [
 		{ id: 123, name: "Dagger", rarity: 1, slot: 1 }, // Dagger
 		{ id: 1234, name: "Rare Scroll", rarity: 2, slot: 2 }, // Scroll

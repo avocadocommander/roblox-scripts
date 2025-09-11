@@ -1,4 +1,4 @@
-import { Players, ReplicatedStorage, UserInputService } from "@rbxts/services";
+import { Players, ReplicatedStorage } from "@rbxts/services";
 
 const playerStateFolder = ((): Folder => {
 	const root = (ReplicatedStorage.FindFirstChild("PlayerState") as Folder) ?? new Instance("Folder");
@@ -38,6 +38,14 @@ const GetLevel = ((): RemoteFunction => {
 const GetCoins = ((): RemoteFunction => {
 	const rf = (playerStateFolder.FindFirstChild("GetCoins") as RemoteFunction) ?? new Instance("RemoteFunction");
 	rf.Name = "GetCoins";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+
+const GetBountyTarget = ((): RemoteFunction => {
+	const rf =
+		(playerStateFolder.FindFirstChild("GetBountyTarget") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "GetBountyTarget";
 	rf.Parent = playerStateFolder;
 	return rf;
 })();
@@ -92,6 +100,8 @@ export interface PlayerState {
 	coins: number;
 	name: string;
 	title: string;
+	activeBountyName: string | undefined;
+	wanted: boolean;
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -101,6 +111,8 @@ const DEFAULT_STATE: PlayerState = {
 	level: 1,
 	name: "Strider",
 	title: "Ranger",
+	activeBountyName: undefined,
+	wanted: false,
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -115,6 +127,10 @@ function pushExpierenceUpdate(player: Player) {
 
 function pushLevelUpdate(player: Player) {
 	LevelUpdated.FireClient(player, PLAYER_STATES.get(player)?.level ?? DEFAULT_STATE.level);
+}
+
+export function getBountyTarget(player: Player) {
+	return PLAYER_STATES.get(player)?.activeBountyName ?? undefined;
 }
 
 Players.PlayerAdded.Connect(async (player) => {
@@ -140,6 +156,9 @@ GetTitle.OnServerInvoke = (player: Player) => {
 };
 GetCoins.OnServerInvoke = (player: Player) => {
 	return PLAYER_STATES.get(player)?.coins ?? DEFAULT_STATE.coins;
+};
+GetBountyTarget.OnServerInvoke = (player: Player): string | undefined => {
+	return getBountyTarget(player);
 };
 
 RequestAddLevel.OnServerInvoke = (player: Player, ...args: unknown[]) => {

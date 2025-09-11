@@ -1,5 +1,4 @@
 import { PlayerDataService } from "./common-data-service";
-import { NPC } from "./npc";
 
 export interface StoreData {
 	level: number;
