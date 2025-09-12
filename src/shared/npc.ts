@@ -1,6 +1,6 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCData, Position, Race, RouteData, RoutePace, useAssetId } from "./module";
+import { NPCData, Race, RouteData, RoutePace, useAssetId } from "./module";
 import { PathfindingService } from "@rbxts/services";
 
 export interface NPC {
@@ -161,8 +161,8 @@ export function getGenericSeededAppearance(
 		hoodMesh.Color = new Color3(0, 0, 0);
 		hood.Parent = npc;
 	} else if (routeData.position === "Preacher") {
-		shirt.Color = new Color3(1, 1, 1);
-		pants.Color = new Color3(1, 1, 1);
+		shirt.Color = new Color3(0.59, 0.03, 0.03);
+		pants.Color = new Color3(0.59, 0.03, 0.03);
 		//	belt.Color = new Color3(0, 0, 0);
 		shoes.Color = new Color3(0, 0, 0);
 	} else {
@@ -313,7 +313,8 @@ export const assignNpcToRoute = async (
 		activeRouteIndex++;
 	}
 	await navigate(routePoints[activeRouteIndex].Position, startingPosition, npc, routePoints[0].Position);
-	await Promise.delay(math.random(5, 50));
+	
+	await Promise.delay(math.random(1, 10));
 
 	assignNpcToRoute(npc, routePoints[activeRouteIndex].Position, routePoints, activeRouteIndex);
 };
