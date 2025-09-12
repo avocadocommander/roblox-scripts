@@ -79,85 +79,89 @@ export const MEDIEVAL_NPC_NAMES = [
 ] as const;
 export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
 
-export type Position = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
+export type Position = "Guard" | "Preacher";
+export type Status = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
+
 export type Gender = "M" | "F";
 export type Race = "Human" | "Elf" | "Goblin";
 export interface NPCData {
 	gender: Gender;
 	race: Race;
-	position: Position;
+	status: Status;
 }
+
+export type RouteData = { pace: RoutePace; position: Position | undefined };
 
 export type NPCModel = Record<string, NPCData>;
 
 export const MEDIEVAL_NPCS: NPCModel = {
 	// Humans
-	"Alaric Thornbald": { gender: "M", race: "Human", position: "Serf" },
-	"Cedric de Ironsart": { gender: "M", race: "Human", position: "Royalty" },
-	"Ealdred Cwilmere": { gender: "M", race: "Human", position: "Serf" },
-	"Godfrey de Morwen": { gender: "M", race: "Human", position: "Nobility" },
-	"Osric Greydane": { gender: "M", race: "Human", position: "Serf" },
-	"Leofric Æshenford": { gender: "M", race: "Human", position: "Serf" },
-	"Theobald de Vexley": { gender: "M", race: "Human", position: "Serf" },
-	"Wymond Duskwathe": { gender: "M", race: "Human", position: "Serf" },
-	"Merien Chandewick": { gender: "F", race: "Human", position: "Serf" },
-	"Rowan Embermere": { gender: "F", race: "Human", position: "Serf" },
-	"Greta Millstone": { gender: "F", race: "Human", position: "Serf" },
-	"Brenna Wudwhistle": { gender: "F", race: "Human", position: "Serf" },
-	"Ulric Fenwatch": { gender: "M", race: "Human", position: "Serf" },
-	"Isolde Fairbloom": { gender: "F", race: "Human", position: "Commoner" },
-	"Bertram de Mere": { gender: "M", race: "Human", position: "Merchant" },
-	"Thorne Æshgrave": { gender: "M", race: "Human", position: "Serf" },
-	"Lyra Goldmead": { gender: "F", race: "Human", position: "Merchant" },
-	"Edric Thornwell": { gender: "M", race: "Human", position: "Commoner" },
-	"Moira Blackfen": { gender: "F", race: "Human", position: "Serf" },
-	"Garrick Hallowmere": { gender: "M", race: "Human", position: "Merchant" },
-	"Halric Stonvein": { gender: "M", race: "Human", position: "Commoner" },
-	"Ansel Ravendock": { gender: "M", race: "Human", position: "Serf" },
-	"Wulfgar Ironswake": { gender: "M", race: "Human", position: "Nobility" },
-	"Thessia Dewmantle": { gender: "F", race: "Human", position: "Serf" },
-	"Magnus Coldmere": { gender: "M", race: "Human", position: "Serf" },
-	"Selwyn Ashthorne": { gender: "M", race: "Human", position: "Serf" },
-	"Idris Moorwatch": { gender: "M", race: "Human", position: "Commoner" },
-	"Rowena Brambleholt": { gender: "F", race: "Human", position: "Merchant" },
-	"Giselle Dawnmere": { gender: "F", race: "Human", position: "Nobility" },
-	"Torvald Ironbriar": { gender: "M", race: "Human", position: "Serf" },
+	"Alaric Thornbald": { gender: "M", race: "Human", status: "Serf" },
+	"Cedric de Ironsart": { gender: "M", race: "Human", status: "Royalty" },
+	"Ealdred Cwilmere": { gender: "M", race: "Human", status: "Serf" },
+	"Godfrey de Morwen": { gender: "M", race: "Human", status: "Nobility" },
+	"Osric Greydane": { gender: "M", race: "Human", status: "Serf" },
+	"Leofric Æshenford": { gender: "M", race: "Human", status: "Serf" },
+	"Theobald de Vexley": { gender: "M", race: "Human", status: "Serf" },
+	"Wymond Duskwathe": { gender: "M", race: "Human", status: "Serf" },
+	"Merien Chandewick": { gender: "F", race: "Human", status: "Serf" },
+	"Rowan Embermere": { gender: "F", race: "Human", status: "Serf" },
+	"Greta Millstone": { gender: "F", race: "Human", status: "Serf" },
+	"Brenna Wudwhistle": { gender: "F", race: "Human", status: "Serf" },
+	"Ulric Fenwatch": { gender: "M", race: "Human", status: "Serf" },
+	"Isolde Fairbloom": { gender: "F", race: "Human", status: "Commoner" },
+	"Bertram de Mere": { gender: "M", race: "Human", status: "Merchant" },
+	"Thorne Æshgrave": { gender: "M", race: "Human", status: "Serf" },
+	"Lyra Goldmead": { gender: "F", race: "Human", status: "Merchant" },
+	"Edric Thornwell": { gender: "M", race: "Human", status: "Commoner" },
+	"Moira Blackfen": { gender: "F", race: "Human", status: "Serf" },
+	"Garrick Hallowmere": { gender: "M", race: "Human", status: "Merchant" },
+	"Halric Stonvein": { gender: "M", race: "Human", status: "Commoner" },
+	"Ansel Ravendock": { gender: "M", race: "Human", status: "Serf" },
+	"Wulfgar Ironswake": { gender: "M", race: "Human", status: "Nobility" },
+	"Thessia Dewmantle": { gender: "F", race: "Human", status: "Serf" },
+	"Magnus Coldmere": { gender: "M", race: "Human", status: "Serf" },
+	"Selwyn Ashthorne": { gender: "M", race: "Human", status: "Serf" },
+	"Idris Moorwatch": { gender: "M", race: "Human", status: "Commoner" },
+	"Rowena Brambleholt": { gender: "F", race: "Human", status: "Merchant" },
+	"Giselle Dawnmere": { gender: "F", race: "Human", status: "Nobility" },
+	"Torvald Ironbriar": { gender: "M", race: "Human", status: "Serf" },
 
 	// Elves
-	"Faelanis Windglen": { gender: "F", race: "Elf", position: "Serf" },
-	"Thalion Brightshade": { gender: "M", race: "Elf", position: "Serf" },
-	"Elandriel Moonvale": { gender: "M", race: "Elf", position: "Serf" },
-	"Caerwyn Duskwhisper": { gender: "M", race: "Elf", position: "Commoner" },
-	"Aerendyl Silversong": { gender: "F", race: "Elf", position: "Royalty" },
-	"Thessaly Nywen": { gender: "F", race: "Elf", position: "Merchant" },
-	"Varethion Hollowmantle": { gender: "M", race: "Elf", position: "Nobility" },
-	"Seraphina Duskwillow": { gender: "F", race: "Elf", position: "Nobility" },
-	"Tamsin Silmare": { gender: "F", race: "Elf", position: "Royalty" },
-	"Yseldra Nightbloom": { gender: "F", race: "Elf", position: "Nobility" },
-	"Elira Frostbrook": { gender: "F", race: "Elf", position: "Commoner" },
-	"Fiora Thistlewynd": { gender: "F", race: "Elf", position: "Merchant" },
-	"Selara Moonpetal": { gender: "F", race: "Elf", position: "Commoner" },
-	"Fenriel Duskbranch": { gender: "M", race: "Elf", position: "Merchant" },
-	"Aeloria Silvercrest": { gender: "F", race: "Elf", position: "Nobility" },
-	"Lorien Blackvale": { gender: "F", race: "Elf", position: "Serf" },
-	"Maelis Stormgrove": { gender: "F", race: "Elf", position: "Royalty" },
+	"Faelanis Windglen": { gender: "F", race: "Elf", status: "Serf" },
+	"Thalion Brightshade": { gender: "M", race: "Elf", status: "Serf" },
+	"Elandriel Moonvale": { gender: "M", race: "Elf", status: "Serf" },
+	"Caerwyn Duskwhisper": { gender: "M", race: "Elf", status: "Commoner" },
+	"Aerendyl Silversong": { gender: "F", race: "Elf", status: "Royalty" },
+	"Thessaly Nywen": { gender: "F", race: "Elf", status: "Merchant" },
+	"Varethion Hollowmantle": { gender: "M", race: "Elf", status: "Nobility" },
+	"Seraphina Duskwillow": { gender: "F", race: "Elf", status: "Nobility" },
+	"Tamsin Silmare": { gender: "F", race: "Elf", status: "Royalty" },
+	"Yseldra Nightbloom": { gender: "F", race: "Elf", status: "Nobility" },
+	"Elira Frostbrook": { gender: "F", race: "Elf", status: "Commoner" },
+	"Fiora Thistlewynd": { gender: "F", race: "Elf", status: "Merchant" },
+	"Selara Moonpetal": { gender: "F", race: "Elf", status: "Commoner" },
+	"Fenriel Duskbranch": { gender: "M", race: "Elf", status: "Merchant" },
+	"Aeloria Silvercrest": { gender: "F", race: "Elf", status: "Nobility" },
+	"Lorien Blackvale": { gender: "F", race: "Elf", status: "Serf" },
+	"Maelis Stormgrove": { gender: "F", race: "Elf", status: "Royalty" },
 
 	// Goblins
-	"Aldruk Ravensnarl": { gender: "M", race: "Goblin", position: "Nobility" },
-	"Baldric Stonhelm": { gender: "M", race: "Goblin", position: "Merchant" },
-	"Orrug Grimquill": { gender: "M", race: "Goblin", position: "Serf" },
-	"Tobruk Mudfoot": { gender: "M", race: "Goblin", position: "Serf" },
-	"Edda Barleyroot": { gender: "F", race: "Goblin", position: "Merchant" },
-	"Hamlin Wainwright": { gender: "M", race: "Goblin", position: "Serf" },
-	"Aldon Brightforge": { gender: "M", race: "Goblin", position: "Merchant" },
-	"Brandok Oakshield": { gender: "M", race: "Goblin", position: "Merchant" },
-	"Draven Mirefang": { gender: "M", race: "Goblin", position: "Serf" },
-	"Zara Mudtwig": { gender: "F", race: "Goblin", position: "Commoner" },
-	"Korrin Blackgrit": { gender: "M", race: "Goblin", position: "Merchant" },
-	"Vrixa Thornsnout": { gender: "F", race: "Goblin", position: "Serf" },
-	"Drogath Greenfang": { gender: "M", race: "Goblin", position: "Nobility" },
-	"Orvar Stoneclad": { gender: "M", race: "Goblin", position: "Serf" },
-	"Grishka Tallowhide": { gender: "F", race: "Goblin", position: "Serf" },
+	"Aldruk Ravensnarl": { gender: "M", race: "Goblin", status: "Nobility" },
+	"Baldric Stonhelm": { gender: "M", race: "Goblin", status: "Merchant" },
+	"Orrug Grimquill": { gender: "M", race: "Goblin", status: "Serf" },
+	"Tobruk Mudfoot": { gender: "M", race: "Goblin", status: "Serf" },
+	"Edda Barleyroot": { gender: "F", race: "Goblin", status: "Merchant" },
+	"Hamlin Wainwright": { gender: "M", race: "Goblin", status: "Serf" },
+	"Aldon Brightforge": { gender: "M", race: "Goblin", status: "Merchant" },
+	"Brandok Oakshield": { gender: "M", race: "Goblin", status: "Merchant" },
+	"Draven Mirefang": { gender: "M", race: "Goblin", status: "Serf" },
+	"Zara Mudtwig": { gender: "F", race: "Goblin", status: "Commoner" },
+	"Korrin Blackgrit": { gender: "M", race: "Goblin", status: "Merchant" },
+	"Vrixa Thornsnout": { gender: "F", race: "Goblin", status: "Serf" },
+	"Drogath Greenfang": { gender: "M", race: "Goblin", status: "Nobility" },
+	"Orvar Stoneclad": { gender: "M", race: "Goblin", status: "Serf" },
+	"Grishka Tallowhide": { gender: "F", race: "Goblin", status: "Serf" },
 };
 export const NPC_TYPE_VALUES = ["GUARD", "TARGET", "MERCHANT", "COMMONER"] as const;
 export type NPCType = (typeof NPC_TYPE_VALUES)[number];

@@ -1,7 +1,7 @@
 import { CollectionService, Players, Workspace } from "@rbxts/services";
 import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
-import { Assignment, MEDIEVAL_NPC_NAMES, RoutePace, MEDIEVAL_NPCS } from "./module";
+import { Assignment, MEDIEVAL_NPC_NAMES, RoutePace, MEDIEVAL_NPCS, Position, RouteData } from "./module";
 import { NPC, createNPCModelAndGenerateHumanoid, assignNpcToRoute } from "./npc";
 import { assassinateTarget } from "./bounty-manager";
 import { requestAddView, requestRemoveView } from "./player-visiualization";
@@ -92,7 +92,11 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 					throw "No routePoints avaliable under parent route folder";
 				}
 
-				const routePace: RoutePace = (npcRoute.GetAttribute("Pace") as RoutePace) ?? "Medium";
+				const dataFromRoute: { pace: RoutePace; position: Position | undefined } = {
+					pace: (npcRoute.GetAttribute("Pace") as RoutePace) ?? "Medium",
+					position: (npcRoute.GetAttribute("NPCType") as Position) ?? undefined,
+				};
+
 				const firstPositionInRoutePoints = routePoints[0];
 				const closestSpawnPointRelativeToRoute: Attachment | undefined =
 					getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints);
@@ -110,7 +114,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 					npcName,
 					MEDIEVAL_NPCS[npcName],
-					routePace,
+					dataFromRoute,
 				);
 
 				if (!npc) {
@@ -120,9 +124,8 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 				const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
 				assignNpcToRoute(npc, npcSpawnPoint, routePoints);
 				addKillPrompt(npc);
-				setupWatcherGaze(npc.model);
+				setupWatcherGaze(npc, dataFromRoute);
 
-				npc.model.AddTag("NPC");
 				npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
@@ -146,17 +149,20 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 	});
 }
 
-export function setupWatcherGaze(npc: Model) {
-	const detectionRadius = 30;
+export function setupWatcherGaze(npc: NPC, routeData: RouteData) {
+	const defaultDetectionRadius = 60;
+	const guardDetectionRadius = defaultDetectionRadius * 2;
+	const detectionRadius = routeData.position === "Guard" ? guardDetectionRadius : defaultDetectionRadius;
+
 	const viewAngle = 180;
 
-	const humanoidRootPart = npc.FindFirstChild("HumanoidRootPart") as BasePart;
+	const humanoidRootPart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
 	if (!humanoidRootPart) return;
 
 	const visibilityMap = new Map<Player, boolean>();
 
 	task.spawn(() => {
-		while (npc.Parent && npc.IsDescendantOf(Workspace)) {
+		while (npc.model.Parent && npc.model.IsDescendantOf(Workspace)) {
 			const npcLookDir = humanoidRootPart.CFrame.LookVector;
 
 			for (const player of Players.GetPlayers()) {
@@ -184,29 +190,29 @@ export function setupWatcherGaze(npc: Model) {
 					const dirrectionToPlayer = playerPosition.sub(npcPosition).Unit;
 					const distance = npcPosition.sub(playerPosition).Magnitude;
 					const angle = math.acos(dirrectionToPlayer.Dot(npcLookDir)) * (180 / math.pi);
-					const inRadius = distance <= detectionRadius / 2;
 
+					const inRadius = distance <= detectionRadius / 2;
 					const inView = angle <= viewAngle / 2;
 
 					if (inRadius && inView) {
-						const ray = createRaycast(npc, npcPosition, dirrectionToPlayer, distance);
+						const ray = createRaycast(npc.model, npcPosition, dirrectionToPlayer, distance);
 						if (ray && ray.Instance) {
 							const hitModel = ray.Instance.FindFirstAncestorOfClass("Model");
 							const isPlayerHit = hitModel === player.Character;
 
 							if (isPlayerHit) {
 								if (!currentPlayerIsAlreadyVisible) {
-									requestAddView(player, npc.Name);
+									requestAddView(player, npc.model.Name);
 								}
 								createVisionBeam(attachment0, attachment1);
 								visibilityMap.set(player, true);
 							} else {
-								requestRemoveView(player, npc.Name);
+								requestRemoveView(player, npc.model.Name);
 							}
 						}
 					} else {
 						if (currentPlayerIsAlreadyVisible) {
-							requestRemoveView(player, npc.Name);
+							requestRemoveView(player, npc.model.Name);
 							visibilityMap.set(player, false);
 						}
 					}
