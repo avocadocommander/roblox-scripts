@@ -1,7 +1,8 @@
 import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
-import { NPCData, Race, RouteData, RoutePace, useAssetId } from "./module";
+import { NPCData, Race, useAssetId } from "./module";
 import { PathfindingService } from "@rbxts/services";
+import { Pace, RouteConfig } from "./route-config";
 
 export interface NPC {
 	name: string;
@@ -15,7 +16,11 @@ export interface NPC {
 	race: Race;
 }
 
-export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, routeData: RouteData): NPC | undefined {
+export function createNPCModelAndGenerateHumanoid(
+	name: string,
+	data: NPCData,
+	routeData: RouteConfig | undefined,
+): NPC | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
 	modelClone.Name = name;
@@ -25,7 +30,7 @@ export function createNPCModelAndGenerateHumanoid(name: string, data: NPCData, r
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeData);
-	setHumanoidPace(humanoid, routeData.pace);
+	humanoid.WalkSpeed = getHumanoidPace(routeData?.pace);
 
 	const animator = humanoid.WaitForChild("Animator") as Animator;
 	const animationInstances = getAnimationTracks(animator);
@@ -76,7 +81,7 @@ export function getGenericSeededAppearance(
 	seed: () => number,
 	data: NPCData,
 	humanoid: Humanoid,
-	routeData: RouteData,
+	routeData: RouteConfig | undefined,
 ): HumanoidDescription | undefined {
 	const raceSkinTones = getRaceSkinTones(data.race);
 	const skinColor = getRandomAssetFromListBasedOnSeed(raceSkinTones, seed());
@@ -145,7 +150,7 @@ export function getGenericSeededAppearance(
 		error("NOT SHIRT");
 	}
 
-	if (routeData.position === "Guard") {
+	if (routeData?.position === "Guard") {
 		shirt.Color = new Color3(0, 0, 0);
 		pants.Color = new Color3(0, 0, 0);
 		shoes.Color = new Color3(0, 0, 0);
@@ -154,7 +159,7 @@ export function getGenericSeededAppearance(
 		const hoodMesh = hood.WaitForChild("Handle") as MeshPart;
 		hoodMesh.Color = new Color3(0, 0, 0);
 		hood.Parent = npc;
-	} else if (routeData.position === "Preacher") {
+	} else if (routeData?.position === "Preacher") {
 		shirt.Color = new Color3(0.59, 0.03, 0.03);
 		pants.Color = new Color3(0.59, 0.03, 0.03);
 		shoes.Color = new Color3(0, 0, 0);
@@ -171,20 +176,25 @@ export function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T
 	return list[math.floor(seed * list.size())];
 }
 
-function setHumanoidPace(humanoid: Humanoid, pace: RoutePace) {
-	const paceSpeedMap: Record<RoutePace, number> = {
+function getHumanoidPace(pace: Pace | undefined): number {
+	const paceSpeedMap: Record<Pace, number> = {
+		Stationary: 5,
 		Slow: math.random(3, 4),
 		Medium: math.random(5, 6),
 		Fast: math.random(7, 8),
 	};
-	humanoid.WalkSpeed = paceSpeedMap[pace];
+
+	if (!pace) {
+		return paceSpeedMap["Medium"];
+	}
+	return pace ? paceSpeedMap[pace] : paceSpeedMap["Medium"];
 }
 
 export function setHumanoidDefaults(
 	humanoid: Humanoid,
 	seed: number,
 	data: NPCData,
-	routeData: RouteData,
+	routeData: RouteConfig | undefined,
 ): Humanoid | undefined {
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	const npcDescription = humanoid.GetAppliedDescription();
@@ -196,7 +206,7 @@ export function setHumanoidDefaults(
 	randomizeBodyShape(npcDescription, rand, data.race);
 	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeData);
 
-	if (routeData.position === "Guard") {
+	if (routeData?.position === "Guard" && routeData?.pace !== "Stationary") {
 		const lantern = ReplicatedStorage.WaitForChild("Lantern") as Tool;
 		const animator = humanoid.FindFirstChildOfClass("Animator") ?? (humanoid.WaitForChild("Animator") as Animator);
 

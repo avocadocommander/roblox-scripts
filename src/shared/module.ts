@@ -79,7 +79,6 @@ export const MEDIEVAL_NPC_NAMES = [
 ] as const;
 export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
 
-export type Position = "Guard" | "Preacher";
 export type Status = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
 
 export type Gender = "M" | "F";
@@ -89,8 +88,6 @@ export interface NPCData {
 	race: Race;
 	status: Status;
 }
-
-export type RouteData = { pace: RoutePace; position: Position | undefined };
 
 export type NPCModel = Record<string, NPCData>;
 
@@ -234,5 +231,3 @@ export interface Assignment {
 	npc: NPC;
 	route: Folder;
 }
-
-export type RoutePace = "Slow" | "Medium" | "Fast";

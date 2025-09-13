@@ -1,10 +1,11 @@
 import { CollectionService, Players, Workspace } from "@rbxts/services";
 import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
-import { Assignment, MEDIEVAL_NPC_NAMES, RoutePace, MEDIEVAL_NPCS, Position, RouteData } from "./module";
+import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
 import { NPC, createNPCModelAndGenerateHumanoid, assignNpcToRoute } from "./npc";
 import { assassinateTarget } from "./bounty-manager";
 import { requestAddView, requestRemoveView } from "./player-visiualization";
+import { getConfigFromRoute, RouteConfig } from "./route-config";
 
 function getNPCRoutes(): Folder[] {
 	const routes = Workspace.WaitForChild("NPCRoutes")
@@ -92,11 +93,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 					throw "No routePoints avaliable under parent route folder";
 				}
 
-				const routeConfig = npcRoute.FindFirstChildOfClass("Configuration") as Configuration;
-				const dataFromRoute: { pace: string | undefined; position: Position | undefined } = {
-					pace: ((routeConfig.FindFirstChild("Pace") as ObjectValue).Value as string) ?? undefined,
-					position: (npcRoute.GetAttribute("NPCType") as Position) ?? undefined,
-				};
+				const routeConfig = getConfigFromRoute(npcRoute);
 
 				const firstPositionInRoutePoints = routePoints[0];
 				const closestSpawnPointRelativeToRoute: Attachment | undefined =
@@ -115,7 +112,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 				const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 					npcName,
 					MEDIEVAL_NPCS[npcName],
-					dataFromRoute,
+					routeConfig,
 				);
 
 				if (!npc) {
@@ -124,7 +121,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 
 				const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
 				addKillPrompt(npc);
-				setupWatcherGaze(npc, dataFromRoute);
+				setupWatcherGaze(npc, routeConfig);
 
 				npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
@@ -151,10 +148,10 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 	});
 }
 
-export function setupWatcherGaze(npc: NPC, routeData: RouteData) {
+export function setupWatcherGaze(npc: NPC, routeData: RouteConfig | undefined) {
 	const defaultDetectionRadius = 60;
 	const guardDetectionRadius = defaultDetectionRadius * 2;
-	const detectionRadius = routeData.position === "Guard" ? guardDetectionRadius : defaultDetectionRadius;
+	const detectionRadius = routeData?.position === "Guard" ? guardDetectionRadius : defaultDetectionRadius;
 
 	const viewAngle = 180;
 
