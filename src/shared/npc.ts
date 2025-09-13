@@ -100,7 +100,6 @@ export function getGenericSeededAppearance(
 	];
 	const pantsColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#556B2F"), Color3.fromHex("#D8C9A8")];
 	const shoeColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#2C2C2C"), Color3.fromHex("#A1886F")];
-	const beltColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#2C2C2C"), Color3.fromHex("#A1886F")];
 
 	if (!shirtColors) {
 		error("NOT shirtColors");
@@ -118,8 +117,6 @@ export function getGenericSeededAppearance(
 		.WaitForChild("BasicShoes")
 		.WaitForChild("Handle")
 		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
-
-	//const belt = npc.WaitForChild("Belt").WaitForChild("Handle").WaitForChild("SurfaceAppearance") as SurfaceAppearance;
 
 	let earType: string | undefined = undefined;
 
@@ -148,13 +145,10 @@ export function getGenericSeededAppearance(
 		error("NOT SHIRT");
 	}
 
-	//	belt.Color = getRandomAssetFromListBasedOnSeed(beltColors, seed());
-
 	if (routeData.position === "Guard") {
 		shirt.Color = new Color3(0, 0, 0);
 		pants.Color = new Color3(0, 0, 0);
 		shoes.Color = new Color3(0, 0, 0);
-		//belt.Color = new Color3(0, 0, 0);
 		const hoodCore = ReplicatedStorage.WaitForChild("Hood") as Accessory;
 		const hood = hoodCore.Clone();
 		const hoodMesh = hood.WaitForChild("Handle") as MeshPart;
@@ -163,7 +157,6 @@ export function getGenericSeededAppearance(
 	} else if (routeData.position === "Preacher") {
 		shirt.Color = new Color3(0.59, 0.03, 0.03);
 		pants.Color = new Color3(0.59, 0.03, 0.03);
-		//	belt.Color = new Color3(0, 0, 0);
 		shoes.Color = new Color3(0, 0, 0);
 	} else {
 		shirt.Color = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
@@ -301,31 +294,32 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
-export const assignNpcToRoute = async (
-	npc: NPC,
-	startingPosition: Vector3,
-	routePoints: BasePart[],
-	activeRouteIndex = 0,
-) => {
-	if (activeRouteIndex >= routePoints.size() - 1) {
-		activeRouteIndex = 0;
-	} else {
-		activeRouteIndex++;
-	}
-	await navigate(routePoints[activeRouteIndex].Position, startingPosition, npc, routePoints[0].Position);
-	
-	await Promise.delay(math.random(1, 10));
+export const assignNpcToRoute = async (npc: NPC, routePoints: BasePart[]) => {
+	let routeActiveIndex = 0;
 
-	assignNpcToRoute(npc, routePoints[activeRouteIndex].Position, routePoints, activeRouteIndex);
+	while (npc) {
+		const activeRoutePoint = routePoints[routeActiveIndex];
+		const lookAtDirrection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
+		const npcHumanoidRootPart: BasePart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
+
+		await navigate(activeRoutePoint.Position, npc);
+
+		if (lookAtDirrection) {
+			warn("Lookin");
+			const look = CFrame.lookAt(npcHumanoidRootPart.Position, lookAtDirrection.WorldPosition);
+			npcHumanoidRootPart.CFrame = look;
+		}
+
+		await Promise.delay(math.random(2, 10));
+		if (routeActiveIndex >= routePoints.size() - 1) {
+			routeActiveIndex = 0;
+		} else {
+			routeActiveIndex++;
+		}
+	}
 };
 
-export async function navigate(
-	goal: Vector3,
-	startPosition: Vector3,
-	npc: NPC,
-	firstPointInRoute: Vector3,
-): Promise<void> {
-	const goalPosition = goal;
+export async function navigate(moveToPosition: Vector3, npc: NPC): Promise<void> {
 	const path = PathfindingService.CreatePath({
 		AgentRadius: 2,
 		AgentHeight: 5,
@@ -335,15 +329,13 @@ export async function navigate(
 			Water: 100,
 		},
 	});
-	path.ComputeAsync(startPosition, goalPosition);
+	path.ComputeAsync(npc.humanoid.RootPart!.Position, moveToPosition);
 	if (path.Status === Enum.PathStatus.Success) {
 		const waypoints = path.GetWaypoints();
 		let current = 0;
 		const moveToNextWaypoint = async () => {
 			current++;
-			if (current >= waypoints.size()) {
-				npc.humanoid.MoveTo(firstPointInRoute);
-				await waitForMove(npc.humanoid);
+			if (current >= waypoints.size() - 1) {
 				setState("IDLE", npc);
 				return;
 			}

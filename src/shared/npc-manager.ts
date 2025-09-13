@@ -92,8 +92,9 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 					throw "No routePoints avaliable under parent route folder";
 				}
 
-				const dataFromRoute: { pace: RoutePace; position: Position | undefined } = {
-					pace: (npcRoute.GetAttribute("Pace") as RoutePace) ?? "Medium",
+				const routeConfig = npcRoute.FindFirstChildOfClass("Configuration") as Configuration;
+				const dataFromRoute: { pace: string | undefined; position: Position | undefined } = {
+					pace: ((routeConfig.FindFirstChild("Pace") as ObjectValue).Value as string) ?? undefined,
 					position: (npcRoute.GetAttribute("NPCType") as Position) ?? undefined,
 				};
 
@@ -122,11 +123,12 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 				}
 
 				const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
-				assignNpcToRoute(npc, npcSpawnPoint, routePoints);
 				addKillPrompt(npc);
 				setupWatcherGaze(npc, dataFromRoute);
 
 				npc.model.PivotTo(new CFrame(npcSpawnPoint));
+
+				assignNpcToRoute(npc, routePoints);
 
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
@@ -204,7 +206,7 @@ export function setupWatcherGaze(npc: NPC, routeData: RouteData) {
 								if (!currentPlayerIsAlreadyVisible) {
 									requestAddView(player, npc.model.Name);
 								}
-								createVisionBeam(attachment0, attachment1);
+								//DEBUG createVisionBeam(attachment0, attachment1);
 								visibilityMap.set(player, true);
 							} else {
 								requestRemoveView(player, npc.model.Name);

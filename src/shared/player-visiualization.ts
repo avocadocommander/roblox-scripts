@@ -40,7 +40,6 @@ export function requestAddView(player: Player, npcName: string) {
 	NPC_VIEW_STATES.set(player, newNamesList);
 
 	ViewsUpdated.FireClient(player, NPC_VIEW_STATES.get(player));
-	warn(`${nameToAdd} ADDED TIO VIEW`);
 }
 export function requestRemoveView(player: Player, npcName: string) {
 	const viewStates = NPC_VIEW_STATES.get(player);
@@ -55,5 +54,4 @@ export function requestRemoveView(player: Player, npcName: string) {
 	NPC_VIEW_STATES.set(player, newNamesList);
 
 	ViewsUpdated.FireClient(player, NPC_VIEW_STATES.get(player));
-	warn(`${nameToRemove} REMOVED FROM VIEW`);
 }
