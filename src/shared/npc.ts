@@ -304,7 +304,7 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
-export const assignNpcToRoute = async (npc: NPC, routePoints: BasePart[]) => {
+export const assignNpcToRoute = async (npc: NPC, routePoints: BasePart[], routeConfig: RouteConfig | undefined) => {
 	let routeActiveIndex = 0;
 
 	while (npc) {
@@ -315,12 +315,11 @@ export const assignNpcToRoute = async (npc: NPC, routePoints: BasePart[]) => {
 		await navigate(activeRoutePoint.Position, npc);
 
 		if (lookAtDirrection) {
-			warn("Lookin");
 			const look = CFrame.lookAt(npcHumanoidRootPart.Position, lookAtDirrection.WorldPosition);
 			npcHumanoidRootPart.CFrame = look;
 		}
 
-		await Promise.delay(math.random(2, 10));
+		await Promise.delay(routeConfig?.tempo ?? math.random(2, 10));
 		if (routeActiveIndex >= routePoints.size() - 1) {
 			routeActiveIndex = 0;
 		} else {
