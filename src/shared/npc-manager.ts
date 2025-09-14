@@ -125,7 +125,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 
 				npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
-				assignNpcToRoute(npc, routePoints);
+				assignNpcToRoute(npc, routePoints, routeConfig);
 
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
 				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
@@ -203,7 +203,8 @@ export function setupWatcherGaze(npc: NPC, routeData: RouteConfig | undefined) {
 								if (!currentPlayerIsAlreadyVisible) {
 									requestAddView(player, npc.model.Name);
 								}
-								//DEBUG createVisionBeam(attachment0, attachment1);
+								//DEBUG
+								// createVisionBeam(attachment0, attachment1);
 								visibilityMap.set(player, true);
 							} else {
 								requestRemoveView(player, npc.model.Name);
