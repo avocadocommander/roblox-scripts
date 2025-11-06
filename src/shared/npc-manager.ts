@@ -3,16 +3,42 @@ import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
 import { NPC, createNPCModelAndGenerateHumanoid, assignNpcToRoute } from "./npc";
-import { assassinateTarget } from "./bounty-manager";
 import { requestAddView, requestRemoveView } from "./player-visiualization";
-import { getConfigFromRoute, RouteConfig } from "./route-config";
+import { getBountyTarget } from "./player-state";
+
+type DEATH_TYPE = {
+	[key: string]: (npcTarget: NPC) => void;
+};
+
+export const DEATH_TYPES: DEATH_TYPE = {
+	DEFAULT: (npcTarget: NPC) => {
+		npcTarget.model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("JointInstance")) {
+				descendant.Destroy();
+			}
+		});
+		task.wait(5);
+		npcTarget.model.Destroy();
+	},
+};
 
 function getNPCRoutes(): Folder[] {
-	const routes = Workspace.WaitForChild("NPCRoutes")
+	const legacyRoutes = Workspace.WaitForChild("NPCRoutes")
 		.GetChildren()
 		.filter((child): child is Folder => {
 			return child.IsA("Folder");
 		});
+
+	const updatedRoutes = CollectionService.GetTagged("Route").filter((child): child is Folder => {
+		return child.IsA("Folder");
+	});
+
+	if (updatedRoutes.size() === 0) {
+		warn("⚠️ No new routes found dog!");
+		return [];
+	}
+
+	const routes: Folder[] = [...legacyRoutes, ...updatedRoutes];
 
 	if (routes.size() === 0) {
 		warn("⚠️ No Routes found!");
@@ -55,6 +81,23 @@ function getClosestSpawnPointRelativeToRoute(firstRoutePointToCompare: BasePart)
 	return nearestSpawn;
 }
 
+export function assassinateTarget(player: Player, npcTarget: NPC) {
+	warn(`${player.Name} wanting to get that ${npcTarget.name}`);
+	const currentPlayerbounty: string | undefined = getBountyTarget(player);
+
+	if (npcTarget.name === currentPlayerbounty) {
+		warn("Payday bois");
+	} else {
+		warn("Killing with no means i see");
+	}
+	setNpcDeath(npcTarget);
+}
+
+export function setNpcDeath(npc: NPC) {
+	DEATH_TYPES["DEFAULT"](npc);
+	warn(`💀 ${npc.name} was slain`);
+}
+
 export function addKillPrompt(npc: NPC) {
 	const head = npc.model.FindFirstChild("Head") as BasePart;
 	if (!head) return warn("No head for NPC");
@@ -76,6 +119,44 @@ export function addKillPrompt(npc: NPC) {
 }
 
 const INSTANCES_FOR_NPC_VISION_TO_IGNORE = new Set<Instance>();
+
+export type Pace = "Stationary" | "Slow" | "Medium" | "Fast";
+export type Position = "Guard" | "Preacher";
+export type Tempo = "Chill" | "Hurry" | "Gas";
+export type RouteConfig = Partial<RouteConfiguration>;
+
+interface RouteConfiguration {
+	pace: Pace;
+	position: Position;
+	tempo: number;
+}
+
+export function getConfigFromRoute(routeConfigParent: Folder): RouteConfig | undefined {
+	const routeConfig: RouteConfig = {};
+	const configFromPart = routeConfigParent.FindFirstChild("Configuration") as Configuration;
+	if (!configFromPart) {
+		return undefined;
+	}
+	const pace = configFromPart.FindFirstChild("Pace") as StringValue;
+	if (pace) {
+		routeConfig.pace = pace.Value as Pace;
+	}
+	const npcType = configFromPart.FindFirstChild("NPCType") as StringValue;
+	if (npcType) {
+		routeConfig.position = npcType.Value as Position;
+	}
+
+	const tempo = configFromPart.FindFirstChild("Tempo") as StringValue;
+	if (tempo) {
+		const tempoMap: Record<Tempo, number> = {
+			Chill: math.random(10, 60),
+			Hurry: math.random(5, 10),
+			Gas: math.random(1, 2),
+		};
+		routeConfig.tempo = tempoMap[tempo.Value as Tempo];
+	}
+	return routeConfig;
+}
 
 export function updateAssignments(assigned: Map<string, Assignment>) {
 	const npcRoutes: Folder[] = getNPCRoutes();
@@ -128,7 +209,7 @@ export function updateAssignments(assigned: Map<string, Assignment>) {
 				assignNpcToRoute(npc, routePoints, routeConfig);
 
 				assigned.set(npcRoute.Name, { npc, route: npcRoute });
-				log(`⚜️ ${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
+				//TODO! log(`${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
 
 				bountyService.onBountyChanged((bounty: Bounty | undefined) => {
 					if (bounty && bounty.npc === npc) {

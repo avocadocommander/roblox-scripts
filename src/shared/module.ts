@@ -40,6 +40,16 @@ export const MEDIEVAL_NPC_NAMES = [
 	"Rowena Brambleholt",
 	"Giselle Dawnmere",
 	"Torvald Ironbriar",
+	"Crispin Hayward",
+	"Merek de Lowenford",
+	"Agnes Hearthwyfe",
+	"Tilda Mossbraid",
+	"Oswyn Blackmere",
+	"Hugh Caskwell",
+	"Sabine de Wintermere",
+	"Frida Thatchbrook",
+	"Geoffrey Saltmarsh",
+	"Alinor Fairholt",
 
 	// Elves
 	"Faelanis Windglen",
@@ -59,6 +69,14 @@ export const MEDIEVAL_NPC_NAMES = [
 	"Aeloria Silvercrest",
 	"Lorien Blackvale",
 	"Maelis Stormgrove",
+	"Ithariel Dawnsong",
+	"Sylwen Starbrook",
+	"Vaelion Greenmantle",
+	"Orendis Whisperglen",
+	"Nythera Frostpetal",
+	"Thalindra Emberglen",
+	"Corenith Leafwhisper",
+	"Elvandar Duskpetal",
 
 	// Goblins
 	"Aldruk Ravensnarl",
@@ -76,7 +94,16 @@ export const MEDIEVAL_NPC_NAMES = [
 	"Drogath Greenfang",
 	"Orvar Stoneclad",
 	"Grishka Tallowhide",
+	"Grubnik Sootfang",
+	"Snaga Miregut",
+	"Drekka Ironnose",
+	"Fizzle Toadsnout",
+	"Zogmar Brambletoe",
+	"Krilla Tallowtongue",
+	"Mograt Splinterjaw",
+	"Prixa Coalbriar",
 ] as const;
+
 export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
 
 export type Status = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
@@ -123,6 +150,16 @@ export const MEDIEVAL_NPCS: NPCModel = {
 	"Rowena Brambleholt": { gender: "F", race: "Human", status: "Merchant" },
 	"Giselle Dawnmere": { gender: "F", race: "Human", status: "Nobility" },
 	"Torvald Ironbriar": { gender: "M", race: "Human", status: "Serf" },
+	"Crispin Hayward": { gender: "M", race: "Human", status: "Commoner" },
+	"Merek de Lowenford": { gender: "M", race: "Human", status: "Merchant" },
+	"Agnes Hearthwyfe": { gender: "F", race: "Human", status: "Serf" },
+	"Tilda Mossbraid": { gender: "F", race: "Human", status: "Commoner" },
+	"Oswyn Blackmere": { gender: "M", race: "Human", status: "Serf" },
+	"Hugh Caskwell": { gender: "M", race: "Human", status: "Commoner" },
+	"Sabine de Wintermere": { gender: "F", race: "Human", status: "Nobility" },
+	"Frida Thatchbrook": { gender: "F", race: "Human", status: "Serf" },
+	"Geoffrey Saltmarsh": { gender: "M", race: "Human", status: "Merchant" },
+	"Alinor Fairholt": { gender: "F", race: "Human", status: "Commoner" },
 
 	// Elves
 	"Faelanis Windglen": { gender: "F", race: "Elf", status: "Serf" },
@@ -142,6 +179,14 @@ export const MEDIEVAL_NPCS: NPCModel = {
 	"Aeloria Silvercrest": { gender: "F", race: "Elf", status: "Nobility" },
 	"Lorien Blackvale": { gender: "F", race: "Elf", status: "Serf" },
 	"Maelis Stormgrove": { gender: "F", race: "Elf", status: "Royalty" },
+	"Ithariel Dawnsong": { gender: "M", race: "Elf", status: "Nobility" },
+	"Sylwen Starbrook": { gender: "F", race: "Elf", status: "Commoner" },
+	"Vaelion Greenmantle": { gender: "M", race: "Elf", status: "Merchant" },
+	"Orendis Whisperglen": { gender: "M", race: "Elf", status: "Serf" },
+	"Nythera Frostpetal": { gender: "F", race: "Elf", status: "Commoner" },
+	"Thalindra Emberglen": { gender: "F", race: "Elf", status: "Merchant" },
+	"Corenith Leafwhisper": { gender: "M", race: "Elf", status: "Serf" },
+	"Elvandar Duskpetal": { gender: "M", race: "Elf", status: "Nobility" },
 
 	// Goblins
 	"Aldruk Ravensnarl": { gender: "M", race: "Goblin", status: "Nobility" },
@@ -159,6 +204,14 @@ export const MEDIEVAL_NPCS: NPCModel = {
 	"Drogath Greenfang": { gender: "M", race: "Goblin", status: "Nobility" },
 	"Orvar Stoneclad": { gender: "M", race: "Goblin", status: "Serf" },
 	"Grishka Tallowhide": { gender: "F", race: "Goblin", status: "Serf" },
+	"Grubnik Sootfang": { gender: "M", race: "Goblin", status: "Serf" },
+	"Snaga Miregut": { gender: "F", race: "Goblin", status: "Serf" },
+	"Drekka Ironnose": { gender: "M", race: "Goblin", status: "Merchant" },
+	"Fizzle Toadsnout": { gender: "F", race: "Goblin", status: "Commoner" },
+	"Zogmar Brambletoe": { gender: "M", race: "Goblin", status: "Serf" },
+	"Krilla Tallowtongue": { gender: "F", race: "Goblin", status: "Merchant" },
+	"Mograt Splinterjaw": { gender: "M", race: "Goblin", status: "Serf" },
+	"Prixa Coalbriar": { gender: "F", race: "Goblin", status: "Commoner" },
 };
 export const NPC_TYPE_VALUES = ["GUARD", "TARGET", "MERCHANT", "COMMONER"] as const;
 export type NPCType = (typeof NPC_TYPE_VALUES)[number];

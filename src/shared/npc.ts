@@ -2,7 +2,7 @@ import { ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "./helpers";
 import { NPCData, Race, useAssetId } from "./module";
 import { PathfindingService } from "@rbxts/services";
-import { Pace, RouteConfig } from "./route-config";
+import { Pace, RouteConfig } from "./npc-manager";
 
 export interface NPC {
 	name: string;
@@ -154,11 +154,6 @@ export function getGenericSeededAppearance(
 		shirt.Color = new Color3(0, 0, 0);
 		pants.Color = new Color3(0, 0, 0);
 		shoes.Color = new Color3(0, 0, 0);
-		const hoodCore = ReplicatedStorage.WaitForChild("Hood") as Accessory;
-		const hood = hoodCore.Clone();
-		const hoodMesh = hood.WaitForChild("Handle") as MeshPart;
-		hoodMesh.Color = new Color3(0, 0, 0);
-		hood.Parent = npc;
 	} else if (routeData?.position === "Preacher") {
 		shirt.Color = new Color3(0.59, 0.03, 0.03);
 		pants.Color = new Color3(0.59, 0.03, 0.03);
@@ -203,11 +198,11 @@ export function setHumanoidDefaults(
 		return undefined;
 	}
 	const rand = makeSeededRandom(seed);
-	randomizeBodyShape(npcDescription, rand, data.race);
+	//randomizeBodyShape(npcDescription, rand, data.race);
 	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeData);
 
 	if (routeData?.position === "Guard" && routeData?.pace !== "Stationary") {
-		const lantern = ReplicatedStorage.WaitForChild("Lantern") as Tool;
+		const torch = ReplicatedStorage.WaitForChild("HandTorch") as Tool;
 		const animator = humanoid.FindFirstChildOfClass("Animator") ?? (humanoid.WaitForChild("Animator") as Animator);
 
 		const anim = new Instance("Animation");
@@ -219,7 +214,7 @@ export function setHumanoidDefaults(
 
 		track.Play();
 
-		humanoid.EquipTool(lantern.Clone());
+		humanoid.EquipTool(torch.Clone());
 	}
 
 	if (!appearenceDescription) return;
@@ -336,6 +331,8 @@ export async function navigate(moveToPosition: Vector3, npc: NPC): Promise<void>
 		AgentCanClimb: false,
 		Costs: {
 			Water: 100,
+			Carpet: 0,
+			Cobblestone: 0,
 		},
 	});
 	path.ComputeAsync(npc.humanoid.RootPart!.Position, moveToPosition);
