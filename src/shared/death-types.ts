@@ -1,1 +1,0 @@
-import { NPC } from "./npc";
