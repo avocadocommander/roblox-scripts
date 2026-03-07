@@ -284,3 +284,5 @@ export interface Assignment {
 	npc: NPC;
 	route: Folder;
 }
+
+export type LifecycleMessage = "InitializePlayer" | "ClientReady";

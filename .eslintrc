@@ -21,6 +21,14 @@
 		"plugin:roblox-ts/recommended",
 		"plugin:prettier/recommended"
 	],
+	"globals": {
+		"Attachment": "readonly",
+		"BasePart": "readonly",
+		"Folder": "readonly",
+		"Model": "readonly",
+		"Part": "readonly",
+		"Humanoid": "readonly"
+	},
 	"rules": {
 		"prettier/prettier": "warn"
 	}
