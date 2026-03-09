@@ -27,7 +27,9 @@ export function log(message: string, logType: "INFO" | "WARN" | "ERROR" = "INFO"
 
 export function applySpeed(speed: SPEEDS, humanoid: Humanoid) {
 	if (humanoid) {
-		humanoid.WalkSpeed = SPEED[speed];
+		const speedValue = SPEED[speed];
+		print(`[SPEED] Applying speed: ${speed} = ${speedValue}`);
+		humanoid.WalkSpeed = speedValue;
 	}
 }
 

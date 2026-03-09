@@ -1,9 +1,5 @@
 import { NPC } from "./npc";
 
-export function makeHello(name: string) {
-	return `Hello from ${name}!`;
-}
-
 export function useAssetId(id: string) {
 	return `rbxassetid://${id}`;
 }
