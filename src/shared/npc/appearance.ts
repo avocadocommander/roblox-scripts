@@ -1,52 +1,8 @@
-import { ReplicatedStorage, Workspace } from "@rbxts/services";
-import { log } from "./helpers";
-import { NPCData, Race, useAssetId } from "./module";
-import { PathfindingService } from "@rbxts/services";
-import { Pace, RouteConfig } from "./npc-manager";
-
-export interface NPC {
-	name: string;
-	seed: number;
-	rarity: Rarity;
-	humanoid: Humanoid;
-	state: NPCStateKeys;
-	previousState: NPCStateKeys;
-	animationInstances: NPCStateRecord;
-	model: Model;
-	race: Race;
-}
-
-export function createNPCModelAndGenerateHumanoid(
-	name: string,
-	data: NPCData,
-	routeData: RouteConfig | undefined,
-): NPC | undefined {
-	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
-	const modelClone = npcTemplate.Clone();
-	modelClone.Name = name;
-
-	modelClone.Parent = Workspace;
-
-	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
-	if (!humanoid) return;
-	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeData);
-	humanoid.WalkSpeed = getHumanoidPace(routeData?.pace);
-
-	const animator = humanoid.WaitForChild("Animator") as Animator;
-	const animationInstances = getAnimationTracks(animator);
-
-	return {
-		name,
-		race: data.race,
-		seed: getSeedFromName(name),
-		rarity: "Commoner",
-		humanoid,
-		model: modelClone,
-		state: "IDLE",
-		previousState: "IDLE",
-		animationInstances,
-	};
-}
+import { ReplicatedStorage } from "@rbxts/services";
+import { log } from "../helpers";
+import { NPCData, Race } from "../module";
+import { RouteConfig } from "../npc-manager";
+import { makeSeededRandom } from "./utils";
 
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
@@ -76,7 +32,11 @@ function getRaceSkinTones(race: Race): Color3[] {
 	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
 }
 
-export function getGenericSeededAppearance(
+function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
+	return list[math.floor(seed * list.size())];
+}
+
+function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
 	data: NPCData,
@@ -167,25 +127,7 @@ export function getGenericSeededAppearance(
 	return humanoidDescription;
 }
 
-export function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
-	return list[math.floor(seed * list.size())];
-}
-
-function getHumanoidPace(pace: Pace | undefined): number {
-	const paceSpeedMap: Record<Pace, number> = {
-		Stationary: 5,
-		Slow: math.random(3, 4),
-		Medium: math.random(5, 6),
-		Fast: math.random(7, 8),
-	};
-
-	if (!pace) {
-		return paceSpeedMap["Medium"];
-	}
-	return pace ? paceSpeedMap[pace] : paceSpeedMap["Medium"];
-}
-
-export function setHumanoidDefaults(
+function setHumanoidDefaults(
 	humanoid: Humanoid,
 	seed: number,
 	data: NPCData,
@@ -223,28 +165,7 @@ export function setHumanoidDefaults(
 	return humanoid;
 }
 
-export function makeSeededRandom(seed: number): () => number {
-	let currentSeed = seed;
-
-	return () => {
-		currentSeed = (currentSeed * 9301 + 49297) % 233280;
-		return currentSeed / 233280;
-	};
-}
-
-export function getSeedFromName(name: string): number {
-	if (!name) throw "No see was created with undefined name";
-
-	let seed = 0;
-	for (let i = 0; i < name.size(); i++) {
-		const char = name.sub(i + 1, i + 1);
-		const byte = string.byte(char) as unknown as number;
-		seed += byte;
-	}
-	return seed;
-}
-
-export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number, race: Race) {
+function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => number, race: Race) {
 	function randRange(min: number, max: number, seed: () => number) {
 		return min + (max - min) * seed();
 	}
@@ -299,101 +220,4 @@ export function randomizeBodyShape(npcDescription: HumanoidDescription, seed: ()
 		math.round(randRange(scales.proportion[0], scales.proportion[1], seed) * 100) / 100;
 }
 
-export const assignNpcToRoute = async (npc: NPC, routePoints: BasePart[], routeConfig: RouteConfig | undefined) => {
-	let routeActiveIndex = 0;
-
-	while (npc) {
-		const activeRoutePoint = routePoints[routeActiveIndex];
-		const lookAtDirrection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
-		const npcHumanoidRootPart: BasePart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
-
-		await navigate(activeRoutePoint.Position, npc);
-
-		if (lookAtDirrection) {
-			const look = CFrame.lookAt(npcHumanoidRootPart.Position, lookAtDirrection.WorldPosition);
-			npcHumanoidRootPart.CFrame = look;
-		}
-
-		await Promise.delay(routeConfig?.tempo ?? math.random(2, 10));
-		if (routeActiveIndex >= routePoints.size() - 1) {
-			routeActiveIndex = 0;
-		} else {
-			routeActiveIndex++;
-		}
-	}
-};
-
-export async function navigate(moveToPosition: Vector3, npc: NPC): Promise<void> {
-	const path = PathfindingService.CreatePath({
-		AgentRadius: 2,
-		AgentHeight: 5,
-		AgentCanJump: true,
-		AgentCanClimb: false,
-		Costs: {
-			Water: 100,
-			Carpet: 0,
-			Cobblestone: 0,
-		},
-	});
-	path.ComputeAsync(npc.humanoid.RootPart!.Position, moveToPosition);
-	if (path.Status === Enum.PathStatus.Success) {
-		const waypoints = path.GetWaypoints();
-		let current = 0;
-		const moveToNextWaypoint = async () => {
-			current++;
-			if (current >= waypoints.size() - 1) {
-				setState("IDLE", npc);
-				return;
-			}
-			const wp = waypoints[current];
-			npc.humanoid.MoveTo(wp.Position);
-			setState("WALKING", npc);
-			await waitForMove(npc.humanoid);
-			await moveToNextWaypoint();
-		};
-		await moveToNextWaypoint();
-	}
-}
-
-export function setState(newState: NPCStateKeys, npc: NPC) {
-	if (npc.state === newState) return;
-	npc.animationInstances[npc.state].Stop();
-	npc.state = newState;
-	npc.animationInstances[npc.state].Play();
-}
-
-export function getAnimationTracks(animator: Animator): NPCStateRecord {
-	const walkAnim = new Instance("Animation");
-	walkAnim.Name = "Walking Animation";
-	walkAnim.AnimationId = useAssetId("133708367021932");
-
-	const idleAnim = new Instance("Animation");
-	idleAnim.Name = "Idle Animation";
-	idleAnim.AnimationId = useAssetId("507766951");
-
-	const walkTrack = animator.LoadAnimation(walkAnim);
-	walkTrack.Priority = Enum.AnimationPriority.Movement;
-	walkTrack.Looped = true;
-
-	const idleTrack = animator.LoadAnimation(idleAnim);
-	idleTrack.Priority = Enum.AnimationPriority.Movement;
-	idleTrack.Looped = true;
-
-	return {
-		WALKING: walkTrack,
-		IDLE: idleTrack,
-	};
-}
-
-export function waitForMove(humanoid: Humanoid): Promise<void> {
-	return new Promise((resolve) => {
-		humanoid.MoveToFinished.Once(() => {
-			return resolve();
-		});
-	});
-}
-
-export type NPCStateKeys = "WALKING" | "IDLE";
-export type Gender = "M" | "F";
-export type Rarity = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
-export type NPCStateRecord = Record<NPCStateKeys, AnimationTrack>;
+export { getGenericSeededAppearance, setHumanoidDefaults, randomizeBodyShape };

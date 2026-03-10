@@ -1,32 +1,57 @@
-// import { Players, ReplicatedStorage } from "@rbxts/services";
+import { Players, ReplicatedStorage } from "@rbxts/services";
+import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 
-// const npcState = ReplicatedStorage.WaitForChild("NPCState") as Folder;
-// const GetViewers = npcState.WaitForChild("GetViewers") as RemoteFunction;
-// const ViewsUpdated = npcState.WaitForChild("ViewsUpdated") as RemoteEvent;
+const npcState = ReplicatedStorage.WaitForChild("NPCState") as Folder;
+const GetViewers = npcState.WaitForChild("GetViewers") as RemoteFunction;
+const ViewsUpdated = npcState.WaitForChild("ViewsUpdated") as RemoteEvent;
 
-// const playerGui = Players.LocalPlayer!.WaitForChild("PlayerGui") as PlayerGui;
-// const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
+const lifecycle = getOrCreateLifecycleRemote();
 
-// const playerVisibilityFrame = screenGui.WaitForChild("VisionIndicator") as Frame;
-// const playerVisibilityTextLabel = playerVisibilityFrame.WaitForChild("VisualText") as TextLabel;
-// const playerVisibilityTextLabelBoarder = playerVisibilityFrame.WaitForChild("VisualTextborder") as TextLabel;
+lifecycle.OnClientEvent.Connect((message: string) => {
+	if (message === "InitializePlayer") {
+		initializeVisionIndicator();
+	}
+});
 
-// function main() {
-// 	const playerViewers: string[] = GetViewers.InvokeServer() as string[];
-// 	setGUIOnChanges(playerViewers);
+function initializeVisionIndicator() {
+	const playerGui = Players.LocalPlayer!.WaitForChild("PlayerGui") as PlayerGui;
+	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
-// 	ViewsUpdated.OnClientEvent.Connect((newTotalViewers: string[]) => {
-// 		setGUIOnChanges(newTotalViewers);
-// 	});
-// }
+	const playerVisibilityFrame = screenGui.WaitForChild("VisionIndicator") as Frame;
+	const playerVisibilityTextLabel = playerVisibilityFrame.WaitForChild("VisualText") as TextLabel;
+	const playerVisibilityTextLabelBoarder = playerVisibilityFrame.WaitForChild("VisualTextborder") as TextLabel;
 
-// function setGUIOnChanges(viewers: string[]) {
-// 	const viewerSize = viewers.size();
+	main(playerVisibilityFrame, playerVisibilityTextLabel, playerVisibilityTextLabelBoarder);
+}
 
-// 	playerVisibilityTextLabel.Text = `${viewerSize}x`;
-// 	playerVisibilityTextLabelBoarder.Text = `${viewerSize}x`;
+function main(
+	playerVisibilityFrame: Frame,
+	playerVisibilityTextLabel: TextLabel,
+	playerVisibilityTextLabelBoarder: TextLabel,
+) {
+	const playerViewers: string[] = GetViewers.InvokeServer() as string[];
+	setGUIOnChanges(playerViewers, playerVisibilityFrame, playerVisibilityTextLabel, playerVisibilityTextLabelBoarder);
 
-// 	playerVisibilityFrame.Visible = viewerSize !== 0;
-// }
+	ViewsUpdated.OnClientEvent.Connect((newTotalViewers: string[]) => {
+		setGUIOnChanges(
+			newTotalViewers,
+			playerVisibilityFrame,
+			playerVisibilityTextLabel,
+			playerVisibilityTextLabelBoarder,
+		);
+	});
+}
 
-// main();
+function setGUIOnChanges(
+	viewers: string[],
+	playerVisibilityFrame: Frame,
+	playerVisibilityTextLabel: TextLabel,
+	playerVisibilityTextLabelBoarder: TextLabel,
+) {
+	const viewerSize = viewers.size();
+
+	playerVisibilityTextLabel.Text = `${viewerSize}x`;
+	playerVisibilityTextLabelBoarder.Text = `${viewerSize}x`;
+
+	playerVisibilityFrame.Visible = viewerSize !== 0;
+}

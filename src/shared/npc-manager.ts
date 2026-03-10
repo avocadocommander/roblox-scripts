@@ -2,23 +2,134 @@ import { CollectionService, Players, Workspace } from "@rbxts/services";
 import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
-import { NPC, createNPCModelAndGenerateHumanoid, assignNpcToRoute } from "./npc";
+import { NPC, createNPCModelAndGenerateHumanoid } from "./npc/main";
 import { requestAddView, requestRemoveView } from "./player-visiualization";
 import { getBountyTarget } from "./player-state";
 
 type DEATH_TYPE = {
-	[key: string]: (npcTarget: NPC) => void;
+	[key: string]: (model: Model) => void;
 };
 
+/**
+ * Death effects system - easily configurable death animations
+ * Each death type can:
+ * - Stop NPC movement/humanoid
+ * - Apply visual effects (transparency, color, particles, etc.)
+ * - Add models/effects to the NPC
+ * - Animate the death sequence
+ * - Finally destroy the model
+ */
 export const DEATH_TYPES: DEATH_TYPE = {
-	DEFAULT: (npcTarget: NPC) => {
-		npcTarget.model.GetDescendants().forEach((descendant) => {
+	/**
+	 * DEFAULT: Drop and collapse (breaks joints, falls, waits, then destroys)
+	 */
+	DEFAULT: (model: Model) => {
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.Health = 0; // Kill the humanoid
+		}
+
+		// Break joints to make them collapse
+		model.GetDescendants().forEach((descendant) => {
 			if (descendant.IsA("JointInstance")) {
 				descendant.Destroy();
 			}
 		});
+
 		task.wait(5);
-		npcTarget.model.Destroy();
+		model.Destroy();
+	},
+
+	/**
+	 * EVAPORATE: Fade out silently (stops movement, gradually becomes transparent, then destroys)
+	 */
+	EVAPORATE: (model: Model) => {
+		// Stop the NPC from moving
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.Health = 0;
+		}
+
+		// Disable collisions
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).CanCollide = false;
+			}
+		});
+
+		// Animate evaporation - gradually become transparent
+		for (let i = 0; i <= 20; i++) {
+			model.GetDescendants().forEach((descendant) => {
+				if (descendant.IsA("BasePart")) {
+					(descendant as BasePart).Transparency = math.min(1, i / 20);
+				}
+			});
+			task.wait(0.1);
+		}
+
+		model.Destroy();
+	},
+
+	/**
+	 * SMOKE: Creates smoke effect before destroying (good for poof effects)
+	 */
+	SMOKE: (model: Model) => {
+		// Stop the NPC
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.Health = 0;
+		}
+
+		// Create smoke effect
+		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (rootPart) {
+			const smoke = new Instance("Smoke");
+			smoke.Parent = rootPart;
+			smoke.Opacity = 0.8;
+
+			task.wait(1);
+		}
+
+		// Destroy
+		model.Destroy();
+	},
+
+	/**
+	 * POISON: Applies poison effect with delayed death (4 second duration)
+	 * Creates a visual poisoned effect then slowly kills the NPC
+	 */
+	POISON: (model: Model) => {
+		// Change appearance to indicate poisoning (transparent purple)
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				const part = descendant as BasePart;
+				part.Color = Color3.fromRGB(138, 43, 226); // Purple poison color
+				part.Transparency = (part.Transparency ?? 0) + 0.3; // Make more transparent
+			}
+		});
+
+		// Create poison particle effect
+		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (rootPart) {
+			const particle = new Instance("ParticleEmitter");
+			particle.Parent = rootPart;
+			particle.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+			particle.Speed = new NumberRange(3, 6);
+			particle.Lifetime = new NumberRange(1.5, 3);
+			particle.Size = new NumberSequence(0.3, 0.1); // Much smaller particles
+			particle.Color = new ColorSequence(Color3.fromRGB(138, 43, 226));
+			particle.Rate = 30;
+			particle.Transparency = new NumberSequence([
+				new NumberSequenceKeypoint(0, 0.5),
+				new NumberSequenceKeypoint(1, 1),
+			]);
+		}
+
+		// Wait for poison effect duration
+		task.wait(4);
+
+		// Then destroy
+		model.Destroy();
 	},
 };
 
@@ -35,28 +146,14 @@ export function assassinateTarget(player: Player, npcTarget: NPC) {
 }
 
 export function setNpcDeath(npc: NPC) {
-	DEATH_TYPES["DEFAULT"](npc);
+	DEATH_TYPES["DEFAULT"](npc.model);
 	warn(`💀 ${npc.name} was slain`);
 }
 
 export function addKillPrompt(npc: NPC) {
-	const head = npc.model.FindFirstChild("Head") as BasePart;
-	if (!head) return warn("No head for NPC");
-
-	const prompt = new Instance("ProximityPrompt");
-	prompt.Enabled = true;
-	prompt.Name = "TalkPrompt";
-	prompt.ObjectText = npc.model.Name;
-	prompt.ActionText = "End";
-	prompt.KeyboardKeyCode = Enum.KeyCode.E;
-	prompt.HoldDuration = 0;
-	prompt.RequiresLineOfSight = true;
-	prompt.MaxActivationDistance = 10;
-	prompt.Parent = head;
-
-	prompt.Triggered.Connect(async (player) => {
-		assassinateTarget(player, npc);
-	});
+	// DEPRECATED: Assassination prompts are now handled by custom client-side UI system
+	// See: client/modules/npc-proximity.ts and server/modules/assassination-handler.ts
+	return;
 }
 
 const INSTANCES_FOR_NPC_VISION_TO_IGNORE = new Set<Instance>();

@@ -1,5 +1,5 @@
 import Signal from "@rbxts/signal";
-import { NPC } from "./npc";
+import { NPC } from "./npc/main";
 import { ReplicatedStorage } from "@rbxts/services";
 import { SATIRICAL_BOUNTY_OFFENSES } from "./module";
 

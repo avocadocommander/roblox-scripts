@@ -34,12 +34,14 @@ export function applySpeed(speed: SPEEDS, humanoid: Humanoid) {
 }
 
 export const SPEED: Record<SPEEDS, number> = {
-	WALK: 8,
-	RUN: 16,
+	WALK: 16,
+	RUN: 24,
+	STEALTH: 8,
 };
 export const enum SPEEDS {
 	WALK = "WALK",
 	RUN = "RUN",
+	STEALTH = "STEALTH",
 }
 
 export function getActiveNPCNames(assignedRoutes: Map<string, Assignment>): string[] {

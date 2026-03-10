@@ -1,10 +1,9 @@
 import { CollectionService, Lighting, Workspace } from "@rbxts/services";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "shared/module";
-import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC } from "shared/npc";
-import { addKillPrompt, getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
+import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
+import { getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
 import { serverIsReady } from "./server-status";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import "./bootstrap"; // Load and initialize server bootstrap
 
 const time = 20.45;
@@ -91,7 +90,7 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			const npcName = avaliableNames[math.random(0, avaliableNames.size() - 1)];
 
 			if (!npcName) {
-				error(`${npcName} name is bad`);
+				throw `NPC name is invalid: ${npcName}`;
 			}
 			const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 				npcName,
@@ -100,16 +99,15 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			);
 
 			if (!npc) {
-				error("Not able to create NPC");
+				throw "Not able to create NPC";
 			}
 
 			const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
-			addKillPrompt(npc);
-			setupWatcherGaze(npc, routeConfig);
+			// Assassination prompts are now handled client-side in custom UI system
 
 			npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
-			assignNpcToRoute(npc, routePoints, routeConfig);
+			assignNpcToRoute(npc, routePoints, routeConfig, setState);
 
 			assigned.set(npcRoute.Name, { npc, route: npcRoute });
 			log(`${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
@@ -139,22 +137,24 @@ function coreGameLoop() {
 	while (!serverIsReady()) {
 		task.wait();
 	}
-	print("CORE LOOP STARTED");
+	print("[CORE LOOP] Started");
 	const assigned: Map<string, Assignment> = new Map();
 	const npcRoutes = getNPCRoutes();
 
 	if (npcRoutes.size() > [...MEDIEVAL_NPC_NAMES].size()) {
-		error(`Route Size: ${npcRoutes.size()} > NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`);
+		log(`[CORE LOOP] Route Size: ${npcRoutes.size()} > NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`, "ERROR");
 	}
-	print(`Initial Route Size: ${npcRoutes.size()} | NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`);
+	print(`[CORE LOOP] Initial Route Size: ${npcRoutes.size()} | NPC amount: ${[...MEDIEVAL_NPC_NAMES].size()}`);
 
 	npcRoutes.forEach((npcRoute) => {
 		try {
 			spawnForRoute(npcRoute, assigned);
 		} catch (err) {
-			log(`Spawn failed for NPC: ${err as string}`, "ERROR");
+			log(`[CORE LOOP] Spawn failed for NPC: ${err as string}`, "ERROR");
 		}
 	});
 }
 
-coreGameLoop();
+task.spawn(() => {
+	coreGameLoop();
+});

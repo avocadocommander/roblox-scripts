@@ -1,2 +1,3 @@
-import { Players, SoundService, UserInputService } from "@rbxts/services";
-import { getOrCreateSprintRemote } from "shared/remotes/sprint-remote";
+// This file is deprecated - all player initialization is now handled by bootstrap.client.ts
+// and the movement module (modules/movement.ts)
+

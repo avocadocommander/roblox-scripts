@@ -1,4 +1,4 @@
-import { NPC } from "./npc";
+import { NPC } from "./npc/main";
 
 export function useAssetId(id: string) {
 	return `rbxassetid://${id}`;
