@@ -6,30 +6,55 @@ import { NPC, createNPCModelAndGenerateHumanoid } from "./npc/main";
 import { requestAddView, requestRemoveView } from "./player-visiualization";
 import { getBountyTarget } from "./player-state";
 
-type DEATH_TYPE = {
-	[key: string]: (model: Model) => void;
-};
+/** A function that plays a visual animation at the moment an NPC dies. */
+type DeathEffectFn = (model: Model) => void;
 
 /**
- * Death effects system - easily configurable death animations
- * Each death type can:
- * - Stop NPC movement/humanoid
- * - Apply visual effects (transparency, color, particles, etc.)
- * - Add models/effects to the NPC
- * - Animate the death sequence
- * - Finally destroy the model
+ * A function for a status effect that runs *while* the NPC is still alive.
+ * `onDeath` is a DeathEffectFn that must be called once the effect ends
+ * so the NPC still receives a proper death animation.
  */
-export const DEATH_TYPES: DEATH_TYPE = {
+type StatusEffectFn = (model: Model, onDeath: DeathEffectFn) => void;
+
+/**
+ * Tracks every NPC model that is currently dying or has a status effect
+ * running on it. Once a model is in this set it cannot be targeted again.
+ */
+const dyingNPCs = new Set<Model>();
+
+/** Returns true if the NPC is alive and not already being killed/poisoned. */
+export function isNPCActive(model: Model): boolean {
+	return model.Parent !== undefined && !dyingNPCs.has(model);
+}
+
+/**
+ * Mark an NPC as dying/afflicted so no further effects can be applied.
+ * Automatically removes it from the set once the model is destroyed.
+ */
+export function markNPCDying(model: Model): void {
+	dyingNPCs.add(model);
+	// Clean up when Roblox removes the model from the DataModel
+	model.Destroying.Connect(() => dyingNPCs.delete(model));
+}
+
+/**
+ * DEATH_EFFECTS — visual animations that play at the exact moment of death.
+ * These are responsible for stopping the humanoid, playing their animation,
+ * and ultimately destroying the model.
+ */
+export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	/**
-	 * DEFAULT: Drop and collapse (breaks joints, falls, waits, then destroys)
+	 * DEFAULT: Break joints so the NPC collapses, then destroy after a short wait.
 	 */
 	DEFAULT: (model: Model) => {
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
-			humanoid.Health = 0; // Kill the humanoid
+			humanoid.Health = 0;
 		}
 
-		// Break joints to make them collapse
 		model.GetDescendants().forEach((descendant) => {
 			if (descendant.IsA("JointInstance")) {
 				descendant.Destroy();
@@ -41,23 +66,23 @@ export const DEATH_TYPES: DEATH_TYPE = {
 	},
 
 	/**
-	 * EVAPORATE: Fade out silently (stops movement, gradually becomes transparent, then destroys)
+	 * EVAPORATE: Disable collisions and fade the NPC out gradually, then destroy.
 	 */
 	EVAPORATE: (model: Model) => {
-		// Stop the NPC from moving
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
 			humanoid.Health = 0;
 		}
 
-		// Disable collisions
 		model.GetDescendants().forEach((descendant) => {
 			if (descendant.IsA("BasePart")) {
 				(descendant as BasePart).CanCollide = false;
 			}
 		});
 
-		// Animate evaporation - gradually become transparent
 		for (let i = 0; i <= 20; i++) {
 			model.GetDescendants().forEach((descendant) => {
 				if (descendant.IsA("BasePart")) {
@@ -71,52 +96,64 @@ export const DEATH_TYPES: DEATH_TYPE = {
 	},
 
 	/**
-	 * SMOKE: Creates smoke effect before destroying (good for poof effects)
+	 * SMOKE: Spawn a smoke cloud at the root part, then destroy.
 	 */
 	SMOKE: (model: Model) => {
-		// Stop the NPC
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
 			humanoid.Health = 0;
 		}
 
-		// Create smoke effect
 		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
 		if (rootPart) {
 			const smoke = new Instance("Smoke");
 			smoke.Parent = rootPart;
 			smoke.Opacity = 0.8;
-
 			task.wait(1);
 		}
 
-		// Destroy
 		model.Destroy();
 	},
+};
 
+/**
+ * STATUS_EFFECTS — effects applied to an NPC *while it is still alive*.
+ * These are NOT death animations. They run over a duration and then call
+ * `onDeath` to trigger a proper death effect when the effect finally kills
+ * the NPC. This means a poisoned NPC will still play a death animation.
+ */
+export const STATUS_EFFECTS: Record<string, StatusEffectFn> = {
 	/**
-	 * POISON: Applies poison effect with delayed death (4 second duration)
-	 * Creates a visual poisoned effect then slowly kills the NPC
+	 * POISON: Tint the NPC purple and emit particles for 4 seconds.
+	 * After the duration, `onDeath` is called so the NPC still receives a
+	 * regular death animation (e.g. DEFAULT, SMOKE, EVAPORATE).
 	 */
-	POISON: (model: Model) => {
-		// Change appearance to indicate poisoning (transparent purple)
+	POISON: (model: Model, onDeath: DeathEffectFn) => {
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
+		// Visual: tint the NPC purple and add transparency to show poisoning
 		model.GetDescendants().forEach((descendant) => {
 			if (descendant.IsA("BasePart")) {
 				const part = descendant as BasePart;
-				part.Color = Color3.fromRGB(138, 43, 226); // Purple poison color
-				part.Transparency = (part.Transparency ?? 0) + 0.3; // Make more transparent
+				part.Color = Color3.fromRGB(138, 43, 226);
+				part.Transparency = math.min(1, (part.Transparency ?? 0) + 0.3);
 			}
 		});
 
-		// Create poison particle effect
+		// Particle effect while alive
 		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		let particle: ParticleEmitter | undefined;
 		if (rootPart) {
-			const particle = new Instance("ParticleEmitter");
+			particle = new Instance("ParticleEmitter");
 			particle.Parent = rootPart;
 			particle.Texture = "rbxasset://textures/particles/sparkles_main.dds";
 			particle.Speed = new NumberRange(3, 6);
 			particle.Lifetime = new NumberRange(1.5, 3);
-			particle.Size = new NumberSequence(0.3, 0.1); // Much smaller particles
+			particle.Size = new NumberSequence(0.3, 0.1);
 			particle.Color = new ColorSequence(Color3.fromRGB(138, 43, 226));
 			particle.Rate = 30;
 			particle.Transparency = new NumberSequence([
@@ -125,13 +162,21 @@ export const DEATH_TYPES: DEATH_TYPE = {
 			]);
 		}
 
-		// Wait for poison effect duration
+		// Poison lasts 4 seconds, then the NPC dies via the provided death effect
 		task.wait(4);
 
-		// Then destroy
-		model.Destroy();
+		// Stop emitting new particles before the death animation fires
+		if (particle) {
+			particle.Rate = 0;
+		}
+
+		// Hand off to the death effect — the NPC still collapses / evaporates / etc.
+		onDeath(model);
 	},
 };
+
+/** Convenience alias kept for backwards compatibility. */
+export const DEATH_TYPES = DEATH_EFFECTS;
 
 export function assassinateTarget(player: Player, npcTarget: NPC) {
 	warn(`${player.Name} wanting to get that ${npcTarget.name}`);
@@ -145,9 +190,33 @@ export function assassinateTarget(player: Player, npcTarget: NPC) {
 	setNpcDeath(npcTarget);
 }
 
-export function setNpcDeath(npc: NPC) {
-	DEATH_TYPES["DEFAULT"](npc.model);
+export function setNpcDeath(npc: NPC, deathEffect: keyof typeof DEATH_EFFECTS = "DEFAULT") {
+	if (!isNPCActive(npc.model)) {
+		warn(`⚠️ ${npc.name} is already dying, ignoring duplicate kill`);
+		return;
+	}
+	DEATH_EFFECTS[deathEffect](npc.model);
 	warn(`💀 ${npc.name} was slain`);
+}
+
+/**
+ * Apply a status effect to an NPC while it is alive.
+ * When the effect expires the NPC will die using the given `deathEffect`.
+ *
+ * Example: applyStatusEffect(npc, "POISON", "EVAPORATE")
+ * → NPC turns purple for 4 s, then evaporates.
+ */
+export function applyStatusEffect(
+	npc: NPC,
+	statusEffect: keyof typeof STATUS_EFFECTS,
+	deathEffect: keyof typeof DEATH_EFFECTS = "DEFAULT",
+) {
+	if (!isNPCActive(npc.model)) {
+		warn(`⚠️ ${npc.name} is already dying, cannot apply ${statusEffect}`);
+		return;
+	}
+	STATUS_EFFECTS[statusEffect](npc.model, DEATH_EFFECTS[deathEffect]);
+	warn(`☠️  ${npc.name} was afflicted with ${statusEffect}`);
 }
 
 export function addKillPrompt(npc: NPC) {

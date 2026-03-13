@@ -1,10 +1,19 @@
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
-import { DEATH_TYPES } from "shared/npc-manager";
+import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
+import { addCoins, addExperience, addKill, addScore, savePlayerData } from "shared/player-state";
+import { bountyService } from "shared/bounty";
+import { MEDIEVAL_NPCS } from "shared/module";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
-const DEATH_STYLES = ["DEFAULT", "EVAPORATE", "SMOKE", "POISON"];
+// POISON is a status effect, not a death animation — keep it out of this list.
+const DEATH_STYLES: Array<keyof typeof DEATH_EFFECTS> = ["DEFAULT", "EVAPORATE", "SMOKE"];
+
+/** Base rewards granted for every assassination regardless of bounty. */
+const BASE_SCORE = 100;
+const BASE_XP = 250;
+const BASE_COINS = 50;
 
 function initializeAssassinationHandler() {
 	log("[ASSASSINATION] Initializing assassination handler");
@@ -13,6 +22,12 @@ function initializeAssassinationHandler() {
 		const model = npcModel as Model;
 		if (!model || !model.Parent) {
 			log(`[ASSASSINATION] ${player.Name} attempted assassination on invalid NPC`, "WARN");
+			return;
+		}
+
+		// Reject if the NPC is already dying or has a status effect running
+		if (isNPCActive(model) === false) {
+			log(`[ASSASSINATION] ${player.Name} targeted ${model.Name} but it is already dying`, "WARN");
 			return;
 		}
 
@@ -72,11 +87,44 @@ function initializeAssassinationHandler() {
 
 		// Kill the NPC with a random death style
 		const selectedStyle = DEATH_STYLES[math.random(0, DEATH_STYLES.size() - 1)];
-		const deathFunction = DEATH_TYPES[selectedStyle];
+		const deathFunction = DEATH_EFFECTS[selectedStyle];
 
 		if (deathFunction) {
 			task.spawn(() => deathFunction(model));
 		}
+
+		// --- Reward the player ---
+		let scoreGain = BASE_SCORE;
+		let xpGain = BASE_XP;
+		let coinGain = BASE_COINS;
+
+		// Check if this NPC had an active bounty and stack those rewards on top
+		const bounty = bountyService.getBounty();
+		if (bounty && bounty.npc.model === model) {
+			xpGain += bounty.xpReward;
+			coinGain += bounty.goldReward;
+			scoreGain += bounty.goldReward; // bounty gold also counts toward score
+			bountyService.clearBounty(bounty.npc);
+			log(
+				`[ASSASSINATION] ${player.Name} claimed bounty on ${model.Name} (+${bounty.goldReward} gold, +${bounty.xpReward} XP)`,
+			);
+		}
+
+		addScore(player, scoreGain);
+		addExperience(player, xpGain);
+		addCoins(player, coinGain);
+
+		// Record the kill in the player's per-NPC kill log
+		const npcData = MEDIEVAL_NPCS[model.Name];
+		if (npcData) {
+			addKill(player, model.Name, { status: npcData.status, race: npcData.race });
+			log(`[ASSASSINATION] ${player.Name} kill log: ${model.Name} x${1} (${npcData.status} ${npcData.race})`);
+		}
+
+		log(`[ASSASSINATION] Rewarded ${player.Name}: +${scoreGain} score, +${xpGain} XP, +${coinGain} coins`);
+
+		// Persist immediately so data is not lost if the server crashes
+		task.spawn(() => savePlayerData(player));
 	});
 }
 

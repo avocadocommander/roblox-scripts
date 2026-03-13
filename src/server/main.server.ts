@@ -4,6 +4,7 @@ import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "shared/module";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
 import { serverIsReady } from "./server-status";
+import "shared/player-state"; // Ensure DataStore listeners are registered at server start
 import "./bootstrap"; // Load and initialize server bootstrap
 
 const time = 20.45;
