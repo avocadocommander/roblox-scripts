@@ -4,6 +4,7 @@ import { serverIsReady, setServerStatus } from "./server-status";
 import { initializeMovementSystem } from "./modules/movement";
 import { initializeStealthTracker } from "./modules/stealth-tracker";
 import { initializeAssassinationHandler } from "./modules/assassination-handler";
+import { initializeBountyManager } from "./modules/bounty-manager";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -14,6 +15,7 @@ export async function bootstrapServer() {
 	initializeMovementSystem();
 	initializeStealthTracker();
 	initializeAssassinationHandler();
+	initializeBountyManager();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }

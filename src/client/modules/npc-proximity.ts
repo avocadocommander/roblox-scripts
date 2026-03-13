@@ -2,6 +2,7 @@ import { Players, RunService, Workspace, CollectionService, UserInputService } f
 import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
+import { UI_THEME } from "shared/ui-theme";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const stealthRemote = getOrCreateStealthRemote();
@@ -20,35 +21,58 @@ const npcUIMap = new Map<Model, NPCProximityUI>();
 
 function createNPCBillboard(npc: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
-	billboard.Size = new UDim2(5, 0, 2.5, 0);
-	billboard.MaxDistance = math.huge; // Always render, we control visibility manually
-	billboard.StudsOffset = new Vector3(0, 6, 0);
+	billboard.Size = new UDim2(4.5, 0, 1.2, 0);
+	billboard.MaxDistance = math.huge;
+	billboard.StudsOffset = new Vector3(0, 6.5, 0);
+	billboard.AlwaysOnTop = false;
 	billboard.Parent = npc;
 
-	// Name label (bottom half)
+	// Name label — sits below the assassinate prompt
 	const nameLabel = new Instance("TextLabel");
-	nameLabel.Size = new UDim2(1, 0, 0.5, 0);
-	nameLabel.Position = new UDim2(0, 0, 0.5, 0);
-	nameLabel.BackgroundColor3 = Color3.fromRGB(215, 206, 178); // Tan/beige (D7CEB2)
-	nameLabel.BackgroundTransparency = 0.2;
-	nameLabel.TextColor3 = Color3.fromRGB(102, 99, 91); // Dark brown (66635B)
-	nameLabel.TextSize = 14;
+	nameLabel.Size = new UDim2(1, 0, 0.55, 0);
+	nameLabel.Position = new UDim2(0, 0, 0.45, 0);
+	nameLabel.BackgroundColor3 = UI_THEME.bg;
+	nameLabel.BackgroundTransparency = 0.25;
+	nameLabel.TextColor3 = UI_THEME.textPrimary;
+	nameLabel.Font = UI_THEME.fontDisplay;
+	nameLabel.TextSize = 13;
 	nameLabel.Text = npc.Name;
+	nameLabel.BorderSizePixel = 0;
 	nameLabel.Parent = billboard;
+
+	const nameCorner = new Instance("UICorner");
+	nameCorner.CornerRadius = new UDim(0, 4);
+	nameCorner.Parent = nameLabel;
+
+	const nameStroke = new Instance("UIStroke");
+	nameStroke.Color = UI_THEME.border;
+	nameStroke.Thickness = 0.8;
+	nameStroke.Parent = nameLabel;
 
 	return billboard;
 }
 
 function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButton {
 	const button = new Instance("TextButton");
-	button.Size = new UDim2(1, 0, 0.5, 0);
-	button.Position = new UDim2(0, 0, 0, 0); // Top half
-	button.BackgroundColor3 = Color3.fromRGB(147, 168, 172); // Light blue-gray (93A8AC)
-	button.BackgroundTransparency = 0.15;
-	button.TextColor3 = Color3.fromRGB(102, 99, 91); // Dark brown (66635B)
-	button.TextSize = 12;
-	button.Text = "[E] Assassinate";
+	button.Size = new UDim2(1, 0, 0.42, 0);
+	button.Position = new UDim2(0, 0, 0, 0);
+	button.BackgroundColor3 = UI_THEME.headerBg;
+	button.BackgroundTransparency = 0.1;
+	button.TextColor3 = UI_THEME.danger;
+	button.Font = UI_THEME.fontBold;
+	button.TextSize = 11;
+	button.Text = "[⚔] ASSASSINATE  [E]";
+	button.BorderSizePixel = 0;
 	button.Parent = billboard;
+
+	const btnCorner = new Instance("UICorner");
+	btnCorner.CornerRadius = new UDim(0, 4);
+	btnCorner.Parent = button;
+
+	const btnStroke = new Instance("UIStroke");
+	btnStroke.Color = UI_THEME.danger;
+	btnStroke.Thickness = 0.8;
+	btnStroke.Parent = button;
 
 	button.MouseButton1Click.Connect(() => {
 		assassinationRemote.FireServer(npc);

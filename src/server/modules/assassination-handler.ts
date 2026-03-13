@@ -3,8 +3,8 @@ import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
 import { addCoins, addExperience, addKill, addScore, savePlayerData } from "shared/player-state";
-import { bountyService } from "shared/bounty";
-import { MEDIEVAL_NPCS } from "shared/module";
+import { getPlayerNPCBounty, onNPCKilled, setPlayerWanted } from "./bounty-manager";
+import { MEDIEVAL_NPCS, Status } from "shared/module";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 // POISON is a status effect, not a death animation — keep it out of this list.
@@ -14,6 +14,24 @@ const DEATH_STYLES: Array<keyof typeof DEATH_EFFECTS> = ["DEFAULT", "EVAPORATE",
 const BASE_SCORE = 100;
 const BASE_XP = 250;
 const BASE_COINS = 50;
+
+/** Gold placed on the PLAYER's head when they make an illegal kill. */
+const WANTED_GOLD_BY_STATUS: Record<Status, number> = {
+	Serf: 150,
+	Commoner: 300,
+	Merchant: 550,
+	Nobility: 900,
+	Royalty: 2000,
+};
+
+/** Flavour text for the royal decree, keyed by the victim's status. */
+const DECREE_BY_STATUS: Record<Status, string> = {
+	Serf: "Slew an innocent serf — by royal decree",
+	Commoner: "Slew a commoner in cold blood — by royal decree",
+	Merchant: "Murdered a merchant of the realm — by royal decree",
+	Nobility: "Cut down a noble of the court — by royal decree",
+	Royalty: "Committed regicide — by decree of the crown",
+};
 
 function initializeAssassinationHandler() {
 	log("[ASSASSINATION] Initializing assassination handler");
@@ -94,34 +112,50 @@ function initializeAssassinationHandler() {
 		}
 
 		// --- Reward the player ---
-		let scoreGain = BASE_SCORE;
-		let xpGain = BASE_XP;
-		let coinGain = BASE_COINS;
+		// Check if this NPC was the player's personal bounty mark BEFORE calling
+		// onNPCKilled (which removes the bounty entry from the map)
+		const personalBounty = getPlayerNPCBounty(player);
+		const wasLegalKill = personalBounty !== undefined && personalBounty.npcName === model.Name;
 
-		// Check if this NPC had an active bounty and stack those rewards on top
-		const bounty = bountyService.getBounty();
-		if (bounty && bounty.npc.model === model) {
-			xpGain += bounty.xpReward;
-			coinGain += bounty.goldReward;
-			scoreGain += bounty.goldReward; // bounty gold also counts toward score
-			bountyService.clearBounty(bounty.npc);
-			log(
-				`[ASSASSINATION] ${player.Name} claimed bounty on ${model.Name} (+${bounty.goldReward} gold, +${bounty.xpReward} XP)`,
-			);
+		print(
+			"[WANTED CHECK] " +
+				player.Name +
+				" killed " +
+				model.Name +
+				" | mark=" +
+				(personalBounty ? personalBounty.npcName : "none") +
+				" | legal=" +
+				(wasLegalKill ? "YES" : "NO"),
+		);
+
+		// Notify all players who had this NPC as their mark (fires BountyCompleted
+		// to them and schedules a new assignment after 3 s)
+		onNPCKilled(player, model.Name);
+
+		if (wasLegalKill) {
+			// Legal bounty kill — award full rewards
+			const scoreGain = BASE_SCORE + personalBounty.gold;
+			const xpGain = BASE_XP + personalBounty.xp;
+			const coinGain = BASE_COINS + personalBounty.gold;
+			addScore(player, scoreGain);
+			addExperience(player, xpGain);
+			addCoins(player, coinGain);
+			log(`[ASSASSINATION] ${player.Name} completed bounty on ${model.Name} (+${coinGain} coins, +${xpGain} XP)`);
+		} else {
+			// Illegal kill — no reward, become wanted
+			const npcData2 = MEDIEVAL_NPCS[model.Name];
+			const npcStatus = (npcData2?.status ?? "Commoner") as Status;
+			const wantedGold = WANTED_GOLD_BY_STATUS[npcStatus] ?? 300;
+			const decree = DECREE_BY_STATUS[npcStatus] ?? "Committed murder — by royal decree";
+			setPlayerWanted(player, wantedGold, decree);
+			print("[WANTED CHECK] " + player.Name + " is now WANTED for " + wantedGold + "g by decree of the king");
 		}
 
-		addScore(player, scoreGain);
-		addExperience(player, xpGain);
-		addCoins(player, coinGain);
-
-		// Record the kill in the player's per-NPC kill log
+		// Record the kill in the player's per-NPC kill log regardless of legality
 		const npcData = MEDIEVAL_NPCS[model.Name];
-		if (npcData) {
+		if (npcData !== undefined) {
 			addKill(player, model.Name, { status: npcData.status, race: npcData.race });
-			log(`[ASSASSINATION] ${player.Name} kill log: ${model.Name} x${1} (${npcData.status} ${npcData.race})`);
 		}
-
-		log(`[ASSASSINATION] Rewarded ${player.Name}: +${scoreGain} score, +${xpGain} XP, +${coinGain} coins`);
 
 		// Persist immediately so data is not lost if the server crashes
 		task.spawn(() => savePlayerData(player));
