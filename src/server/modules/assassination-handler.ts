@@ -1,9 +1,30 @@
+import { Players } from "@rbxts/services";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
+import { getPlayerAssassinationRemote } from "shared/remotes/bounty-remote";
+import { getAchievementUnlockedRemote } from "shared/remotes/kill-book-remote";
 import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
-import { addCoins, addExperience, addKill, addScore, savePlayerData } from "shared/player-state";
-import { getPlayerNPCBounty, onNPCKilled, setPlayerWanted } from "./bounty-manager";
+import {
+	addCoins,
+	addCompletedBounty,
+	addExperience,
+	addKill,
+	addPlayerDeath,
+	addPlayerKill,
+	addScore,
+	hasAchievement,
+	savePlayerData,
+	unlockAchievement,
+} from "shared/player-state";
+import {
+	getPlayerNPCBounty,
+	onNPCKilled,
+	setPlayerWanted,
+	isPlayerWanted,
+	clearPlayerWanted,
+	getWantedPlayerGold,
+} from "./bounty-manager";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
@@ -133,14 +154,16 @@ function initializeAssassinationHandler() {
 		onNPCKilled(player, model.Name);
 
 		if (wasLegalKill) {
-			// Legal bounty kill — award full rewards
-			const scoreGain = BASE_SCORE + personalBounty.gold;
-			const xpGain = BASE_XP + personalBounty.xp;
-			const coinGain = BASE_COINS + personalBounty.gold;
-			addScore(player, scoreGain);
-			addExperience(player, xpGain);
-			addCoins(player, coinGain);
-			log(`[ASSASSINATION] ${player.Name} completed bounty on ${model.Name} (+${coinGain} coins, +${xpGain} XP)`);
+			// Legal bounty kill — store as completed bounty (turned in later via kill book)
+			addCompletedBounty(
+				player,
+				model.Name,
+				BASE_COINS + personalBounty.gold,
+				BASE_XP + personalBounty.xp,
+				personalBounty.offence,
+			);
+			addScore(player, BASE_SCORE + personalBounty.gold);
+			log("[ASSASSINATION] " + player.Name + " completed bounty on " + model.Name + " (stored for turn-in)");
 		} else {
 			// Illegal kill — no reward, become wanted
 			const npcData2 = MEDIEVAL_NPCS[model.Name];
@@ -154,11 +177,95 @@ function initializeAssassinationHandler() {
 		// Record the kill in the player's per-NPC kill log regardless of legality
 		const npcData = MEDIEVAL_NPCS[model.Name];
 		if (npcData !== undefined) {
-			addKill(player, model.Name, { status: npcData.status, race: npcData.race });
+			addKill(player, model.Name, { status: npcData.status, race: npcData.race }, wasLegalKill);
+		}
+
+		// ── Achievement checks ─────────────────────────────────────────────────
+		if (!hasAchievement(player, "FIRST_ASSASSINATION")) {
+			if (unlockAchievement(player, "FIRST_ASSASSINATION")) {
+				getAchievementUnlockedRemote().FireClient(player, "FIRST_ASSASSINATION");
+				log("[ACHIEVEMENT] " + player.Name + " unlocked: First Blood");
+			}
 		}
 
 		// Persist immediately so data is not lost if the server crashes
 		task.spawn(() => savePlayerData(player));
+	});
+
+	// ── Player-vs-player assassination (wanted bounties) ──────────────────────
+	const playerAssassinationRemote = getPlayerAssassinationRemote();
+
+	playerAssassinationRemote.OnServerEvent.Connect((killer: Player, targetCharModel: unknown) => {
+		const targetModel = targetCharModel as Model;
+		if (!targetModel || !targetModel.Parent) return;
+
+		const targetPlayer = Players.GetPlayerFromCharacter(targetModel);
+		if (!targetPlayer) return;
+		if (targetPlayer === killer) return;
+
+		if (!isPlayerWanted(targetPlayer)) {
+			log(
+				"[ASSASSINATION] " + killer.Name + " tried to assassinate non-wanted player " + targetPlayer.Name,
+				"WARN",
+			);
+			return;
+		}
+
+		if (!isPlayerStealthing(killer)) {
+			log("[ASSASSINATION] " + killer.Name + " not stealthing for player assassination", "WARN");
+			return;
+		}
+
+		const killerCharacter = killer.Character;
+		if (!killerCharacter) return;
+
+		const killerHRP = killerCharacter.FindFirstChild("HumanoidRootPart") as BasePart;
+		const targetHRP = targetModel.FindFirstChild("HumanoidRootPart") as BasePart;
+		if (!killerHRP || !targetHRP) return;
+
+		const distance = killerHRP.Position.sub(targetHRP.Position).Magnitude;
+		if (distance > 15) {
+			log("[ASSASSINATION] " + killer.Name + " too far to assassinate " + targetPlayer.Name, "WARN");
+			return;
+		}
+
+		// Kill the wanted player
+		log("[ASSASSINATION] " + killer.Name + " assassinated wanted player " + targetPlayer.Name + "!");
+		const targetHumanoid = targetModel.FindFirstChildOfClass("Humanoid");
+		if (targetHumanoid) {
+			targetHumanoid.Health = 0;
+		}
+
+		// Reward the assassin with the bounty
+		const wantedGold = getWantedPlayerGold(targetPlayer) ?? 300;
+		addCoins(killer, wantedGold);
+		addScore(killer, wantedGold);
+		addExperience(killer, math.floor(wantedGold * 1.5));
+		log("[ASSASSINATION] " + killer.Name + " earned " + wantedGold + "g for killing " + targetPlayer.Name);
+
+		// Track PvP stats
+		addPlayerKill(killer);
+		addPlayerDeath(targetPlayer);
+
+		// Achievement: Player Slayer
+		if (!hasAchievement(killer, "PLAYER_SLAYER")) {
+			if (unlockAchievement(killer, "PLAYER_SLAYER")) {
+				getAchievementUnlockedRemote().FireClient(killer, "PLAYER_SLAYER");
+				log("[ACHIEVEMENT] " + killer.Name + " unlocked: Player Slayer");
+			}
+		}
+
+		// Clear wanted status
+		clearPlayerWanted(targetPlayer);
+
+		// Respawn the killed player after a delay
+		task.delay(5, () => {
+			if (targetPlayer.Parent !== undefined) {
+				targetPlayer.LoadCharacter();
+			}
+		});
+
+		task.spawn(() => savePlayerData(killer));
 	});
 }
 

@@ -52,6 +52,9 @@ function setupMovementInput() {
 			log(`[MOVEMENT] Toggling stealth mode: ${isStealthMode}`);
 			setStealthing(isStealthMode);
 			movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
+			// Broadcast stealth state as an attribute so other LocalScripts
+			// (e.g. user-ui-block) can react without needing a shared module.
+			Players.LocalPlayer.SetAttribute("IsStealthing", isStealthMode);
 		}
 
 		// Space - Double Jump

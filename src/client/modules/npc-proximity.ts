@@ -3,6 +3,13 @@ import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
 import { UI_THEME } from "shared/ui-theme";
+import {
+	getPlayerAssassinationRemote,
+	getPlayerWantedRemote,
+	getPlayerWantedClearedRemote,
+	getBountyListSyncRemote,
+	PlayerWantedPayload,
+} from "shared/remotes/bounty-remote";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const stealthRemote = getOrCreateStealthRemote();
@@ -10,6 +17,11 @@ const PROXIMITY_RANGE = 5; // Only show when very close to NPC
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
 let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
+
+// ── Wanted Player Tracking ──────────────────────────────────────────────────────
+const wantedPlayerInfo = new Map<string, { gold: number; displayName: string }>();
+const wantedBillboards = new Map<string, BillboardGui>();
+let closestWantedPlayerInRange: Model | undefined = undefined;
 
 interface NPCProximityUI {
 	billboard: BillboardGui;
@@ -101,6 +113,144 @@ function isNPCInCameraFrame(camera: Instance, npcPosition: Vector3): boolean {
 	return true;
 }
 
+// ── Wanted Player Billboards ────────────────────────────────────────────────────
+
+function createWantedBillboard(character: Model, playerName: string, gold: number): void {
+	removeWantedBillboard(playerName);
+	const head = character.FindFirstChild("Head") as BasePart;
+	if (!head) return;
+
+	// Hide default Roblox name display
+	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	if (humanoid) {
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+	}
+
+	const billboard = new Instance("BillboardGui");
+	billboard.Name = "WantedBillboard";
+	billboard.Size = new UDim2(5, 0, 2.0, 0);
+	billboard.MaxDistance = 100;
+	billboard.StudsOffset = new Vector3(0, 2.5, 0);
+	billboard.AlwaysOnTop = false;
+	billboard.Parent = head;
+
+	// Info frame — dark themed
+	const info = new Instance("Frame");
+	info.Name = "Info";
+	info.Size = new UDim2(1, 0, 0.75, 0);
+	info.Position = new UDim2(0, 0, 0.25, 0);
+	info.BackgroundColor3 = UI_THEME.bg;
+	info.BackgroundTransparency = 0.15;
+	info.BorderSizePixel = 0;
+	info.Parent = billboard;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = new UDim(0, 4);
+	corner.Parent = info;
+
+	const stroke = new Instance("UIStroke");
+	stroke.Color = UI_THEME.danger;
+	stroke.Thickness = UI_THEME.strokeThickness;
+	stroke.Parent = info;
+
+	// "WANTED" header
+	const wantedTag = new Instance("TextLabel");
+	wantedTag.Name = "WantedTag";
+	wantedTag.Size = new UDim2(1, 0, 0.28, 0);
+	wantedTag.Position = new UDim2(0, 0, 0.02, 0);
+	wantedTag.BackgroundTransparency = 1;
+	wantedTag.TextColor3 = UI_THEME.danger;
+	wantedTag.Font = UI_THEME.fontBold;
+	wantedTag.TextSize = 9;
+	wantedTag.Text = "WANTED";
+	wantedTag.Parent = info;
+
+	// Player name — RED
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Name = "NameLabel";
+	nameLabel.Size = new UDim2(1, 0, 0.38, 0);
+	nameLabel.Position = new UDim2(0, 0, 0.28, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = UI_THEME.danger;
+	nameLabel.Font = UI_THEME.fontDisplay;
+	nameLabel.TextSize = 14;
+	nameLabel.Text = playerName;
+	nameLabel.Parent = info;
+
+	// Gold reward
+	const goldLabel = new Instance("TextLabel");
+	goldLabel.Name = "GoldLabel";
+	goldLabel.Size = new UDim2(1, 0, 0.28, 0);
+	goldLabel.Position = new UDim2(0, 0, 0.68, 0);
+	goldLabel.BackgroundTransparency = 1;
+	goldLabel.TextColor3 = UI_THEME.gold;
+	goldLabel.Font = UI_THEME.fontBold;
+	goldLabel.TextSize = 11;
+	goldLabel.Text = gold + " Gold";
+	goldLabel.Parent = info;
+
+	wantedBillboards.set(playerName, billboard);
+}
+
+function updateWantedGold(playerName: string, gold: number): void {
+	const billboard = wantedBillboards.get(playerName);
+	if (!billboard) return;
+	const info = billboard.FindFirstChild("Info") as Frame;
+	if (!info) return;
+	const goldLabel = info.FindFirstChild("GoldLabel") as TextLabel;
+	if (goldLabel) goldLabel.Text = gold + " Gold";
+}
+
+function removeWantedBillboard(playerName: string): void {
+	const billboard = wantedBillboards.get(playerName);
+	if (billboard) {
+		billboard.Destroy();
+		wantedBillboards.delete(playerName);
+	}
+}
+
+function handlePlayerWanted(payload: PlayerWantedPayload): void {
+	if (payload.playerName === Players.LocalPlayer.Name) return;
+	wantedPlayerInfo.set(payload.playerName, { gold: payload.gold, displayName: payload.displayName });
+	const targetPlayer = Players.FindFirstChild(payload.playerName) as Player | undefined;
+	if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
+		if (wantedBillboards.has(payload.playerName)) {
+			updateWantedGold(payload.playerName, payload.gold);
+		} else {
+			createWantedBillboard(targetPlayer.Character, payload.playerName, payload.gold);
+		}
+	}
+}
+
+function handlePlayerWantedCleared(playerName: string): void {
+	wantedPlayerInfo.delete(playerName);
+	// Restore default Roblox name display
+	const targetPlayer = Players.FindFirstChild(playerName) as Player | undefined;
+	if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
+		const humanoid = targetPlayer.Character.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer;
+		}
+	}
+	removeWantedBillboard(playerName);
+}
+
+/** Re-create billboards for wanted players after respawn or late join. */
+function ensureWantedBillboards(): void {
+	for (const [playerName, info] of wantedPlayerInfo) {
+		if (playerName === Players.LocalPlayer.Name) continue;
+		const targetPlayer = Players.FindFirstChild(playerName) as Player | undefined;
+		if (!targetPlayer || !targetPlayer.IsA("Player") || !targetPlayer.Character) {
+			if (wantedBillboards.has(playerName)) removeWantedBillboard(playerName);
+			continue;
+		}
+		const existing = wantedBillboards.get(playerName);
+		if (!existing || !existing.Parent) {
+			createWantedBillboard(targetPlayer.Character, playerName, info.gold);
+		}
+	}
+}
+
 function updateNPCProximityUI() {
 	const player = Players.LocalPlayer;
 	if (!player || !player.Character) return;
@@ -162,6 +312,24 @@ function updateNPCProximityUI() {
 		}
 	}
 
+	// ── Wanted player proximity ─────────────────────────────────────────────────────
+	closestWantedPlayerInRange = undefined;
+	ensureWantedBillboards();
+
+	for (const [wantedName] of wantedPlayerInfo) {
+		if (wantedName === player.Name) continue;
+		const wantedPlayer = Players.FindFirstChild(wantedName) as Player | undefined;
+		if (!wantedPlayer || !wantedPlayer.IsA("Player") || !wantedPlayer.Character) continue;
+		const hrp = wantedPlayer.Character.FindFirstChild("HumanoidRootPart") as BasePart;
+		if (!hrp) continue;
+		const dist = playerPosition.sub(hrp.Position).Magnitude;
+		if (dist <= PROXIMITY_RANGE && dist < closestDistance) {
+			closestDistance = dist;
+			closestWantedPlayerInRange = wantedPlayer.Character;
+			closestNPC = undefined; // wanted player takes priority
+		}
+	}
+
 	// Update global closest NPC for E key handling
 	closestNPCInRange = closestNPC;
 
@@ -180,11 +348,64 @@ function updateNPCProximityUI() {
 			}
 		}
 	}
+
+	// Third pass: show/hide assassination prompt on wanted players
+	for (const [wantedName] of wantedPlayerInfo) {
+		const billboard = wantedBillboards.get(wantedName);
+		if (!billboard) continue;
+
+		const wantedPlayer = Players.FindFirstChild(wantedName) as Player | undefined;
+		const shouldShow =
+			isCurrentlyStealthing &&
+			wantedPlayer !== undefined &&
+			wantedPlayer.IsA("Player") &&
+			wantedPlayer.Character === closestWantedPlayerInRange;
+
+		const existingBtn = billboard.FindFirstChild("AssassinateBtn") as TextButton | undefined;
+
+		if (shouldShow && !existingBtn) {
+			const btn = new Instance("TextButton");
+			btn.Name = "AssassinateBtn";
+			btn.Size = new UDim2(1, 0, 0.22, 0);
+			btn.Position = new UDim2(0, 0, 0, 0);
+			btn.BackgroundColor3 = UI_THEME.headerBg;
+			btn.BackgroundTransparency = 0.1;
+			btn.TextColor3 = UI_THEME.danger;
+			btn.Font = UI_THEME.fontBold;
+			btn.TextSize = 11;
+			btn.Text = "[E] ASSASSINATE";
+			btn.BorderSizePixel = 0;
+			btn.Parent = billboard;
+
+			const btnCorner = new Instance("UICorner");
+			btnCorner.CornerRadius = new UDim(0, 4);
+			btnCorner.Parent = btn;
+
+			const btnStroke = new Instance("UIStroke");
+			btnStroke.Color = UI_THEME.danger;
+			btnStroke.Thickness = 0.8;
+			btnStroke.Parent = btn;
+
+			btn.MouseButton1Click.Connect(() => {
+				if (wantedPlayer && wantedPlayer.IsA("Player") && wantedPlayer.Character) {
+					playerAssassinationRemote.FireServer(wantedPlayer.Character);
+				}
+			});
+		} else if (!shouldShow && existingBtn) {
+			existingBtn.Destroy();
+		}
+	}
 }
+
+// Resolved lazily inside initializeNPCProximity once the server is ready
+let playerAssassinationRemote: RemoteEvent;
 
 function initializeNPCProximity() {
 	const player = Players.LocalPlayer;
 	if (!player) return;
+
+	// Resolve now — server has created all bounty remotes by this point
+	playerAssassinationRemote = getPlayerAssassinationRemote();
 
 	// Find existing NPCs in workspace (exclude player characters)
 	const existingNPCs = Workspace.GetDescendants().filter((inst): inst is Model => {
@@ -215,17 +436,40 @@ function initializeNPCProximity() {
 		}
 	});
 
+	// ── Wanted player remote listeners ──────────────────────────────────────────
+	getPlayerWantedRemote().OnClientEvent.Connect((data: unknown) => {
+		handlePlayerWanted(data as PlayerWantedPayload);
+	});
+
+	getPlayerWantedClearedRemote().OnClientEvent.Connect((playerName: unknown) => {
+		handlePlayerWantedCleared(playerName as string);
+	});
+
+	getBountyListSyncRemote().OnClientEvent.Connect((_npcBounty: unknown, wanted: unknown) => {
+		for (const entry of ((wanted ?? []) as PlayerWantedPayload[])) {
+			handlePlayerWanted(entry);
+		}
+	});
+
+	Players.PlayerRemoving.Connect((leavingPlayer) => {
+		handlePlayerWantedCleared(leavingPlayer.Name);
+	});
+
 	// Update proximity UI every frame
 	RunService.RenderStepped.Connect(() => {
 		updateNPCProximityUI();
 	});
 
-	// Listen for E key to assassinate closest NPC
+	// Listen for E key to assassinate closest target (wanted player or NPC)
 	UserInputService.InputBegan.Connect((input, gameProcessed) => {
 		if (gameProcessed) return;
 
 		if (input.KeyCode === Enum.KeyCode.E) {
-			if (isCurrentlyStealthing && closestNPCInRange) {
+			if (!isCurrentlyStealthing) return;
+			if (closestWantedPlayerInRange) {
+				log("[ASSASSINATION] Player attempting to assassinate wanted player via E key");
+				playerAssassinationRemote.FireServer(closestWantedPlayerInRange);
+			} else if (closestNPCInRange) {
 				log(`[ASSASSINATION] Player attempting to assassinate ${closestNPCInRange.Name} via E key`);
 				assassinationRemote.FireServer(closestNPCInRange);
 			}

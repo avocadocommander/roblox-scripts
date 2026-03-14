@@ -77,3 +77,8 @@ export function getPlayerWantedClearedRemote(): RemoteEvent {
 export function getBountyListSyncRemote(): RemoteEvent {
 	return getOrCreateEvent("BountyListSync");
 }
+
+/** Client → server: player attempting to assassinate a wanted player. */
+export function getPlayerAssassinationRemote(): RemoteEvent {
+	return getOrCreateEvent("PlayerAssassination");
+}

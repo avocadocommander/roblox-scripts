@@ -18,6 +18,10 @@ const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
 const ExpierenceUpdated = playerState.WaitForChild("ExpierenceUpdated") as RemoteEvent;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 
+// NPC visibility — fires from server whenever an NPC starts/stops seeing this player
+const npcStateFolder = ReplicatedStorage.WaitForChild("NPCState") as Folder;
+const ViewsUpdated = npcStateFolder.WaitForChild("ViewsUpdated") as RemoteEvent;
+
 const lifecycle = getOrCreateLifecycleRemote();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +35,9 @@ let xpBar: Frame | undefined;
 let xpFill: Frame | undefined;
 let wantedRow: Frame | undefined;
 let wantedGoldLabel: TextLabel | undefined;
+let eyeWidget: Frame | undefined;
+let eyeCountLabel: TextLabel | undefined;
+let lastViewerCount = 0;
 
 const XP_PER_LEVEL = 1000;
 
@@ -79,7 +86,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 
 	nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "PlayerName";
-	nameLabel.Size = new UDim2(1, 0, 0, 22);
+	nameLabel.Size = new UDim2(0.68, 0, 0, 22);
 	nameLabel.Position = new UDim2(0, 0, 0, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.Text = "—";
@@ -88,6 +95,38 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	nameLabel.TextSize = 18;
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	nameLabel.Parent = nameRow;
+
+	// ── Eye / visibility indicator (right side of name, stealth-only) ───
+	const eyeFrame = new Instance("Frame");
+	eyeFrame.Name = "EyeIndicator";
+	eyeFrame.Size = new UDim2(0.32, -4, 0, 20);
+	eyeFrame.Position = new UDim2(0.68, 4, 0, 1);
+	eyeFrame.BackgroundColor3 = UI_THEME.bgInset;
+	eyeFrame.BackgroundTransparency = 0.1;
+	eyeFrame.BorderSizePixel = 0;
+	eyeFrame.Visible = false; // hidden until stealth active
+	eyeFrame.Parent = nameRow;
+	eyeWidget = eyeFrame;
+
+	const eyeCorner = new Instance("UICorner");
+	eyeCorner.CornerRadius = new UDim(0, 3);
+	eyeCorner.Parent = eyeFrame;
+
+	const eyeStroke = new Instance("UIStroke");
+	eyeStroke.Color = UI_THEME.textMuted;
+	eyeStroke.Thickness = 0.8;
+	eyeStroke.Parent = eyeFrame;
+
+	const eyeLabel = new Instance("TextLabel");
+	eyeLabel.Name = "EyeCount";
+	eyeLabel.Size = new UDim2(1, 0, 1, 0);
+	eyeLabel.BackgroundTransparency = 1;
+	eyeLabel.Text = "👁 0";
+	eyeLabel.TextColor3 = UI_THEME.textMuted;
+	eyeLabel.Font = UI_THEME.fontBold;
+	eyeLabel.TextSize = 10;
+	eyeLabel.Parent = eyeFrame;
+	eyeCountLabel = eyeLabel;
 
 	titleLabel = new Instance("TextLabel");
 	titleLabel.Name = "PlayerTitle";
@@ -278,6 +317,32 @@ function clearWanted(): void {
 	if (titleLabel) titleLabel.TextColor3 = UI_THEME.textSection;
 }
 
+/** Update the eye indicator count. Always runs — widget may be hidden. */
+function setEyeCount(viewers: string[]): void {
+	// Guard: viewers can arrive as nil from the remote if no one has been added yet
+	if (viewers === undefined) {
+		return;
+	}
+	const count = (viewers as defined as string[]).size();
+	lastViewerCount = count;
+	print("[EYE] ViewsUpdated received, count=", count);
+	if (!eyeCountLabel || !eyeWidget) return;
+	// Always keep label text up-to-date even if widget is hidden — when stealth
+	// is toggled on the correct count will already be in the label.
+	const isSpotted = count > 0;
+	eyeCountLabel.Text = "Eye: " + count;
+	eyeCountLabel.TextColor3 = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
+	const stroke = eyeWidget.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	if (stroke !== undefined) stroke.Color = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
+}
+
+/** Show or hide the eye indicator based on stealth state. */
+function setEyeStealth(stealthing: boolean): void {
+	if (!eyeWidget) return;
+	eyeWidget.Visible = stealthing;
+	// Label is always kept current by setEyeCount, nothing extra to do
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────────
 
 lifecycle.OnClientEvent.Connect((message: string) => {
@@ -336,5 +401,17 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 				break;
 			}
 		}
+	});
+
+	// Eye indicator — NPC visibility updates from server
+	ViewsUpdated.OnClientEvent.Connect((viewers: unknown) => {
+		print("[EYE] ViewsUpdated event fired on client, raw viewers:", viewers);
+		setEyeCount((viewers ?? []) as string[]);
+	});
+
+	// Eye indicator — show/hide when stealth is toggled (Q key sets this attribute)
+	Players.LocalPlayer.GetAttributeChangedSignal("IsStealthing").Connect(() => {
+		const stealthing = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
+		setEyeStealth(stealthing === true);
 	});
 });

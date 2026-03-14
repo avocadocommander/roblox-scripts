@@ -15,6 +15,8 @@ export type NPCTier = "Standard" | "Elite" | "Boss" | "Legendary";
 export interface NPCKillRecord {
 	/** Total number of times this player has killed this NPC. */
 	count: number;
+	/** Number of times killed while this NPC was the player's bounty target. */
+	bountyKills: number;
 	/** Social status of the NPC — acts as the base difficulty indicator. */
 	status: Status;
 	/** The NPC's race. */

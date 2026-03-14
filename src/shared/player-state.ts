@@ -2,6 +2,16 @@ import { Players, ReplicatedStorage } from "@rbxts/services";
 import { PlayerDataService } from "./common-data-service";
 import { KillLog, NPCKillMeta, NPCKillRecord } from "./kill-log";
 
+/** A completed bounty waiting to be turned in (or already turned in). */
+export interface CompletedBountyEntry {
+	npcName: string;
+	gold: number;
+	xp: number;
+	offence: string;
+	/** Epoch timestamp when completed. */
+	completedAt: number;
+}
+
 const playerStateFolder = ((): Folder => {
 	const root = (ReplicatedStorage.FindFirstChild("PlayerState") as Folder) ?? new Instance("Folder");
 	root.Name = "PlayerState";
@@ -122,6 +132,18 @@ export interface PlayerState {
 	wanted: boolean;
 	/** Per-NPC kill counts and metadata for this player. */
 	killLog: KillLog;
+	/** PvP — total player kills (as the assassin). */
+	playerKills: number;
+	/** PvP — total deaths to other players. */
+	playerDeaths: number;
+	/** Completed bounties waiting to be turned in for reward. */
+	completedBounties: CompletedBountyEntry[];
+	/** All-time bounties turned in (for the kill book history). */
+	turnedInBounties: CompletedBountyEntry[];
+	/** Achievement IDs the player has unlocked. */
+	unlockedAchievements: string[];
+	/** Total NPC assassinations (all-time). */
+	totalNPCKills: number;
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -135,6 +157,12 @@ const DEFAULT_STATE: PlayerState = {
 	activeBountyName: undefined,
 	wanted: false,
 	killLog: {},
+	playerKills: 0,
+	playerDeaths: 0,
+	completedBounties: [],
+	turnedInBounties: [],
+	unlockedAchievements: [],
+	totalNPCKills: 0,
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -292,13 +320,14 @@ export function addExperience(player: Player, amount: number): number {
  * If the NPC has been killed before, its count is incremented.
  * If it's a first kill, a fresh record is created from `meta`.
  */
-export function addKill(player: Player, npcName: string, meta: NPCKillMeta): void {
+export function addKill(player: Player, npcName: string, meta: NPCKillMeta, wasBountyKill = false): void {
 	const state = PLAYER_STATES.get(player);
 	if (!state) return;
 
 	const existing: NPCKillRecord | undefined = state.killLog[npcName] as NPCKillRecord | undefined;
 	const updated: NPCKillRecord = {
 		count: (existing?.count ?? 0) + 1,
+		bountyKills: (existing?.bountyKills ?? 0) + (wasBountyKill ? 1 : 0),
 		status: meta.status,
 		race: meta.race,
 		tier: meta.tier ?? "Standard",
@@ -308,7 +337,11 @@ export function addKill(player: Player, npcName: string, meta: NPCKillMeta): voi
 	const updatedLog: KillLog = { ...state.killLog };
 	updatedLog[npcName] = updated;
 
-	PLAYER_STATES.set(player, { ...state, killLog: updatedLog });
+	PLAYER_STATES.set(player, {
+		...state,
+		killLog: updatedLog,
+		totalNPCKills: state.totalNPCKills + 1,
+	});
 }
 
 /** Return the full kill log for `player` (server-side read). */
@@ -320,6 +353,96 @@ export function getKillLog(player: Player): KillLog {
 export function getKillCount(player: Player, npcName: string): number {
 	const record = (PLAYER_STATES.get(player)?.killLog ?? {})[npcName] as NPCKillRecord | undefined;
 	return record?.count ?? 0;
+}
+
+// ── PvP tracking ───────────────────────────────────────────────────────────────
+
+/** Increment player kill count (PvP). */
+export function addPlayerKill(player: Player): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, { ...state, playerKills: state.playerKills + 1 });
+}
+
+/** Increment player death count (PvP). */
+export function addPlayerDeath(player: Player): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, { ...state, playerDeaths: state.playerDeaths + 1 });
+}
+
+// ── Completed bounty collection ──────────────────────────────────────────────────
+
+/** Add a completed bounty to the player's pending collection. */
+export function addCompletedBounty(player: Player, npcName: string, gold: number, xp: number, offence: string): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	const entry: CompletedBountyEntry = {
+		npcName,
+		gold,
+		xp,
+		offence,
+		completedAt: os.time(),
+	};
+	PLAYER_STATES.set(player, {
+		...state,
+		completedBounties: [...state.completedBounties, entry],
+	});
+}
+
+/** Turn in all completed bounties — award gold/XP, move to history, return total. */
+export function turnInBounties(player: Player): { totalGold: number; totalXP: number; count: number } {
+	const state = PLAYER_STATES.get(player);
+	if (!state || state.completedBounties.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
+
+	let totalGold = 0;
+	let totalXP = 0;
+	for (const b of state.completedBounties) {
+		totalGold += b.gold;
+		totalXP += b.xp;
+	}
+
+	const count = state.completedBounties.size();
+	PLAYER_STATES.set(player, {
+		...state,
+		completedBounties: [],
+		turnedInBounties: [...state.turnedInBounties, ...state.completedBounties],
+	});
+
+	addCoins(player, totalGold);
+	addExperience(player, totalXP);
+	addScore(player, totalGold);
+
+	return { totalGold, totalXP, count };
+}
+
+/** Read completed bounties pending turn-in (server-side). */
+export function getCompletedBounties(player: Player): CompletedBountyEntry[] {
+	return PLAYER_STATES.get(player)?.completedBounties ?? [];
+}
+
+/** Read the full player state snapshot (for kill book data sync). */
+export function getPlayerStateSnapshot(player: Player): PlayerState | undefined {
+	return PLAYER_STATES.get(player);
+}
+
+// ── Achievements ─────────────────────────────────────────────────────────────
+
+/** Unlock an achievement by ID if not already unlocked. Returns true if newly unlocked. */
+export function unlockAchievement(player: Player, achievementId: string): boolean {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return false;
+	if (state.unlockedAchievements.includes(achievementId)) return false;
+	PLAYER_STATES.set(player, {
+		...state,
+		unlockedAchievements: [...state.unlockedAchievements, achievementId],
+	});
+	return true;
+}
+
+/** Check if player has a specific achievement. */
+export function hasAchievement(player: Player, achievementId: string): boolean {
+	return PLAYER_STATES.get(player)?.unlockedAchievements.includes(achievementId) ?? false;
 }
 
 RequestAddLevel.OnServerInvoke = (player: Player, ...args: unknown[]) => {

@@ -9,13 +9,15 @@ import {
 	NPCBountyPayload,
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
-import { UI_THEME } from "shared/ui-theme";
+import { MEDIEVAL_NPCS, NPCData } from "shared/module";
+import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
 // Module-level refs so update functions can reach the labels
 let npcNameLabel: TextLabel | undefined;
 let npcGoldLabel: TextLabel | undefined;
+let npcStatusLabel: TextLabel | undefined;
 let npcOffenceLabel: TextLabel | undefined;
 let wantedList: Frame | undefined;
 let wantedCount = 0;
@@ -72,7 +74,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	// ── "YOUR MARK" section ──────────────────────────────────────────────────
 	const npcSection = new Instance("Frame");
 	npcSection.LayoutOrder = 1;
-	npcSection.Size = new UDim2(1, -20, 0, 56);
+	npcSection.Size = new UDim2(1, -20, 0, 70);
 	npcSection.BackgroundTransparency = 1;
 	npcSection.Parent = panel;
 
@@ -121,10 +123,22 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	npcGoldLabel.Parent = nameRow;
 
+	npcStatusLabel = new Instance("TextLabel");
+	npcStatusLabel.Name = "NPCStatus";
+	npcStatusLabel.Size = new UDim2(1, 0, 0, 13);
+	npcStatusLabel.Position = new UDim2(0, 0, 0, 36);
+	npcStatusLabel.BackgroundTransparency = 1;
+	npcStatusLabel.Text = "";
+	npcStatusLabel.TextColor3 = UI_THEME.textMuted;
+	npcStatusLabel.Font = UI_THEME.fontBody;
+	npcStatusLabel.TextSize = 10;
+	npcStatusLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	npcStatusLabel.Parent = npcSection;
+
 	npcOffenceLabel = new Instance("TextLabel");
 	npcOffenceLabel.Name = "NPCOffence";
 	npcOffenceLabel.Size = new UDim2(1, 0, 0, 12);
-	npcOffenceLabel.Position = new UDim2(0, 0, 0, 38);
+	npcOffenceLabel.Position = new UDim2(0, 0, 0, 51);
 	npcOffenceLabel.BackgroundTransparency = 1;
 	npcOffenceLabel.Text = "";
 	npcOffenceLabel.TextColor3 = UI_THEME.textMuted;
@@ -199,14 +213,31 @@ function makeParchment(screenGui: ScreenGui): void {
 // ─── Update helpers ───────────────────────────────────────────────────────────
 
 function applyNPCBounty(bounty: NPCBountyPayload): void {
-	if (npcNameLabel) npcNameLabel.Text = bounty.npcName;
+	const npcData = MEDIEVAL_NPCS[bounty.npcName] as NPCData | undefined;
+	const rarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
+	if (npcNameLabel) {
+		npcNameLabel.Text = bounty.npcName;
+		npcNameLabel.TextColor3 = rarity ? rarity.color : UI_THEME.textPrimary;
+	}
 	if (npcGoldLabel) npcGoldLabel.Text = bounty.gold + " " + "🪙";
+	if (npcStatusLabel) {
+		if (npcData && rarity) {
+			npcStatusLabel.Text = npcData.status + "  |  " + rarity.label;
+			npcStatusLabel.TextColor3 = rarity.color;
+		} else {
+			npcStatusLabel.Text = "";
+		}
+	}
 	if (npcOffenceLabel) npcOffenceLabel.Text = `"${bounty.offence}"`;
 }
 
 function clearNPCBounty(): void {
-	if (npcNameLabel) npcNameLabel.Text = "Awaiting new mark...";
+	if (npcNameLabel) {
+		npcNameLabel.Text = "Awaiting new mark...";
+		npcNameLabel.TextColor3 = UI_THEME.textPrimary;
+	}
 	if (npcGoldLabel) npcGoldLabel.Text = "";
+	if (npcStatusLabel) npcStatusLabel.Text = "";
 	if (npcOffenceLabel) npcOffenceLabel.Text = "";
 }
 

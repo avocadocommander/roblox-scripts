@@ -6,6 +6,7 @@ import {
 	getBountyAssignedRemote,
 	getBountyCompletedRemote,
 	getBountyListSyncRemote,
+	getPlayerAssassinationRemote,
 	getPlayerWantedClearedRemote,
 	getPlayerWantedRemote,
 	NPCBountyPayload,
@@ -145,6 +146,12 @@ export function isPlayerWanted(player: Player): boolean {
 	return wantedPlayers.has(player);
 }
 
+/** Get the gold bounty on a wanted player's head. */
+export function getWantedPlayerGold(player: Player): number | undefined {
+	const data = wantedPlayers.get(player);
+	return data?.gold;
+}
+
 /** Remove `player` from the wanted list and notify all clients. */
 export function clearPlayerWanted(player: Player): void {
 	if (wantedPlayers.has(player)) {
@@ -166,6 +173,7 @@ export function initializeBountyManager(): void {
 	getBountyListSyncRemote();
 	getPlayerWantedRemote();
 	getPlayerWantedClearedRemote();
+	getPlayerAssassinationRemote();
 
 	const lifecycle = getOrCreateLifecycleRemote();
 

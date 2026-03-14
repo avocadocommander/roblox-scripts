@@ -109,6 +109,7 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
 			assignNpcToRoute(npc, routePoints, routeConfig, setState);
+			setupWatcherGaze(npc, routeConfig);
 
 			assigned.set(npcRoute.Name, { npc, route: npcRoute });
 			log(`${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
