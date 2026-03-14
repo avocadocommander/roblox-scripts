@@ -82,41 +82,144 @@ function makeSectionHeader(parent: Instance, text: string, order: number): TextL
 function renderBountiesTab(data: KillBookData): void {
 	clearContent();
 	if (!contentFrame) return;
-	let order = 0;
 
-	// Active bounty
-	makeSectionHeader(contentFrame, "ACTIVE BOUNTY", order++);
+	// Use a fixed-height wrapper with absolute positioning so the footer
+	// (total + turn-in) sticks to the bottom and the bounty list fills
+	// the space in between.
+	const absY = contentFrame.AbsoluteSize.Y;
+	const visibleH = absY > 0 ? absY - 8 : 430;
+
+	const wrapper = new Instance("Frame");
+	wrapper.Name = "BountyWrapper";
+	wrapper.Size = new UDim2(1, 0, 0, visibleH);
+	wrapper.BackgroundTransparency = 1;
+	wrapper.LayoutOrder = 0;
+	wrapper.Parent = contentFrame;
+
+	// ── Active bounty (top) ─────────────────────────────────────────────────
+	let topY = 0;
+
+	const activeHeader = new Instance("TextLabel");
+	activeHeader.Size = new UDim2(1, 0, 0, 18);
+	activeHeader.Position = new UDim2(0, 0, 0, topY);
+	activeHeader.BackgroundTransparency = 1;
+	activeHeader.TextColor3 = UI_THEME.textSection;
+	activeHeader.Font = UI_THEME.fontBold;
+	activeHeader.TextSize = 11;
+	activeHeader.Text = "ACTIVE BOUNTY";
+	activeHeader.TextXAlignment = Enum.TextXAlignment.Left;
+	activeHeader.Parent = wrapper;
+	topY += 20;
+
 	if (data.activeBountyName !== undefined) {
 		const activeNpc = MEDIEVAL_NPCS[data.activeBountyName] as NPCData | undefined;
 		const activeRarity = activeNpc ? STATUS_RARITY[activeNpc.status] : undefined;
-		makeLabel(contentFrame, data.activeBountyName, order++, {
-			color: activeRarity?.color ?? UI_THEME.textHeader,
-			font: UI_THEME.fontDisplay,
-			size: 15,
-			height: 26,
-		});
+
+		const nameLbl = new Instance("TextLabel");
+		nameLbl.Size = new UDim2(1, 0, 0, 22);
+		nameLbl.Position = new UDim2(0, 0, 0, topY);
+		nameLbl.BackgroundTransparency = 1;
+		nameLbl.TextColor3 = activeRarity?.color ?? UI_THEME.textHeader;
+		nameLbl.Font = UI_THEME.fontDisplay;
+		nameLbl.TextSize = 15;
+		nameLbl.Text = data.activeBountyName;
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.Parent = wrapper;
+		topY += 24;
+
 		if (activeNpc) {
 			const infoLine =
 				activeNpc.race + "  |  " + activeNpc.status + (activeRarity ? "  |  " + activeRarity.label : "");
-			makeLabel(contentFrame, infoLine, order++, {
-				color: activeRarity?.color ?? UI_THEME.textMuted,
-				size: 11,
-			});
+			const infoLbl = new Instance("TextLabel");
+			infoLbl.Size = new UDim2(1, 0, 0, 14);
+			infoLbl.Position = new UDim2(0, 0, 0, topY);
+			infoLbl.BackgroundTransparency = 1;
+			infoLbl.TextColor3 = activeRarity?.color ?? UI_THEME.textMuted;
+			infoLbl.Font = UI_THEME.fontBody;
+			infoLbl.TextSize = 11;
+			infoLbl.Text = infoLine;
+			infoLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			infoLbl.Parent = wrapper;
+			topY += 16;
 		}
 	} else {
-		makeLabel(contentFrame, "No active bounty", order++, { color: UI_THEME.textMuted });
+		const noLbl = new Instance("TextLabel");
+		noLbl.Size = new UDim2(1, 0, 0, 18);
+		noLbl.Position = new UDim2(0, 0, 0, topY);
+		noLbl.BackgroundTransparency = 1;
+		noLbl.TextColor3 = UI_THEME.textMuted;
+		noLbl.Font = UI_THEME.fontBody;
+		noLbl.TextSize = 13;
+		noLbl.Text = "No active bounty";
+		noLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		noLbl.Parent = wrapper;
+		topY += 20;
 	}
 
-	makeDivider(contentFrame, order++);
+	// Divider
+	const div1 = new Instance("Frame");
+	div1.Size = new UDim2(1, 0, 0, 1);
+	div1.Position = new UDim2(0, 0, 0, topY + 2);
+	div1.BackgroundColor3 = UI_THEME.divider;
+	div1.BorderSizePixel = 0;
+	div1.Parent = wrapper;
+	topY += 6;
 
-	// Completed bounties ready to turn in
-	makeSectionHeader(contentFrame, "COMPLETED BOUNTIES", order++);
+	// "COMPLETED BOUNTIES" header
+	const compHeader = new Instance("TextLabel");
+	compHeader.Size = new UDim2(1, 0, 0, 18);
+	compHeader.Position = new UDim2(0, 0, 0, topY);
+	compHeader.BackgroundTransparency = 1;
+	compHeader.TextColor3 = UI_THEME.textSection;
+	compHeader.Font = UI_THEME.fontBold;
+	compHeader.TextSize = 11;
+	compHeader.Text = "COMPLETED BOUNTIES";
+	compHeader.TextXAlignment = Enum.TextXAlignment.Left;
+	compHeader.Parent = wrapper;
+	topY += 22;
 
-	if (data.completedBounties.size() === 0) {
-		makeLabel(contentFrame, "No bounties to turn in", order++, { color: UI_THEME.textMuted });
+	// ── Bottom-anchored sections ────────────────────────────────────────────
+	const HISTORY_HEADER_H = 26;
+	const hasBounties = data.completedBounties.size() > 0;
+	const FOOTER_H = hasBounties ? 66 : 0;
+	const bottomReserved = FOOTER_H + HISTORY_HEADER_H + 4;
+
+	// ── Bounty list (scrollable, fills middle stretch zone) ──────────────────
+	const listHeight = math.max(40, visibleH - topY - bottomReserved);
+
+	if (!hasBounties) {
+		const emptyLbl = new Instance("TextLabel");
+		emptyLbl.Size = new UDim2(1, 0, 0, 22);
+		emptyLbl.Position = new UDim2(0, 0, 0, topY);
+		emptyLbl.BackgroundTransparency = 1;
+		emptyLbl.TextColor3 = UI_THEME.textMuted;
+		emptyLbl.Font = UI_THEME.fontBody;
+		emptyLbl.TextSize = 13;
+		emptyLbl.Text = "No bounties to turn in";
+		emptyLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		emptyLbl.Parent = wrapper;
 	} else {
+		const listFrame = new Instance("ScrollingFrame");
+		listFrame.Name = "BountyList";
+		listFrame.Size = new UDim2(1, 0, 0, listHeight);
+		listFrame.Position = new UDim2(0, 0, 0, topY);
+		listFrame.BackgroundTransparency = 1;
+		listFrame.BorderSizePixel = 0;
+		listFrame.ScrollBarThickness = 3;
+		listFrame.ScrollBarImageColor3 = UI_THEME.border;
+		listFrame.CanvasSize = new UDim2(0, 0, 0, 0);
+		listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y;
+		listFrame.Parent = wrapper;
+
+		const listLayout = new Instance("UIListLayout");
+		listLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+		listLayout.Padding = new UDim(0, 4);
+		listLayout.Parent = listFrame;
+
 		let totalGold = 0;
 		let totalXP = 0;
+		let idx = 0;
+
 		for (const b of data.completedBounties) {
 			const bNpc = MEDIEVAL_NPCS[b.npcName] as NPCData | undefined;
 			const bRarity = bNpc ? STATUS_RARITY[bNpc.status] : undefined;
@@ -126,8 +229,8 @@ function renderBountiesTab(data: KillBookData): void {
 			row.BackgroundColor3 = UI_THEME.bgInset;
 			row.BackgroundTransparency = 0.4;
 			row.BorderSizePixel = 0;
-			row.LayoutOrder = order++;
-			row.Parent = contentFrame;
+			row.LayoutOrder = idx++;
+			row.Parent = listFrame;
 
 			const rc = new Instance("UICorner");
 			rc.CornerRadius = new UDim(0, 3);
@@ -143,16 +246,16 @@ function renderBountiesTab(data: KillBookData): void {
 				accent.Parent = row;
 			}
 
-			const nameLbl = new Instance("TextLabel");
-			nameLbl.Size = new UDim2(0.55, 0, 1, 0);
-			nameLbl.Position = new UDim2(0, 8, 0, 0);
-			nameLbl.BackgroundTransparency = 1;
-			nameLbl.TextColor3 = bRarity?.color ?? UI_THEME.textPrimary;
-			nameLbl.Font = UI_THEME.fontBody;
-			nameLbl.TextSize = 12;
-			nameLbl.Text = b.npcName;
-			nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
-			nameLbl.Parent = row;
+			const bNameLbl = new Instance("TextLabel");
+			bNameLbl.Size = new UDim2(0.55, 0, 1, 0);
+			bNameLbl.Position = new UDim2(0, 8, 0, 0);
+			bNameLbl.BackgroundTransparency = 1;
+			bNameLbl.TextColor3 = bRarity?.color ?? UI_THEME.textPrimary;
+			bNameLbl.Font = UI_THEME.fontBody;
+			bNameLbl.TextSize = 12;
+			bNameLbl.Text = b.npcName;
+			bNameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			bNameLbl.Parent = row;
 
 			const goldLbl = new Instance("TextLabel");
 			goldLbl.Size = new UDim2(0.2, 0, 1, 0);
@@ -178,27 +281,38 @@ function renderBountiesTab(data: KillBookData): void {
 			totalXP += b.xp;
 		}
 
-		makeDivider(contentFrame, order++);
+		// ── Footer: Total + Turn-in (anchored above history) ────────────────
+		const footerTop = visibleH - bottomReserved;
 
-		// Totals
-		makeLabel(contentFrame, "Total: " + totalGold + " Gold  |  " + totalXP + " XP", order++, {
-			color: UI_THEME.gold,
-			font: UI_THEME.fontBold,
-			size: 13,
-		});
+		const footerDiv = new Instance("Frame");
+		footerDiv.Size = new UDim2(1, 0, 0, 1);
+		footerDiv.Position = new UDim2(0, 0, 0, footerTop);
+		footerDiv.BackgroundColor3 = UI_THEME.divider;
+		footerDiv.BorderSizePixel = 0;
+		footerDiv.Parent = wrapper;
 
-		// Turn-in button
+		const totalLbl = new Instance("TextLabel");
+		totalLbl.Size = new UDim2(1, 0, 0, 22);
+		totalLbl.Position = new UDim2(0, 0, 0, footerTop + 4);
+		totalLbl.BackgroundTransparency = 1;
+		totalLbl.TextColor3 = UI_THEME.gold;
+		totalLbl.Font = UI_THEME.fontBold;
+		totalLbl.TextSize = 13;
+		totalLbl.Text = "Total: " + totalGold + " Gold  |  " + totalXP + " XP";
+		totalLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		totalLbl.Parent = wrapper;
+
 		const turnInBtn = new Instance("TextButton");
 		turnInBtn.Name = "TurnInBtn";
 		turnInBtn.Size = new UDim2(1, 0, 0, 32);
+		turnInBtn.Position = new UDim2(0, 0, 0, footerTop + 30);
 		turnInBtn.BackgroundColor3 = UI_THEME.headerBg;
 		turnInBtn.TextColor3 = UI_THEME.gold;
 		turnInBtn.Font = UI_THEME.fontBold;
 		turnInBtn.TextSize = 14;
 		turnInBtn.Text = "TURN IN BOUNTIES";
 		turnInBtn.BorderSizePixel = 0;
-		turnInBtn.LayoutOrder = order++;
-		turnInBtn.Parent = contentFrame;
+		turnInBtn.Parent = wrapper;
 
 		const btnCorner = new Instance("UICorner");
 		btnCorner.CornerRadius = new UDim(0, 4);
@@ -212,28 +326,114 @@ function renderBountiesTab(data: KillBookData): void {
 		turnInBtn.MouseButton1Click.Connect(() => {
 			const result = getTurnInBountiesRemote().InvokeServer() as TurnInResult;
 			if (result && result.count > 0) {
-				// Refresh the tab after turn-in
 				fetchAndRender(0);
 			}
 		});
 	}
 
-	makeDivider(contentFrame, order++);
+	// ── History accordion (bottom, collapsed by default) ─────────────────────
+	const historyTop = visibleH - HISTORY_HEADER_H;
 
-	// Turned-in history
-	makeSectionHeader(contentFrame, "BOUNTY HISTORY (" + data.turnedInBounties.size() + ")", order++);
-	const historySlice = data.turnedInBounties;
-	// Show last 10
-	const startIdx = math.max(0, historySlice.size() - 10);
-	for (let i = historySlice.size() - 1; i >= startIdx; i--) {
-		const b = historySlice[i];
-		const hNpc = MEDIEVAL_NPCS[b.npcName] as NPCData | undefined;
-		const hRarity = hNpc ? STATUS_RARITY[hNpc.status] : undefined;
-		makeLabel(contentFrame, b.npcName + "  " + b.gold + "g", order++, {
-			color: hRarity?.color ?? UI_THEME.textMuted,
-			size: 11,
-		});
-	}
+	const historyDiv = new Instance("Frame");
+	historyDiv.Size = new UDim2(1, 0, 0, 1);
+	historyDiv.Position = new UDim2(0, 0, 0, historyTop - 3);
+	historyDiv.BackgroundColor3 = UI_THEME.divider;
+	historyDiv.BorderSizePixel = 0;
+	historyDiv.Parent = wrapper;
+
+	const historyToggle = new Instance("TextButton");
+	historyToggle.Name = "HistoryToggle";
+	historyToggle.Size = new UDim2(1, 0, 0, HISTORY_HEADER_H);
+	historyToggle.Position = new UDim2(0, 0, 0, historyTop);
+	historyToggle.BackgroundColor3 = UI_THEME.bgInset;
+	historyToggle.BackgroundTransparency = 0.5;
+	historyToggle.TextColor3 = UI_THEME.textSection;
+	historyToggle.Font = UI_THEME.fontBold;
+	historyToggle.TextSize = 10;
+	historyToggle.Text = ">  BOUNTY HISTORY (" + data.turnedInBounties.size() + ")";
+	historyToggle.TextXAlignment = Enum.TextXAlignment.Left;
+	historyToggle.BorderSizePixel = 0;
+	historyToggle.Parent = wrapper;
+
+	const htCorner = new Instance("UICorner");
+	htCorner.CornerRadius = new UDim(0, 3);
+	htCorner.Parent = historyToggle;
+
+	const htPad = new Instance("UIPadding");
+	htPad.PaddingLeft = new UDim(0, 8);
+	htPad.Parent = historyToggle;
+
+	let historyExpanded = false;
+	let historyContent: ScrollingFrame | undefined;
+
+	historyToggle.MouseButton1Click.Connect(() => {
+		historyExpanded = !historyExpanded;
+
+		if (historyExpanded) {
+			historyToggle.Text = "v  BOUNTY HISTORY (" + data.turnedInBounties.size() + ")";
+
+			const entryCount = math.min(data.turnedInBounties.size(), 10);
+			const contentH = math.min(140, entryCount * 20 + 8);
+
+			historyContent = new Instance("ScrollingFrame");
+			historyContent.Name = "HistoryContent";
+			historyContent.Size = new UDim2(1, 0, 0, contentH);
+			historyContent.Position = new UDim2(0, 0, 0, historyTop + HISTORY_HEADER_H + 2);
+			historyContent.BackgroundColor3 = UI_THEME.bgInset;
+			historyContent.BackgroundTransparency = 0.6;
+			historyContent.BorderSizePixel = 0;
+			historyContent.ScrollBarThickness = 3;
+			historyContent.ScrollBarImageColor3 = UI_THEME.border;
+			historyContent.CanvasSize = new UDim2(0, 0, 0, 0);
+			historyContent.AutomaticCanvasSize = Enum.AutomaticSize.Y;
+			historyContent.Parent = wrapper;
+
+			const hcCorner = new Instance("UICorner");
+			hcCorner.CornerRadius = new UDim(0, 3);
+			hcCorner.Parent = historyContent;
+
+			const hcLayout = new Instance("UIListLayout");
+			hcLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+			hcLayout.Padding = new UDim(0, 2);
+			hcLayout.Parent = historyContent;
+
+			const hcPad = new Instance("UIPadding");
+			hcPad.PaddingLeft = new UDim(0, 6);
+			hcPad.PaddingTop = new UDim(0, 4);
+			hcPad.PaddingRight = new UDim(0, 4);
+			hcPad.Parent = historyContent;
+
+			const histSlice = data.turnedInBounties;
+			const startI = math.max(0, histSlice.size() - 10);
+			let hIdx = 0;
+			for (let i = histSlice.size() - 1; i >= startI; i--) {
+				const b = histSlice[i];
+				const hNpc = MEDIEVAL_NPCS[b.npcName] as NPCData | undefined;
+				const hRarity = hNpc ? STATUS_RARITY[hNpc.status] : undefined;
+
+				const hLbl = new Instance("TextLabel");
+				hLbl.Size = new UDim2(1, 0, 0, 16);
+				hLbl.BackgroundTransparency = 1;
+				hLbl.TextColor3 = hRarity?.color ?? UI_THEME.textMuted;
+				hLbl.Font = UI_THEME.fontBody;
+				hLbl.TextSize = 11;
+				hLbl.Text = b.npcName + "  " + b.gold + "g";
+				hLbl.TextXAlignment = Enum.TextXAlignment.Left;
+				hLbl.LayoutOrder = hIdx++;
+				hLbl.Parent = historyContent;
+			}
+
+			// Expand wrapper so the outer scroll frame can reach the history
+			wrapper.Size = new UDim2(1, 0, 0, visibleH + contentH + 4);
+		} else {
+			historyToggle.Text = ">  BOUNTY HISTORY (" + data.turnedInBounties.size() + ")";
+			if (historyContent) {
+				historyContent.Destroy();
+				historyContent = undefined;
+			}
+			wrapper.Size = new UDim2(1, 0, 0, visibleH);
+		}
+	});
 }
 
 // ─── Tab: Bestiary (NPC Pokédex) ─────────────────────────────────────────────
