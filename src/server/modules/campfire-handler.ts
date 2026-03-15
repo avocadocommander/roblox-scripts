@@ -76,11 +76,11 @@ export function respawnPlayerAtCampfire(player: Player): boolean {
  */
 export function loadPlayerCampfireFromStorage(player: Player, onLoaded?: () => void): void {
 	task.spawn(() => {
-		const [success, data] = pcall(() => {
-			return dataStore.GetAsync(player.UserId) as
-				| { x: number; y: number; z: number; timestamp: number }
-				| undefined;
+		const [success, raw] = pcall(() => {
+			const [value] = dataStore.GetAsync(tostring(player.UserId));
+			return value as { x: number; y: number; z: number; timestamp: number } | undefined;
 		});
+		const data = success ? (raw as { x: number; y: number; z: number; timestamp: number } | undefined) : undefined;
 
 		if (!success) {
 			log(`[CAMPFIRE] Failed to load campfire for ${player.Name} from DataStore`, "ERROR");

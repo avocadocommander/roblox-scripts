@@ -2,7 +2,6 @@ import { Players, SoundService, UserInputService } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import { initializeMovementSystem } from "./modules/movement";
 import { initializeNPCProximity } from "./modules/npc-proximity";
-import "./campfire.client"; // Initialize campfire client handler
 
 const lifecycle = getOrCreateLifecycleRemote();
 
