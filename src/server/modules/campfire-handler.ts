@@ -14,7 +14,8 @@ const dataStore = DataStoreService.GetDataStore("PlayerCampfires");
 export function initializeCampfireSystem() {
 	placeCampfireRemote.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {
 		const position = args[0] as Vector3;
-		placePlayerCampfire(player, position);
+		const lookDir = (args[1] as Vector3 | undefined) ?? new Vector3(0, 0, -1);
+		placePlayerCampfire(player, position, lookDir);
 	});
 
 	// Clean up campfire when player leaves
@@ -27,16 +28,19 @@ export function initializeCampfireSystem() {
 	});
 }
 
-function placePlayerCampfire(player: Player, position: Vector3): void {
-	spawnCampfireModel(player, position);
+function placePlayerCampfire(player: Player, position: Vector3, lookDir: Vector3): void {
+	spawnCampfireModel(player, position, lookDir);
 
-	// Persist to DataStore
+	// Persist the ground-level position that spawnCampfireModel resolved
+	const placed = playerCampfires.get(player);
+	const savePos = placed ? placed.position : position;
+
 	task.spawn(() => {
 		const [success] = pcall(() => {
 			dataStore.SetAsync(tostring(player.UserId), {
-				x: position.X,
-				y: position.Y,
-				z: position.Z,
+				x: savePos.X,
+				y: savePos.Y,
+				z: savePos.Z,
 				timestamp: os.time(),
 			});
 		});
@@ -95,7 +99,21 @@ export function loadPlayerCampfireFromStorage(player: Player, onLoaded?: () => v
 	});
 }
 
-function spawnCampfireModel(player: Player, position: Vector3): void {
+function raycastToGround(origin: Vector3): Vector3 {
+	const params = new RaycastParams();
+	params.FilterType = Enum.RaycastFilterType.Exclude;
+	params.FilterDescendantsInstances = [];
+
+	const result = Workspace.Raycast(origin, new Vector3(0, -500, 0), params);
+	if (result) {
+		return result.Position;
+	}
+	// No ground found — just drop it 3 studs below the origin as a fallback
+	return origin.sub(new Vector3(0, 3, 0));
+}
+
+function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3): void {
+	const shouldToss = lookDir !== undefined;
 	// Remove any existing campfire for this player
 	const oldData = playerCampfires.get(player);
 	if (oldData) {
@@ -110,21 +128,119 @@ function spawnCampfireModel(player: Player, position: Vector3): void {
 
 	const campfire = campfireTemplate.Clone();
 	campfire.Name = `Campfire_${player.Name}`;
-	campfire.Parent = Workspace;
 
-	if (campfire.PrimaryPart) {
-		campfire.PivotTo(new CFrame(position));
-	} else {
-		const firstPart = campfire.GetDescendants().find((d): d is BasePart => d.IsA("BasePart"));
-		if (firstPart) {
-			firstPart.Position = position;
+	// Ensure PrimaryPart is set so PivotTo anchors correctly.
+	if (!campfire.PrimaryPart) {
+		const fallback = campfire.GetDescendants().find((d): d is BasePart => d.IsA("BasePart"));
+		if (fallback) {
+			campfire.PrimaryPart = fallback;
 		}
 	}
 
-	playerCampfires.set(player, { campfire, position });
+	// Collect all BaseParts in the model
+	const allParts: BasePart[] = [];
+	for (const desc of campfire.GetDescendants()) {
+		if (desc.IsA("BasePart")) {
+			allParts.push(desc as BasePart);
+		}
+	}
 
-	// Broadcast to all currently connected clients so they see the campfire label/effect
-	for (const otherPlayer of Players.GetPlayers()) {
-		placeCampfireRemote.FireClient(otherPlayer, player.Name, position);
+	// Weld every part to the PrimaryPart so logs + fire stay together as
+	// one rigid body during the toss. WeldConstraints respect physics.
+	const root = campfire.PrimaryPart!;
+	for (const part of allParts) {
+		if (part === root) continue;
+		const weld = new Instance("WeldConstraint");
+		weld.Part0 = root;
+		weld.Part1 = part;
+		weld.Parent = root;
+	}
+
+	// Orient the model upright, preserving template rotation
+	const templatePivot = campfire.GetPivot();
+	const uprightRot = templatePivot.sub(templatePivot.Position);
+
+	if (shouldToss) {
+		// Spawn at chest height for a natural-looking toss origin
+		const spawnPos = position.add(new Vector3(0, 1, 0));
+		campfire.PivotTo(new CFrame(spawnPos).mul(uprightRot));
+
+		// Unanchor all parts so physics works during the toss
+		for (const part of allParts) {
+			part.Anchored = false;
+			part.CanCollide = true;
+		}
+
+		campfire.Parent = Workspace;
+
+		// Flatten the look vector to the XZ plane so the toss is horizontal
+		const flatDir = new Vector3(lookDir!.X, 0, lookDir!.Z).Unit;
+		const TOSS_SPEED = 22;
+		const TOSS_UP = 18;
+		const tossVelocity = flatDir.mul(TOSS_SPEED).add(new Vector3(0, TOSS_UP, 0));
+
+		// Apply velocity to the root part -- welds carry the rest
+		root.AssemblyLinearVelocity = tossVelocity;
+		// Slight tumble spin for flavour
+		root.AssemblyAngularVelocity = new Vector3(
+			math.random(-2, 2),
+			math.random(-1, 1),
+			math.random(-2, 2),
+		);
+
+		// Store with initial position -- will be updated when it lands
+		playerCampfires.set(player, { campfire, position });
+
+		// Settle: wait for the campfire to land then freeze it
+		task.delay(2, () => {
+			if (!campfire.Parent) return;
+
+			const landedPos = root.Position;
+
+			for (const part of allParts) {
+				if (part.Parent) {
+					part.Anchored = true;
+					part.AssemblyLinearVelocity = Vector3.zero;
+					part.AssemblyAngularVelocity = Vector3.zero;
+				}
+			}
+
+			playerCampfires.set(player, { campfire, position: landedPos });
+
+			// Re-persist with the final landed position
+			task.spawn(() => {
+				const [ok] = pcall(() => {
+					dataStore.SetAsync(tostring(player.UserId), {
+						x: landedPos.X,
+						y: landedPos.Y,
+						z: landedPos.Z,
+						timestamp: os.time(),
+					});
+				});
+				if (!ok) {
+					log(`[CAMPFIRE] Failed to persist landed position for ${player.Name}`, "ERROR");
+				}
+			});
+
+			// Broadcast final position to all clients
+			for (const otherPlayer of Players.GetPlayers()) {
+				placeCampfireRemote.FireClient(otherPlayer, player.Name, landedPos);
+			}
+		});
+	} else {
+		// Loaded from DataStore -- place directly, anchored, no toss
+		campfire.PivotTo(new CFrame(position).mul(uprightRot));
+
+		for (const part of allParts) {
+			part.Anchored = true;
+			part.CanCollide = true;
+		}
+
+		campfire.Parent = Workspace;
+		playerCampfires.set(player, { campfire, position });
+
+		for (const otherPlayer of Players.GetPlayers()) {
+			placeCampfireRemote.FireClient(otherPlayer, player.Name, position);
+		}
 	}
 }

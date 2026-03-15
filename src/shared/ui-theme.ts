@@ -111,3 +111,27 @@ export const STATUS_RARITY: Record<
 		order: 4,
 	},
 };
+
+// ── Responsive scaling ─────────────────────────────────────────────────────
+
+/**
+ * Returns a uniform scale factor based on the current viewport relative to a
+ * 1920x1080 baseline. Clamped to a minimum of MIN_SCALE so the UI never
+ * becomes unreadably small on laptops / tablets.
+ */
+const MIN_SCALE = 0.85;
+const BASE_WIDTH = 1920;
+const BASE_HEIGHT = 1080;
+
+export function getUIScale(): number {
+	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
+	if (!camera) return 1;
+	const vp = camera.ViewportSize;
+	const raw = math.min(vp.X / BASE_WIDTH, vp.Y / BASE_HEIGHT);
+	return math.max(raw, MIN_SCALE);
+}
+
+/** Scale a pixel value designed at 1920x1080 to the current viewport. */
+export function scaleUI(baseSize: number): number {
+	return baseSize * getUIScale();
+}

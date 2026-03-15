@@ -8,7 +8,7 @@ import {
 } from "shared/remotes/bounty-remote";
 import { getOrCreateMovementRemote } from "shared/remotes/movement-remote";
 import { getPlaceCampfireRemote } from "shared/remotes/campfire-remote";
-import { UI_THEME } from "shared/ui-theme";
+import { UI_THEME, getUIScale } from "shared/ui-theme";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const GetPlayerExpierence = playerState.WaitForChild("GetExpierence") as RemoteFunction;
@@ -28,19 +28,8 @@ const lifecycle = getOrCreateLifecycleRemote();
 
 // ── Screen ratio scaling helpers ──────────────────────────────────────────────
 
-function getScreenRatio(): Vector2 {
-	const userInputService = game.GetService("UserInputService") as UserInputService;
-	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
-	if (!camera) return new Vector2(1, 1);
-
-	const viewportSize = camera.ViewportSize;
-	// Normalize based on 1920x1080 as baseline
-	return new Vector2(viewportSize.X / 1920, viewportSize.Y / 1080);
-}
-
 function scaleSize(baseSize: number): number {
-	const ratio = getScreenRatio();
-	return baseSize * math.min(ratio.X, ratio.Y); // Use minimum ratio for consistent scaling
+	return baseSize * getUIScale();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,12 +446,13 @@ function placeCampfire(): void {
 	const character = player.Character;
 	if (!character || !character.PrimaryPart) return;
 
-	// Get campfire position (at player's position)
-	const campfirePos = character.PrimaryPart.Position;
+	// Position + look direction so the server can toss the campfire forward
+	const hrp = character.PrimaryPart;
+	const campfirePos = hrp.Position;
+	const lookDir = hrp.CFrame.LookVector;
 
-	// Fire the remote to place campfire on server
 	const campfireRemote = getPlaceCampfireRemote();
-	campfireRemote.FireServer(campfirePos);
+	campfireRemote.FireServer(campfirePos, lookDir);
 
 	// Start cooldown
 	campfireOnCooldown = true;

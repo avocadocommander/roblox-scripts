@@ -25,6 +25,7 @@ import {
 	clearPlayerWanted,
 	getWantedPlayerGold,
 } from "./bounty-manager";
+import { transferBountyScrolls, addPlayerBountyScroll } from "./inventory-handler";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
@@ -253,6 +254,22 @@ function initializeAssassinationHandler() {
 				getAchievementUnlockedRemote().FireClient(killer, "PLAYER_SLAYER");
 				log("[ACHIEVEMENT] " + killer.Name + " unlocked: Player Slayer");
 			}
+		}
+
+		// Award a "player" rarity bounty scroll to the killer
+		addPlayerBountyScroll(killer, targetPlayer.Name, wantedGold, math.floor(wantedGold * 1.5));
+
+		// Transfer bounty scrolls from victim to killer (highest rarity first)
+		const scrollsTransferred = transferBountyScrolls(targetPlayer, killer);
+		if (scrollsTransferred > 0) {
+			log(
+				"[ASSASSINATION] " +
+					killer.Name +
+					" looted " +
+					scrollsTransferred +
+					" bounty scroll(s) from " +
+					targetPlayer.Name,
+			);
 		}
 
 		// Clear wanted status

@@ -12,6 +12,7 @@ import {
 	NPCBountyPayload,
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
+import { getPlayerScrollRarities } from "./inventory-handler";
 
 // ─── Reward scaling by NPC social status ─────────────────────────────────────
 
@@ -85,6 +86,7 @@ function buildWantedList(): PlayerWantedPayload[] {
 			displayName: wantedPlayer.DisplayName,
 			gold: info.gold,
 			reason: info.reason,
+			scrollRarities: getPlayerScrollRarities(wantedPlayer),
 		});
 	}
 	return list;
@@ -156,6 +158,7 @@ export function setPlayerWanted(player: Player, gold: number, reason: string): v
 		displayName: player.DisplayName,
 		gold: newGold,
 		reason: newReason,
+		scrollRarities: getPlayerScrollRarities(player),
 	};
 	getPlayerWantedRemote().FireAllClients(payload);
 	if (existing) {
@@ -183,6 +186,23 @@ export function clearPlayerWanted(player: Player): void {
 		getPlayerWantedClearedRemote().FireAllClients(player.Name);
 		log(`[BOUNTY] ${player.DisplayName} wanted status cleared`);
 	}
+}
+
+/**
+ * Re-broadcast a wanted player's entry to all clients (e.g. after their
+ * scroll inventory changed due to a PvP kill transfer).
+ */
+export function broadcastWantedScrollUpdate(player: Player): void {
+	const info = wantedPlayers.get(player);
+	if (!info) return;
+	const payload: PlayerWantedPayload = {
+		playerName: player.Name,
+		displayName: player.DisplayName,
+		gold: info.gold,
+		reason: info.reason,
+		scrollRarities: getPlayerScrollRarities(player),
+	};
+	getPlayerWantedRemote().FireAllClients(payload);
 }
 
 // ─── Initialization ───────────────────────────────────────────────────────────

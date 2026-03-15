@@ -10,7 +10,7 @@ import {
 import { ACHIEVEMENT_LIST, AchievementDef } from "shared/achievements";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
-import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
+import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
@@ -715,15 +715,24 @@ function buildKillBook(playerGui: PlayerGui): void {
 	backdrop.Parent = bookGui;
 	backdrop.MouseButton1Click.Connect(() => toggleBook());
 
-	// Main frame — centered
+	// Main frame — centered, scaled to viewport
+	const scale = getUIScale();
+	const frameW = math.floor(440 * scale);
+	const frameH = math.floor(520 * scale);
+
 	bookFrame = new Instance("Frame");
 	bookFrame.Name = "KillBook";
-	bookFrame.Size = new UDim2(0, 440, 0, 520);
-	bookFrame.Position = new UDim2(0.5, -220, 0.5, -260);
+	bookFrame.Size = new UDim2(0, frameW, 0, frameH);
+	bookFrame.Position = new UDim2(0.5, -math.floor(frameW / 2), 0.5, -math.floor(frameH / 2));
 	bookFrame.BackgroundColor3 = UI_THEME.bg;
 	bookFrame.BackgroundTransparency = UI_THEME.bgTransparency;
 	bookFrame.BorderSizePixel = 0;
 	bookFrame.Parent = bookGui;
+
+	// Apply UIScale so all children (text sizes, padding, rows) scale proportionally
+	const uiScale = new Instance("UIScale");
+	uiScale.Scale = scale;
+	uiScale.Parent = bookFrame;
 
 	const corner = new Instance("UICorner");
 	corner.CornerRadius = UI_THEME.cornerRadius;

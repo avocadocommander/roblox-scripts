@@ -10,24 +10,15 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
-import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
+import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
+import { RARITY_COLORS } from "shared/inventory";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
 // ── Screen ratio scaling helpers ──────────────────────────────────────────────
 
-function getScreenRatio(): Vector2 {
-	const camera = (Workspace as Workspace).CurrentCamera;
-	if (!camera) return new Vector2(1, 1);
-
-	const viewportSize = camera.ViewportSize;
-	// Normalize based on 1920x1080 as baseline
-	return new Vector2(viewportSize.X / 1920, viewportSize.Y / 1080);
-}
-
 function scaleSize(baseSize: number): number {
-	const ratio = getScreenRatio();
-	return baseSize * math.min(ratio.X, ratio.Y); // Use minimum ratio for consistent scaling
+	return baseSize * getUIScale();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -430,7 +421,7 @@ function applyNPCBounty(bounty: NPCBountyPayload): void {
 		npcNameLabel.Text = bounty.npcName;
 		npcNameLabel.TextColor3 = rarity ? rarity.color : UI_THEME.textPrimary;
 	}
-	if (npcGoldLabel) npcGoldLabel.Text = bounty.gold + " " + "🪙";
+	if (npcGoldLabel) npcGoldLabel.Text = bounty.gold + "g";
 	if (npcStatusLabel) {
 		if (npcData && rarity) {
 			npcStatusLabel.Text = npcData.status + "  |  " + rarity.label;
@@ -457,11 +448,12 @@ function clearNPCBounty(): void {
 function addWantedRow(payload: PlayerWantedPayload): void {
 	if (!wantedList) return;
 
-	// If a row already exists for this player, just update the gold amount
+	// If a row already exists for this player, update gold + scroll indicators
 	const existing = wantedList.FindFirstChild(`Wanted_${payload.playerName}`) as Frame | undefined;
 	if (existing) {
 		const goldL = existing.FindFirstChild("Gold") as TextLabel | undefined;
-		if (goldL) goldL.Text = payload.gold + " " + "🪙";
+		if (goldL) goldL.Text = payload.gold + "g";
+		updateScrollIndicators(existing, payload.scrollRarities ?? []);
 		return;
 	}
 
@@ -476,26 +468,72 @@ function addWantedRow(payload: PlayerWantedPayload): void {
 
 	const nameL = new Instance("TextLabel");
 	nameL.Name = "ChildName";
-	nameL.Size = new UDim2(0.62, 0, 1, 0);
+	nameL.Size = new UDim2(0.42, 0, 1, 0);
 	nameL.BackgroundTransparency = 1;
 	nameL.Text = payload.displayName;
 	nameL.TextColor3 = UI_THEME.textWanted;
 	nameL.Font = UI_THEME.fontBody;
 	nameL.TextSize = scaleSize(isInfoMode ? 12 : 10);
 	nameL.TextXAlignment = Enum.TextXAlignment.Left;
+	nameL.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameL.Parent = row;
+
+	// Scroll rarity indicators container (up to 4 colored #)
+	const scrollBar = new Instance("Frame");
+	scrollBar.Name = "ScrollIndicators";
+	scrollBar.Size = new UDim2(0.22, 0, 1, 0);
+	scrollBar.Position = new UDim2(0.42, 0, 0, 0);
+	scrollBar.BackgroundTransparency = 1;
+	scrollBar.Parent = row;
+
+	const scrollLayout = new Instance("UIListLayout");
+	scrollLayout.FillDirection = Enum.FillDirection.Horizontal;
+	scrollLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
+	scrollLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+	scrollLayout.Padding = new UDim(0, 1);
+	scrollLayout.Parent = scrollBar;
+
+	// Create the # labels
+	updateScrollIndicators(row, payload.scrollRarities ?? []);
 
 	const goldL = new Instance("TextLabel");
 	goldL.Name = "Gold";
-	goldL.Size = new UDim2(0.38, -10, 1, 0);
-	goldL.Position = new UDim2(0.62, 0, 0, 0);
+	goldL.Size = new UDim2(0.36, -10, 1, 0);
+	goldL.Position = new UDim2(0.64, 0, 0, 0);
 	goldL.BackgroundTransparency = 1;
-	goldL.Text = payload.gold + " " + "🪙";
+	goldL.Text = payload.gold + "g";
 	goldL.TextColor3 = UI_THEME.gold;
 	goldL.Font = UI_THEME.fontBold;
 	goldL.TextSize = scaleSize(isInfoMode ? 12 : 8);
 	goldL.TextXAlignment = Enum.TextXAlignment.Right;
 	goldL.Parent = row;
+}
+
+function updateScrollIndicators(row: Frame, rarities: string[]): void {
+	const scrollBar = row.FindFirstChild("ScrollIndicators") as Frame | undefined;
+	if (!scrollBar) return;
+
+	// Remove old indicators (keep the UIListLayout)
+	for (const child of scrollBar.GetChildren()) {
+		if (child.IsA("TextLabel")) child.Destroy();
+	}
+
+	// Add up to 4 colored # symbols
+	for (let i = 0; i < rarities.size(); i++) {
+		const rarity = rarities[i];
+		const color = RARITY_COLORS[rarity] ?? UI_THEME.textMuted;
+
+		const indicator = new Instance("TextLabel");
+		indicator.Name = "Scroll_" + i;
+		indicator.Size = new UDim2(0, scaleSize(10), 1, 0);
+		indicator.BackgroundTransparency = 1;
+		indicator.Text = "#";
+		indicator.TextColor3 = color;
+		indicator.Font = UI_THEME.fontBold;
+		indicator.TextSize = scaleSize(11);
+		indicator.LayoutOrder = i;
+		indicator.Parent = scrollBar;
+	}
 }
 
 function removeWantedRow(playerName: string): void {

@@ -7,6 +7,8 @@ import { initializeAssassinationHandler } from "./modules/assassination-handler"
 import { initializeBountyManager } from "./modules/bounty-manager";
 import { initializeKillBookRemotes } from "./modules/kill-book-server";
 import { initializeCampfireSystem } from "./modules/campfire-handler";
+import { initializeAchievementHandler } from "./modules/achievement-handler";
+import { initializeInventorySystem } from "./modules/inventory-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -20,6 +22,8 @@ export async function bootstrapServer() {
 	initializeBountyManager();
 	initializeKillBookRemotes();
 	initializeCampfireSystem();
+	initializeAchievementHandler();
+	initializeInventorySystem();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }

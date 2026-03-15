@@ -17,6 +17,8 @@ export interface PlayerWantedPayload {
 	displayName: string;
 	gold: number;
 	reason: string;
+	/** Up to 4 rarity strings for the wanted player's bounty scrolls (for # indicators). */
+	scrollRarities: string[];
 }
 
 /** Full state sync fired once when a client first becomes ready. */

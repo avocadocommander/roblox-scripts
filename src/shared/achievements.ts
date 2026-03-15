@@ -31,6 +31,12 @@ export const ACHIEVEMENTS: Record<string, AchievementDef> = {
 		description: "Assassinate a wanted player.",
 		icon: "P",
 	},
+	MOCK_TEST: {
+		id: "MOCK_TEST",
+		name: "Night Owl",
+		description: "Lurk in the shadows long enough to earn your title.",
+		icon: "*",
+	},
 };
 
 /** Ordered list for display purposes. */
@@ -38,4 +44,5 @@ export const ACHIEVEMENT_LIST: AchievementDef[] = [
 	ACHIEVEMENTS.FIRST_ASSASSINATION,
 	ACHIEVEMENTS.BOUNTY_HUNTER,
 	ACHIEVEMENTS.PLAYER_SLAYER,
+	ACHIEVEMENTS.MOCK_TEST,
 ];

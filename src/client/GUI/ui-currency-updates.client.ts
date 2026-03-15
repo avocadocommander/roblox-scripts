@@ -1,5 +1,6 @@
 import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
 import { UI_THEME } from "shared/ui-theme";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
@@ -182,6 +183,129 @@ function showLevelUp(level: number, screenGui: ScreenGui): void {
 	});
 }
 
+// ── Achievement unlocked ──────────────────────────────────────────────────────
+
+function showAchievement(achievementName: string, description: string, icon: string, screenGui: ScreenGui): void {
+	// Subtle dark flash
+	const flash = new Instance("Frame");
+	flash.Size = new UDim2(1, 0, 1, 0);
+	flash.BackgroundColor3 = UI_THEME.bg;
+	flash.BackgroundTransparency = 0.55;
+	flash.BorderSizePixel = 0;
+	flash.ZIndex = 20;
+	flash.Parent = screenGui;
+
+	const flashFade = TweenService.Create(flash, new TweenInfo(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency: 1,
+	});
+	flashFade.Play();
+	flashFade.Completed.Once(() => flash.Destroy());
+
+	// Card — starts compressed, scales out
+	const card = new Instance("Frame");
+	card.Size = new UDim2(0, 120, 0, 30);
+	card.Position = new UDim2(0.5, 0, 0.38, 0);
+	card.AnchorPoint = new Vector2(0.5, 0.5);
+	card.BackgroundColor3 = UI_THEME.headerBg;
+	card.BackgroundTransparency = 0;
+	card.BorderSizePixel = 0;
+	card.ZIndex = 21;
+	card.Parent = screenGui;
+
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = UI_THEME.cornerRadius;
+	cardCorner.Parent = card;
+
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = UI_THEME.gold;
+	cardStroke.Thickness = 1.5;
+	cardStroke.Parent = card;
+
+	// Icon badge — left side
+	const iconLabel = new Instance("TextLabel");
+	iconLabel.Size = new UDim2(0, 44, 1, 0);
+	iconLabel.BackgroundTransparency = 1;
+	iconLabel.Text = icon;
+	iconLabel.TextColor3 = UI_THEME.gold;
+	iconLabel.TextTransparency = 1;
+	iconLabel.Font = UI_THEME.fontDisplay;
+	iconLabel.TextSize = 32;
+	iconLabel.ZIndex = 22;
+	iconLabel.Parent = card;
+
+	// "ACHIEVEMENT UNLOCKED" sub-header
+	const topLine = new Instance("TextLabel");
+	topLine.Size = new UDim2(1, -48, 0.38, 0);
+	topLine.Position = new UDim2(0, 48, 0.02, 0);
+	topLine.BackgroundTransparency = 1;
+	topLine.Text = "-- ACHIEVEMENT UNLOCKED --";
+	topLine.TextColor3 = UI_THEME.textSection;
+	topLine.TextTransparency = 1;
+	topLine.Font = UI_THEME.fontBold;
+	topLine.TextSize = 9;
+	topLine.TextXAlignment = Enum.TextXAlignment.Left;
+	topLine.ZIndex = 22;
+	topLine.Parent = card;
+
+	// Achievement name — large
+	const nameLine = new Instance("TextLabel");
+	nameLine.Size = new UDim2(1, -48, 0.36, 0);
+	nameLine.Position = new UDim2(0, 48, 0.32, 0);
+	nameLine.BackgroundTransparency = 1;
+	nameLine.Text = achievementName;
+	nameLine.TextColor3 = UI_THEME.textHeader;
+	nameLine.TextTransparency = 1;
+	nameLine.Font = UI_THEME.fontDisplay;
+	nameLine.TextSize = 22;
+	nameLine.TextXAlignment = Enum.TextXAlignment.Left;
+	nameLine.ZIndex = 22;
+	nameLine.Parent = card;
+
+	// Description — smaller muted text
+	const descLine = new Instance("TextLabel");
+	descLine.Size = new UDim2(1, -48, 0.26, 0);
+	descLine.Position = new UDim2(0, 48, 0.7, 0);
+	descLine.BackgroundTransparency = 1;
+	descLine.Text = description;
+	descLine.TextColor3 = UI_THEME.textMuted;
+	descLine.TextTransparency = 1;
+	descLine.Font = UI_THEME.fontBody;
+	descLine.TextSize = 11;
+	descLine.TextXAlignment = Enum.TextXAlignment.Left;
+	descLine.ZIndex = 22;
+	descLine.Parent = card;
+
+	// Animate: scale card in + fade all text
+	TweenService.Create(card, new TweenInfo(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size: new UDim2(0, 340, 0, 86),
+	}).Play();
+	TweenService.Create(iconLabel, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TextTransparency: 0,
+	}).Play();
+	TweenService.Create(topLine, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TextTransparency: 0,
+	}).Play();
+	TweenService.Create(nameLine, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TextTransparency: 0,
+	}).Play();
+	TweenService.Create(descLine, new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TextTransparency: 0,
+	}).Play();
+
+	// Hold then fade out
+	task.delay(3.0, () => {
+		const fadeInfo = new TweenInfo(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In);
+		TweenService.Create(card, fadeInfo, { BackgroundTransparency: 1 }).Play();
+		TweenService.Create(cardStroke, fadeInfo, { Transparency: 1 }).Play();
+		TweenService.Create(iconLabel, fadeInfo, { TextTransparency: 1 }).Play();
+		TweenService.Create(topLine, fadeInfo, { TextTransparency: 1 }).Play();
+		TweenService.Create(nameLine, fadeInfo, { TextTransparency: 1 }).Play();
+		const finish = TweenService.Create(descLine, fadeInfo, { TextTransparency: 1 });
+		finish.Play();
+		finish.Completed.Once(() => card.Destroy());
+	});
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 lifecycle.OnClientEvent.Connect((message: string) => {
@@ -208,5 +332,11 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 			if (delta > 0) showCoinGain(delta, screenGui);
 		}
 		prevCoins = newTotal;
+	});
+
+	// Achievement unlocked notification
+	const achievementRemote = getAchievementUnlockedRemote();
+	achievementRemote.OnClientEvent.Connect((name: string, description: string, icon: string) => {
+		showAchievement(name, description, icon, screenGui);
 	});
 });
