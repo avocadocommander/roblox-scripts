@@ -1,4 +1,4 @@
-import { Players } from "@rbxts/services";
+import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
@@ -41,15 +41,39 @@ const wantedPlayers = new Map<Player, { gold: number; reason: string }>();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function getRouteForNPC(npcName: string): string | undefined {
+	// Search Workspace for the NPC model by name
+	const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
+	if (!npcModel) return undefined;
+
+	// Find the parent route folder (tagged with "Route" or in NPCRoutes)
+	let parent = npcModel.Parent;
+	while (parent && parent !== Workspace) {
+		if (parent.IsA("Folder")) {
+			const folder = parent as Folder;
+			// Check if this folder is a route (has route points)
+			const hasRoutePoints = folder.GetChildren().some((child) => child.Name === "Route");
+			if (hasRoutePoints) {
+				return folder.Name;
+			}
+		}
+		parent = parent.Parent;
+	}
+	return undefined;
+}
+
 function buildNewNPCBounty(): NPCBountyPayload {
 	const names = [...MEDIEVAL_NPC_NAMES];
 	const npcName = names[math.random(0, names.size() - 1)];
 	const npcData = MEDIEVAL_NPCS[npcName];
+	const route = getRouteForNPC(npcName);
+
 	return {
 		npcName,
 		gold: GOLD_BY_STATUS[npcData.status as Status] ?? 200,
 		xp: XP_BY_STATUS[npcData.status as Status] ?? 500,
 		offence: SATIRICAL_BOUNTY_OFFENSES[math.random(0, SATIRICAL_BOUNTY_OFFENSES.size() - 1)],
+		route,
 	};
 }
 

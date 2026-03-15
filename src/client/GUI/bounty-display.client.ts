@@ -1,4 +1,4 @@
-import { Players } from "@rbxts/services";
+import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
 	getBountyAssignedRemote,
@@ -14,27 +14,60 @@ import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
+// ── Screen ratio scaling helpers ──────────────────────────────────────────────
+
+function getScreenRatio(): Vector2 {
+	const camera = (Workspace as Workspace).CurrentCamera;
+	if (!camera) return new Vector2(1, 1);
+
+	const viewportSize = camera.ViewportSize;
+	// Normalize based on 1920x1080 as baseline
+	return new Vector2(viewportSize.X / 1920, viewportSize.Y / 1080);
+}
+
+function scaleSize(baseSize: number): number {
+	const ratio = getScreenRatio();
+	return baseSize * math.min(ratio.X, ratio.Y); // Use minimum ratio for consistent scaling
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Module-level refs so update functions can reach the labels
 let npcNameLabel: TextLabel | undefined;
 let npcGoldLabel: TextLabel | undefined;
 let npcStatusLabel: TextLabel | undefined;
+let npcRouteLabel: TextLabel | undefined;
 let npcOffenceLabel: TextLabel | undefined;
+let npcSectionFrame: Frame | undefined;
 let wantedList: Frame | undefined;
 let wantedCount = 0;
+let infoMVPButton: TextButton | undefined;
+let minimizeButton: TextButton | undefined;
+let isInfoMode = true; // true = INFO, false = MVP
+let isMinimized = false; // true = collapsed to icon
+let bountyPanel: Frame | undefined;
+let bountyContentsFrame: Frame | undefined; // Contains all content except header
+let dividerWrapFrame: Frame | undefined;
+let wantedHeaderFrame: TextLabel | undefined;
+let scaledPanelWidth = 0; // Store panel width for toggle
 
 // ─── UI builder ───────────────────────────────────────────────────────────────
 
 function makeParchment(screenGui: ScreenGui): void {
 	// ── Outer panel (top-right) ──────────────────────────────────────────────
+	const basePanelWidth = 285;
+	scaledPanelWidth = scaleSize(basePanelWidth);
+
 	const panel = new Instance("Frame");
 	panel.Name = "BountyHUD";
-	panel.Size = new UDim2(0, 285, 0, 0);
-	panel.Position = new UDim2(1, -300, 0, 12);
+	panel.Size = new UDim2(0, scaledPanelWidth, 0, 0);
+	panel.Position = new UDim2(1, -scaleSize(300), 0, scaleSize(12));
 	panel.AutomaticSize = Enum.AutomaticSize.Y;
 	panel.BackgroundColor3 = UI_THEME.bg;
 	panel.BackgroundTransparency = UI_THEME.bgTransparency;
 	panel.BorderSizePixel = 0;
 	panel.Parent = screenGui;
+	bountyPanel = panel;
 
 	const corner = new Instance("UICorner");
 	corner.CornerRadius = UI_THEME.cornerRadius;
@@ -54,29 +87,99 @@ function makeParchment(screenGui: ScreenGui): void {
 	layout.Padding = new UDim(0, 0);
 	layout.Parent = panel;
 
-	// ── Header bar ───────────────────────────────────────────────────────────
-	const header = new Instance("TextLabel");
-	header.LayoutOrder = 0;
-	header.Size = new UDim2(1, 0, 0, 28);
-	header.BackgroundColor3 = UI_THEME.headerBg;
-	header.BackgroundTransparency = 0;
-	header.BorderSizePixel = 0;
-	header.Text = "⚔  BOUNTY BOARD";
-	header.TextColor3 = UI_THEME.textHeader;
-	header.Font = UI_THEME.fontDisplay;
-	header.TextSize = 15;
-	header.Parent = panel;
+	// ── Header bar with toggle buttons ───────────────────────────────────────
+	const headerContainer = new Instance("Frame");
+	headerContainer.LayoutOrder = 0;
+	headerContainer.Size = new UDim2(1, 0, 0, scaleSize(28));
+	headerContainer.BackgroundColor3 = UI_THEME.headerBg;
+	headerContainer.BackgroundTransparency = 0;
+	headerContainer.BorderSizePixel = 0;
+	headerContainer.Parent = panel;
 
 	const headerCorner = new Instance("UICorner");
 	headerCorner.CornerRadius = UI_THEME.cornerRadius;
-	headerCorner.Parent = header;
+	headerCorner.Parent = headerContainer;
+
+	const header = new Instance("TextLabel");
+	header.Name = "Title";
+	header.Size = new UDim2(0.5, 0, 1, 0);
+	header.BackgroundTransparency = 1;
+	header.Text = "⚔  BOUNTY BOARD";
+	header.TextColor3 = UI_THEME.textHeader;
+	header.Font = UI_THEME.fontDisplay;
+	header.TextSize = scaleSize(15);
+	header.TextXAlignment = Enum.TextXAlignment.Left;
+	header.Parent = headerContainer;
+
+	const headerPad = new Instance("UIPadding");
+	headerPad.PaddingLeft = new UDim(0, 8);
+	headerPad.Parent = header;
+
+	// Info/MVP toggle button (right after title)
+	infoMVPButton = new Instance("TextButton");
+	infoMVPButton.Name = "ToggleInfoMVP";
+	infoMVPButton.Size = new UDim2(0.25, -4, 1, 0);
+	infoMVPButton.Position = new UDim2(0.5, 0, 0, 0);
+	infoMVPButton.BackgroundColor3 = UI_THEME.bgInset;
+	infoMVPButton.BackgroundTransparency = 0.3;
+	infoMVPButton.BorderSizePixel = 0;
+	infoMVPButton.Text = "INFO";
+	infoMVPButton.TextColor3 = UI_THEME.textPrimary;
+	infoMVPButton.Font = UI_THEME.fontBold;
+	infoMVPButton.TextSize = scaleSize(10);
+	infoMVPButton.Parent = headerContainer;
+
+	const infoButtonCorner = new Instance("UICorner");
+	infoButtonCorner.CornerRadius = new UDim(0, 3);
+	infoButtonCorner.Parent = infoMVPButton;
+
+	infoMVPButton.MouseButton1Click.Connect(() => {
+		toggleInfoMVPMode();
+	});
+
+	// Minimize/Expand button (far right)
+	minimizeButton = new Instance("TextButton");
+	minimizeButton.Name = "MinimizeExpand";
+	minimizeButton.Size = new UDim2(0.15, 0, 1, 0);
+	minimizeButton.Position = new UDim2(0.85, 0, 0, 0);
+	minimizeButton.BackgroundColor3 = UI_THEME.danger;
+	minimizeButton.BackgroundTransparency = 0.2;
+	minimizeButton.BorderSizePixel = 0;
+	minimizeButton.Text = "⚔";
+	minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255);
+	minimizeButton.Font = UI_THEME.fontBold;
+	minimizeButton.TextSize = scaleSize(16);
+	minimizeButton.Parent = headerContainer;
+
+	const minimizeButtonCorner = new Instance("UICorner");
+	minimizeButtonCorner.CornerRadius = new UDim(0, 4);
+	minimizeButtonCorner.Parent = minimizeButton;
+
+	minimizeButton.MouseButton1Click.Connect(() => {
+		toggleMinimized();
+	});
+
+	// ── Content wrapper (everything below header) ─────────────────────────────
+	const contentsWrapper = new Instance("Frame");
+	contentsWrapper.LayoutOrder = 1;
+	contentsWrapper.Size = new UDim2(1, 0, 0, 0);
+	contentsWrapper.AutomaticSize = Enum.AutomaticSize.Y;
+	contentsWrapper.BackgroundTransparency = 1;
+	contentsWrapper.Parent = panel;
+	bountyContentsFrame = contentsWrapper;
+
+	const wrapLayout = new Instance("UIListLayout");
+	wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	wrapLayout.Padding = new UDim(0, 0);
+	wrapLayout.Parent = contentsWrapper;
 
 	// ── "YOUR MARK" section ──────────────────────────────────────────────────
 	const npcSection = new Instance("Frame");
-	npcSection.LayoutOrder = 1;
+	npcSection.LayoutOrder = 0;
 	npcSection.Size = new UDim2(1, -20, 0, 70);
 	npcSection.BackgroundTransparency = 1;
-	npcSection.Parent = panel;
+	npcSection.Parent = contentsWrapper;
+	npcSectionFrame = npcSection;
 
 	const npcPad = new Instance("UIPadding");
 	npcPad.PaddingLeft = new UDim(0, 10);
@@ -90,7 +193,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	markLabel.Text = "YOUR MARK";
 	markLabel.TextColor3 = UI_THEME.textSection;
 	markLabel.Font = UI_THEME.fontBold;
-	markLabel.TextSize = 10;
+	markLabel.TextSize = scaleSize(10);
 	markLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	markLabel.Parent = npcSection;
 
@@ -107,7 +210,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcNameLabel.Text = "—";
 	npcNameLabel.TextColor3 = UI_THEME.textPrimary;
 	npcNameLabel.Font = UI_THEME.fontDisplay;
-	npcNameLabel.TextSize = 15;
+	npcNameLabel.TextSize = scaleSize(15);
 	npcNameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	npcNameLabel.Parent = nameRow;
 
@@ -119,7 +222,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcGoldLabel.Text = "";
 	npcGoldLabel.TextColor3 = UI_THEME.gold;
 	npcGoldLabel.Font = UI_THEME.fontBold;
-	npcGoldLabel.TextSize = 13;
+	npcGoldLabel.TextSize = scaleSize(13);
 	npcGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	npcGoldLabel.Parent = nameRow;
 
@@ -131,9 +234,23 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcStatusLabel.Text = "";
 	npcStatusLabel.TextColor3 = UI_THEME.textMuted;
 	npcStatusLabel.Font = UI_THEME.fontBody;
-	npcStatusLabel.TextSize = 10;
+	npcStatusLabel.TextSize = scaleSize(10);
 	npcStatusLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	npcStatusLabel.Visible = true;
 	npcStatusLabel.Parent = npcSection;
+
+	npcRouteLabel = new Instance("TextLabel");
+	npcRouteLabel.Name = "NPCRoute";
+	npcRouteLabel.Size = new UDim2(1, 0, 0, 12);
+	npcRouteLabel.Position = new UDim2(0, 0, 0, 23);
+	npcRouteLabel.BackgroundTransparency = 1;
+	npcRouteLabel.Text = "";
+	npcRouteLabel.TextColor3 = UI_THEME.textSection;
+	npcRouteLabel.Font = UI_THEME.fontBody;
+	npcRouteLabel.TextSize = scaleSize(9);
+	npcRouteLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	npcRouteLabel.Visible = true;
+	npcRouteLabel.Parent = npcSection;
 
 	npcOffenceLabel = new Instance("TextLabel");
 	npcOffenceLabel.Name = "NPCOffence";
@@ -143,17 +260,19 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcOffenceLabel.Text = "";
 	npcOffenceLabel.TextColor3 = UI_THEME.textMuted;
 	npcOffenceLabel.Font = UI_THEME.fontBody;
-	npcOffenceLabel.TextSize = 9;
+	npcOffenceLabel.TextSize = scaleSize(9);
 	npcOffenceLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	npcOffenceLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	npcOffenceLabel.Visible = true;
 	npcOffenceLabel.Parent = npcSection;
 
 	// ── Divider ──────────────────────────────────────────────────────────────
 	const dividerWrap = new Instance("Frame");
-	dividerWrap.LayoutOrder = 2;
+	dividerWrap.LayoutOrder = 1;
 	dividerWrap.Size = new UDim2(1, 0, 0, 9);
 	dividerWrap.BackgroundTransparency = 1;
-	dividerWrap.Parent = panel;
+	dividerWrap.Parent = contentsWrapper;
+	dividerWrapFrame = dividerWrap;
 
 	const divider = new Instance("Frame");
 	divider.Size = new UDim2(1, -20, 0, 1);
@@ -165,28 +284,31 @@ function makeParchment(screenGui: ScreenGui): void {
 
 	// ── "WANTED" header ───────────────────────────────────────────────────────
 	const wantedHeader = new Instance("TextLabel");
-	wantedHeader.LayoutOrder = 3;
+	wantedHeader.LayoutOrder = 2;
 	wantedHeader.Size = new UDim2(1, -20, 0, 18);
 	wantedHeader.BackgroundTransparency = 1;
 	wantedHeader.Text = "WANTED";
 	wantedHeader.TextColor3 = UI_THEME.danger;
 	wantedHeader.Font = UI_THEME.fontBold;
-	wantedHeader.TextSize = 10;
+	wantedHeader.TextSize = scaleSize(10);
 	wantedHeader.TextXAlignment = Enum.TextXAlignment.Left;
+	wantedHeader.Visible = true;
 
 	const wantedPad = new Instance("UIPadding");
 	wantedPad.PaddingLeft = new UDim(0, 10);
 	wantedPad.Parent = wantedHeader;
-	wantedHeader.Parent = panel;
+	wantedHeader.Parent = contentsWrapper;
+	wantedHeaderFrame = wantedHeader;
 
 	// ── Wanted list container ────────────────────────────────────────────────
 	const listContainer = new Instance("Frame");
-	listContainer.LayoutOrder = 4;
+	listContainer.LayoutOrder = 3;
 	listContainer.Name = "WantedList";
 	listContainer.Size = new UDim2(1, -20, 0, 0);
 	listContainer.AutomaticSize = Enum.AutomaticSize.Y;
 	listContainer.BackgroundTransparency = 1;
-	listContainer.Parent = panel;
+	listContainer.Parent = contentsWrapper;
+	listContainer.Visible = true;
 	wantedList = listContainer;
 
 	const listPad = new Instance("UIPadding");
@@ -205,12 +327,101 @@ function makeParchment(screenGui: ScreenGui): void {
 	emptyLabel.Text = "No known criminals";
 	emptyLabel.TextColor3 = UI_THEME.textMuted;
 	emptyLabel.Font = UI_THEME.fontBody;
-	emptyLabel.TextSize = 10;
+	emptyLabel.TextSize = scaleSize(10);
 	emptyLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	emptyLabel.Parent = listContainer;
 }
 
 // ─── Update helpers ───────────────────────────────────────────────────────────
+
+function toggleInfoMVPMode(): void {
+	if (!infoMVPButton || !npcSectionFrame || !dividerWrapFrame || !wantedHeaderFrame || !wantedList) return;
+
+	isInfoMode = !isInfoMode;
+
+	// Update button appearance and text
+	infoMVPButton.Text = isInfoMode ? "INFO" : "MVP";
+	infoMVPButton.TextColor3 = isInfoMode ? UI_THEME.textPrimary : UI_THEME.danger;
+
+	// Update NPC section height and detail visibility
+	if (!isInfoMode) {
+		// MVP mode: compact, show route, keep wanted visible
+		npcSectionFrame.Size = new UDim2(1, -20, 0, 35);
+		if (npcStatusLabel) npcStatusLabel.Visible = false;
+		if (npcRouteLabel) npcRouteLabel.Visible = true;
+		if (npcOffenceLabel) npcOffenceLabel.Visible = false;
+		dividerWrapFrame.Visible = true;
+		wantedHeaderFrame.Visible = true;
+		wantedList.Visible = true;
+	} else {
+		// Info mode: full detail
+		npcSectionFrame.Size = new UDim2(1, -20, 0, 70);
+		if (npcStatusLabel) npcStatusLabel.Visible = true;
+		if (npcRouteLabel) npcRouteLabel.Visible = false;
+		if (npcOffenceLabel) npcOffenceLabel.Visible = true;
+		dividerWrapFrame.Visible = true;
+		wantedHeaderFrame.Visible = true;
+		wantedList.Visible = true;
+	}
+
+	// Update all wanted rows font sizes
+	updateWantedRowSizes();
+}
+
+function toggleMinimized(): void {
+	if (!minimizeButton || !bountyContentsFrame || !bountyPanel) return;
+
+	isMinimized = !isMinimized;
+
+	// Update button appearance
+	minimizeButton.Text = isMinimized ? "⚔" : "⚔";
+	minimizeButton.Position = isMinimized ? new UDim2(0, 0, 0, 0) : new UDim2(0.85, 0, 0, 0);
+	minimizeButton.Size = isMinimized ? new UDim2(1, 0, 1, 0) : new UDim2(0.15, 0, 1, 0);
+
+	// Hide/show content
+	bountyContentsFrame.Visible = !isMinimized;
+
+	// Adjust panel size
+	if (isMinimized) {
+		const collapsedSize = scaleSize(40);
+		bountyPanel.Size = new UDim2(0, collapsedSize, 0, collapsedSize);
+		minimizeButton.TextSize = scaleSize(18);
+	} else {
+		bountyPanel.Size = new UDim2(0, scaledPanelWidth, 0, 0);
+		bountyPanel.AutomaticSize = Enum.AutomaticSize.Y;
+		minimizeButton.TextSize = scaleSize(16);
+	}
+}
+
+function updateWantedRowSizes(): void {
+	if (!wantedList) return;
+	for (const child of wantedList.GetChildren()) {
+		// Skip non-frames and layout elements
+		if (!child.IsA("Frame")) continue;
+
+		const frameName = child.Name as string;
+		// Only process rows that start with "Wanted_" (7 characters for "Wanted_")
+		if (frameName.sub(1, 7) !== "Wanted_") continue;
+
+		const row = child as Frame;
+
+		if (!isInfoMode) {
+			// MVP mode: compact
+			row.Size = new UDim2(1, 0, 0, 14);
+			const nameL = row.FindFirstChild("ChildName") as TextLabel | undefined;
+			const goldL = row.FindFirstChild("Gold") as TextLabel | undefined;
+			if (nameL) nameL.TextSize = 9;
+			if (goldL) goldL.TextSize = 8;
+		} else {
+			// Info mode: regular
+			row.Size = new UDim2(1, 0, 0, 18);
+			const nameL = row.FindFirstChild("ChildName") as TextLabel | undefined;
+			const goldL = row.FindFirstChild("Gold") as TextLabel | undefined;
+			if (nameL) nameL.TextSize = 12;
+			if (goldL) goldL.TextSize = 12;
+		}
+	}
+}
 
 function applyNPCBounty(bounty: NPCBountyPayload): void {
 	const npcData = MEDIEVAL_NPCS[bounty.npcName] as NPCData | undefined;
@@ -228,6 +439,7 @@ function applyNPCBounty(bounty: NPCBountyPayload): void {
 			npcStatusLabel.Text = "";
 		}
 	}
+	if (npcRouteLabel) npcRouteLabel.Text = bounty.route ? "📍 " + bounty.route : "";
 	if (npcOffenceLabel) npcOffenceLabel.Text = `"${bounty.offence}"`;
 }
 
@@ -238,6 +450,7 @@ function clearNPCBounty(): void {
 	}
 	if (npcGoldLabel) npcGoldLabel.Text = "";
 	if (npcStatusLabel) npcStatusLabel.Text = "";
+	if (npcRouteLabel) npcRouteLabel.Text = "";
 	if (npcOffenceLabel) npcOffenceLabel.Text = "";
 }
 
@@ -257,17 +470,18 @@ function addWantedRow(payload: PlayerWantedPayload): void {
 
 	const row = new Instance("Frame");
 	row.Name = `Wanted_${payload.playerName}`;
-	row.Size = new UDim2(1, 0, 0, 18);
+	row.Size = new UDim2(1, 0, 0, isInfoMode ? 18 : 16);
 	row.BackgroundTransparency = 1;
 	row.Parent = wantedList;
 
 	const nameL = new Instance("TextLabel");
+	nameL.Name = "ChildName";
 	nameL.Size = new UDim2(0.62, 0, 1, 0);
 	nameL.BackgroundTransparency = 1;
 	nameL.Text = payload.displayName;
 	nameL.TextColor3 = UI_THEME.textWanted;
 	nameL.Font = UI_THEME.fontBody;
-	nameL.TextSize = 12;
+	nameL.TextSize = scaleSize(isInfoMode ? 12 : 10);
 	nameL.TextXAlignment = Enum.TextXAlignment.Left;
 	nameL.Parent = row;
 
@@ -279,7 +493,7 @@ function addWantedRow(payload: PlayerWantedPayload): void {
 	goldL.Text = payload.gold + " " + "🪙";
 	goldL.TextColor3 = UI_THEME.gold;
 	goldL.Font = UI_THEME.fontBold;
-	goldL.TextSize = 12;
+	goldL.TextSize = scaleSize(isInfoMode ? 12 : 8);
 	goldL.TextXAlignment = Enum.TextXAlignment.Right;
 	goldL.Parent = row;
 }
@@ -297,7 +511,7 @@ function removeWantedRow(playerName: string): void {
 		empty.Text = "No known criminals";
 		empty.TextColor3 = UI_THEME.textMuted;
 		empty.Font = UI_THEME.fontBody;
-		empty.TextSize = 10;
+		empty.TextSize = scaleSize(10);
 		empty.TextXAlignment = Enum.TextXAlignment.Left;
 		empty.Parent = wantedList;
 	}

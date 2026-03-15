@@ -1,4 +1,4 @@
-import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
+import { Players, ReplicatedStorage, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
 	getBountyListSyncRemote,
@@ -6,6 +6,8 @@ import {
 	getPlayerWantedRemote,
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
+import { getOrCreateMovementRemote } from "shared/remotes/movement-remote";
+import { getPlaceCampfireRemote } from "shared/remotes/campfire-remote";
 import { UI_THEME } from "shared/ui-theme";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
@@ -24,9 +26,26 @@ const ViewsUpdated = npcStateFolder.WaitForChild("ViewsUpdated") as RemoteEvent;
 
 const lifecycle = getOrCreateLifecycleRemote();
 
+// ── Screen ratio scaling helpers ──────────────────────────────────────────────
+
+function getScreenRatio(): Vector2 {
+	const userInputService = game.GetService("UserInputService") as UserInputService;
+	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
+	if (!camera) return new Vector2(1, 1);
+
+	const viewportSize = camera.ViewportSize;
+	// Normalize based on 1920x1080 as baseline
+	return new Vector2(viewportSize.X / 1920, viewportSize.Y / 1080);
+}
+
+function scaleSize(baseSize: number): number {
+	const ratio = getScreenRatio();
+	return baseSize * math.min(ratio.X, ratio.Y); // Use minimum ratio for consistent scaling
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Live label refs — set once in buildPlayerPanel, updated by events
+// ── Live label refs — set once in buildPlayerPanel, updated by events
 let nameLabel: TextLabel | undefined;
 let titleLabel: TextLabel | undefined;
 let levelLabel: TextLabel | undefined;
@@ -38,6 +57,11 @@ let wantedGoldLabel: TextLabel | undefined;
 let eyeWidget: Frame | undefined;
 let eyeCountLabel: TextLabel | undefined;
 let lastViewerCount = 0;
+let sneakButton: TextButton | undefined;
+let isStealthMode = false;
+let campfireButton: TextButton | undefined;
+let campfireOnCooldown = false;
+const CAMPFIRE_COOLDOWN = 2; // seconds
 
 const XP_PER_LEVEL = 1000;
 
@@ -47,7 +71,9 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// Outer panel — bottom-left
 	const panel = new Instance("Frame");
 	panel.Name = "PlayerHUD";
-	panel.Size = new UDim2(0, 230, 0, 0);
+	const baseWidth = 230;
+	const scaledWidth = scaleSize(baseWidth);
+	panel.Size = new UDim2(0, scaledWidth, 0, 0);
 	panel.Position = new UDim2(0, 12, 1, -12);
 	panel.AnchorPoint = new Vector2(0, 1);
 	panel.AutomaticSize = Enum.AutomaticSize.Y;
@@ -66,41 +92,41 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	stroke.Parent = panel;
 
 	const outerPad = new Instance("UIPadding");
-	outerPad.PaddingTop = new UDim(0, 10);
-	outerPad.PaddingBottom = new UDim(0, 10);
-	outerPad.PaddingLeft = new UDim(0, 12);
-	outerPad.PaddingRight = new UDim(0, 12);
+	outerPad.PaddingTop = new UDim(0, scaleSize(10));
+	outerPad.PaddingBottom = new UDim(0, scaleSize(10));
+	outerPad.PaddingLeft = new UDim(0, scaleSize(12));
+	outerPad.PaddingRight = new UDim(0, scaleSize(12));
 	outerPad.Parent = panel;
 
 	const layout = new Instance("UIListLayout");
 	layout.SortOrder = Enum.SortOrder.LayoutOrder;
-	layout.Padding = new UDim(0, 5);
+	layout.Padding = new UDim(0, scaleSize(5));
 	layout.Parent = panel;
 
 	// ── Name + title row ───────────────────────────────────────────────────
 	const nameRow = new Instance("Frame");
 	nameRow.LayoutOrder = 0;
-	nameRow.Size = new UDim2(1, 0, 0, 38);
+	nameRow.Size = new UDim2(1, 0, 0, scaleSize(38));
 	nameRow.BackgroundTransparency = 1;
 	nameRow.Parent = panel;
 
 	nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "PlayerName";
-	nameLabel.Size = new UDim2(0.68, 0, 0, 22);
+	nameLabel.Size = new UDim2(0.68, 0, 0, scaleSize(22));
 	nameLabel.Position = new UDim2(0, 0, 0, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.Text = "—";
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 18;
+	nameLabel.TextSize = scaleSize(18);
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	nameLabel.Parent = nameRow;
 
 	// ── Eye / visibility indicator (right side of name, stealth-only) ───
 	const eyeFrame = new Instance("Frame");
 	eyeFrame.Name = "EyeIndicator";
-	eyeFrame.Size = new UDim2(0.32, -4, 0, 20);
-	eyeFrame.Position = new UDim2(0.68, 4, 0, 1);
+	eyeFrame.Size = new UDim2(0.32, scaleSize(-4), 0, scaleSize(20));
+	eyeFrame.Position = new UDim2(0.68, scaleSize(4), 0, scaleSize(1));
 	eyeFrame.BackgroundColor3 = UI_THEME.bgInset;
 	eyeFrame.BackgroundTransparency = 0.1;
 	eyeFrame.BorderSizePixel = 0;
@@ -109,12 +135,12 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	eyeWidget = eyeFrame;
 
 	const eyeCorner = new Instance("UICorner");
-	eyeCorner.CornerRadius = new UDim(0, 3);
+	eyeCorner.CornerRadius = new UDim(0, scaleSize(3));
 	eyeCorner.Parent = eyeFrame;
 
 	const eyeStroke = new Instance("UIStroke");
 	eyeStroke.Color = UI_THEME.textMuted;
-	eyeStroke.Thickness = 0.8;
+	eyeStroke.Thickness = scaleSize(0.8);
 	eyeStroke.Parent = eyeFrame;
 
 	const eyeLabel = new Instance("TextLabel");
@@ -124,19 +150,19 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	eyeLabel.Text = "👁 0";
 	eyeLabel.TextColor3 = UI_THEME.textMuted;
 	eyeLabel.Font = UI_THEME.fontBold;
-	eyeLabel.TextSize = 10;
+	eyeLabel.TextSize = scaleSize(10);
 	eyeLabel.Parent = eyeFrame;
 	eyeCountLabel = eyeLabel;
 
 	titleLabel = new Instance("TextLabel");
 	titleLabel.Name = "PlayerTitle";
-	titleLabel.Size = new UDim2(1, 0, 0, 13);
-	titleLabel.Position = new UDim2(0, 0, 0, 23);
+	titleLabel.Size = new UDim2(1, 0, 0, scaleSize(13));
+	titleLabel.Position = new UDim2(0, 0, 0, scaleSize(23));
 	titleLabel.BackgroundTransparency = 1;
 	titleLabel.Text = "";
 	titleLabel.TextColor3 = UI_THEME.textSection;
 	titleLabel.Font = UI_THEME.fontBold;
-	titleLabel.TextSize = 10;
+	titleLabel.TextSize = scaleSize(10);
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	titleLabel.Parent = nameRow;
 
@@ -144,7 +170,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	const wantedRowFrame = new Instance("Frame");
 	wantedRowFrame.Name = "WantedBadge";
 	wantedRowFrame.LayoutOrder = 1;
-	wantedRowFrame.Size = new UDim2(1, 0, 0, 18);
+	wantedRowFrame.Size = new UDim2(1, 0, 0, scaleSize(18));
 	wantedRowFrame.BackgroundColor3 = UI_THEME.danger;
 	wantedRowFrame.BackgroundTransparency = 0.4;
 	wantedRowFrame.BorderSizePixel = 0;
@@ -153,12 +179,12 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedRow = wantedRowFrame;
 
 	const wantedCorner = new Instance("UICorner");
-	wantedCorner.CornerRadius = new UDim(0, 3);
+	wantedCorner.CornerRadius = new UDim(0, scaleSize(3));
 	wantedCorner.Parent = wantedRowFrame;
 
 	const wantedBadgePad = new Instance("UIPadding");
-	wantedBadgePad.PaddingLeft = new UDim(0, 6);
-	wantedBadgePad.PaddingRight = new UDim(0, 6);
+	wantedBadgePad.PaddingLeft = new UDim(0, scaleSize(6));
+	wantedBadgePad.PaddingRight = new UDim(0, scaleSize(6));
 	wantedBadgePad.Parent = wantedRowFrame;
 
 	const wantedTitleLabel = new Instance("TextLabel");
@@ -167,7 +193,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedTitleLabel.Text = "⚑  WANTED";
 	wantedTitleLabel.TextColor3 = UI_THEME.textPrimary;
 	wantedTitleLabel.Font = UI_THEME.fontBold;
-	wantedTitleLabel.TextSize = 10;
+	wantedTitleLabel.TextSize = scaleSize(10);
 	wantedTitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	wantedTitleLabel.Parent = wantedRowFrame;
 
@@ -179,14 +205,14 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedGoldLabel.Text = "";
 	wantedGoldLabel.TextColor3 = UI_THEME.gold;
 	wantedGoldLabel.Font = UI_THEME.fontBold;
-	wantedGoldLabel.TextSize = 10;
+	wantedGoldLabel.TextSize = scaleSize(10);
 	wantedGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	wantedGoldLabel.Parent = wantedRowFrame;
 
 	// ── Divider ───────────────────────────────────────────────────────────
 	const divider = new Instance("Frame");
 	divider.LayoutOrder = 2;
-	divider.Size = new UDim2(1, 0, 0, 1);
+	divider.Size = new UDim2(1, 0, 0, scaleSize(1));
 	divider.BackgroundColor3 = UI_THEME.divider;
 	divider.BackgroundTransparency = 0;
 	divider.BorderSizePixel = 0;
@@ -195,7 +221,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// ── Stats row (level | coins) ─────────────────────────────────────────
 	const statsRow = new Instance("Frame");
 	statsRow.LayoutOrder = 3;
-	statsRow.Size = new UDim2(1, 0, 0, 18);
+	statsRow.Size = new UDim2(1, 0, 0, scaleSize(18));
 	statsRow.BackgroundTransparency = 1;
 	statsRow.Parent = panel;
 
@@ -206,7 +232,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	lvlCap.Text = "LVL";
 	lvlCap.TextColor3 = UI_THEME.textSection;
 	lvlCap.Font = UI_THEME.fontBold;
-	lvlCap.TextSize = 9;
+	lvlCap.TextSize = scaleSize(9);
 	lvlCap.TextXAlignment = Enum.TextXAlignment.Left;
 	lvlCap.TextYAlignment = Enum.TextYAlignment.Center;
 	lvlCap.Parent = statsRow;
@@ -219,7 +245,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	levelLabel.Text = "1";
 	levelLabel.TextColor3 = UI_THEME.textPrimary;
 	levelLabel.Font = UI_THEME.fontDisplay;
-	levelLabel.TextSize = 15;
+	levelLabel.TextSize = scaleSize(15);
 	levelLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	levelLabel.Parent = statsRow;
 
@@ -231,7 +257,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	coinCap.Text = "🪙";
 	coinCap.TextColor3 = UI_THEME.gold;
 	coinCap.Font = UI_THEME.fontBold;
-	coinCap.TextSize = 12;
+	coinCap.TextSize = scaleSize(12);
 	coinCap.TextXAlignment = Enum.TextXAlignment.Left;
 	coinCap.TextYAlignment = Enum.TextYAlignment.Center;
 	coinCap.Parent = statsRow;
@@ -244,14 +270,14 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	coinsLabel.Text = "0";
 	coinsLabel.TextColor3 = UI_THEME.gold;
 	coinsLabel.Font = UI_THEME.fontDisplay;
-	coinsLabel.TextSize = 14;
+	coinsLabel.TextSize = scaleSize(14);
 	coinsLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	coinsLabel.Parent = statsRow;
 
 	// ── XP bar ────────────────────────────────────────────────────────────────
 	const xpRow = new Instance("Frame");
 	xpRow.LayoutOrder = 4;
-	xpRow.Size = new UDim2(1, 0, 0, 14);
+	xpRow.Size = new UDim2(1, 0, 0, scaleSize(14));
 	xpRow.BackgroundTransparency = 1;
 	xpRow.Parent = panel;
 
@@ -261,14 +287,14 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	xpCap.Text = "XP";
 	xpCap.TextColor3 = UI_THEME.textSection;
 	xpCap.Font = UI_THEME.fontBold;
-	xpCap.TextSize = 9;
+	xpCap.TextSize = scaleSize(9);
 	xpCap.TextXAlignment = Enum.TextXAlignment.Left;
 	xpCap.TextYAlignment = Enum.TextYAlignment.Center;
 	xpCap.Parent = xpRow;
 
 	xpBar = new Instance("Frame");
-	xpBar.Size = new UDim2(0.82, 0, 0, 6);
-	xpBar.Position = new UDim2(0.18, 0, 0.5, -3);
+	xpBar.Size = new UDim2(0.82, 0, 0, scaleSize(6));
+	xpBar.Position = new UDim2(0.18, 0, 0.5, scaleSize(-3));
 	xpBar.BackgroundColor3 = UI_THEME.bgInset;
 	xpBar.BackgroundTransparency = 0;
 	xpBar.BorderSizePixel = 0;
@@ -292,6 +318,223 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 }
 
 // ── Update helpers ─────────────────────────────────────────────────────────────
+
+function buildSneakButton(screenGui: ScreenGui): void {
+	const buttonSize = scaleSize(50);
+	const buttonPadding = scaleSize(12);
+
+	// Container for the button
+	const buttonContainer = new Instance("Frame");
+	buttonContainer.Name = "SneakButtonContainer";
+	buttonContainer.Size = new UDim2(0, buttonSize, 0, buttonSize);
+	buttonContainer.Position = new UDim2(1, -buttonSize - buttonPadding, 1, -buttonSize - buttonPadding);
+	buttonContainer.AnchorPoint = new Vector2(1, 1);
+	buttonContainer.BackgroundTransparency = 1;
+	buttonContainer.Parent = screenGui;
+
+	// The actual button
+	sneakButton = new Instance("TextButton");
+	sneakButton.Name = "SneakButton";
+	sneakButton.Size = new UDim2(1, 0, 1, 0);
+	sneakButton.BackgroundColor3 = UI_THEME.bgInset;
+	sneakButton.BackgroundTransparency = 0.2;
+	sneakButton.BorderSizePixel = 0;
+	sneakButton.Text = "🥷";
+	sneakButton.TextColor3 = UI_THEME.textMuted;
+	sneakButton.Font = UI_THEME.fontBold;
+	sneakButton.TextSize = scaleSize(24);
+	sneakButton.Parent = buttonContainer;
+
+	// Rounded corners for sneak button
+	const buttonCorner = new Instance("UICorner");
+	buttonCorner.CornerRadius = new UDim(0.5, 0);
+	buttonCorner.Parent = sneakButton;
+
+	// Border stroke
+	const buttonStroke = new Instance("UIStroke");
+	buttonStroke.Color = UI_THEME.textMuted;
+	buttonStroke.Thickness = scaleSize(1.5);
+	buttonStroke.Parent = sneakButton;
+
+	// Mouse hover effects
+	let isHovering = false;
+
+	sneakButton.MouseEnter.Connect(() => {
+		isHovering = true;
+		sneakButton!.BackgroundTransparency = 0;
+		const stroke = sneakButton!.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+		if (stroke) {
+			stroke.Color = UI_THEME.textPrimary;
+		}
+	});
+
+	sneakButton.MouseLeave.Connect(() => {
+		isHovering = false;
+		if (!isStealthMode) {
+			sneakButton!.BackgroundTransparency = 0.2;
+			const stroke = sneakButton!.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) {
+				stroke.Color = UI_THEME.textMuted;
+			}
+		}
+	});
+
+	// Click to toggle stealth
+	sneakButton.Activated.Connect(() => {
+		toggleSneak();
+	});
+}
+
+function buildCampfireButton(screenGui: ScreenGui): void {
+	const buttonSize = scaleSize(50);
+	const buttonPadding = scaleSize(12);
+	const sneak_button_width = buttonSize + buttonPadding; // Account for sneak button
+
+	// Container for the button (to the left of sneak button)
+	const buttonContainer = new Instance("Frame");
+	buttonContainer.Name = "CampfireButtonContainer";
+	buttonContainer.Size = new UDim2(0, buttonSize, 0, buttonSize);
+	buttonContainer.Position = new UDim2(1, -(sneak_button_width * 2) - buttonPadding, 1, -buttonSize - buttonPadding);
+	buttonContainer.AnchorPoint = new Vector2(1, 1);
+	buttonContainer.BackgroundTransparency = 1;
+	buttonContainer.Parent = screenGui;
+
+	// The actual button
+	campfireButton = new Instance("TextButton");
+	campfireButton.Name = "CampfireButton";
+	campfireButton.Size = new UDim2(1, 0, 1, 0);
+	campfireButton.BackgroundColor3 = UI_THEME.bgInset;
+	campfireButton.BackgroundTransparency = 0.2;
+	campfireButton.BorderSizePixel = 0;
+	campfireButton.Text = "🔥";
+	campfireButton.TextColor3 = UI_THEME.textMuted;
+	campfireButton.Font = UI_THEME.fontBold;
+	campfireButton.TextSize = scaleSize(24);
+	campfireButton.Parent = buttonContainer;
+
+	// Rounded corners for campfire button
+	const buttonCorner = new Instance("UICorner");
+	buttonCorner.CornerRadius = new UDim(0.5, 0);
+	buttonCorner.Parent = campfireButton;
+
+	// Border stroke
+	const buttonStroke = new Instance("UIStroke");
+	buttonStroke.Color = UI_THEME.gold;
+	buttonStroke.Thickness = scaleSize(1.5);
+	buttonStroke.Parent = campfireButton;
+
+	// Mouse hover effects
+	campfireButton.MouseEnter.Connect(() => {
+		if (!campfireOnCooldown) {
+			campfireButton!.BackgroundTransparency = 0;
+			const stroke = campfireButton!.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) {
+				stroke.Color = UI_THEME.danger;
+			}
+		}
+	});
+
+	campfireButton.MouseLeave.Connect(() => {
+		if (!campfireOnCooldown) {
+			campfireButton!.BackgroundTransparency = 0.2;
+			const stroke = campfireButton!.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) {
+				stroke.Color = UI_THEME.gold;
+			}
+		}
+	});
+
+	// Click to place campfire
+	campfireButton.Activated.Connect(() => {
+		placeCampfire();
+	});
+}
+
+function placeCampfire(): void {
+	if (campfireOnCooldown) return;
+
+	const player = Players.LocalPlayer;
+	const character = player.Character;
+	if (!character || !character.PrimaryPart) return;
+
+	// Get campfire position (at player's position)
+	const campfirePos = character.PrimaryPart.Position;
+
+	// Fire the remote to place campfire on server
+	const campfireRemote = getPlaceCampfireRemote();
+	campfireRemote.FireServer(campfirePos);
+
+	// Start cooldown
+	campfireOnCooldown = true;
+	if (campfireButton) {
+		campfireButton.BackgroundTransparency = 0.5;
+		const stroke = campfireButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+		if (stroke) {
+			stroke.Color = UI_THEME.textMuted;
+		}
+	}
+
+	// Cooldown timer
+	let cooldownRemaining = CAMPFIRE_COOLDOWN;
+	const cooldownLabel = campfireButton?.FindFirstChild("CooldownLabel") as TextLabel;
+
+	const updateCooldown = () => {
+		if (campfireButton && cooldownRemaining > 0) {
+			if (!cooldownLabel) {
+				const label = new Instance("TextLabel");
+				label.Name = "CooldownLabel";
+				label.Size = new UDim2(1, 0, 1, 0);
+				label.BackgroundTransparency = 1;
+				label.TextColor3 = UI_THEME.danger;
+				label.Font = UI_THEME.fontBold;
+				label.TextSize = scaleSize(14);
+				label.Parent = campfireButton;
+			}
+		}
+		cooldownRemaining -= 0.1;
+		if (cooldownRemaining <= 0) {
+			campfireOnCooldown = false;
+			campfireButton!.BackgroundTransparency = 0.2;
+			const stroke = campfireButton!.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) {
+				stroke.Color = UI_THEME.gold;
+			}
+			const label = campfireButton!.FindFirstChild("CooldownLabel") as TextLabel | undefined;
+			if (label) label.Destroy();
+		}
+	};
+
+	for (let i = 0; i < CAMPFIRE_COOLDOWN * 10; i++) {
+		task.delay(i * 0.1, () => {
+			updateCooldown();
+		});
+	}
+}
+
+function toggleSneak(): void {
+	isStealthMode = !isStealthMode;
+	print(`[SNEAK BUTTON] Toggling stealth mode: ${isStealthMode}`);
+
+	if (!sneakButton) return;
+
+	// Update button appearance
+	const btnStroke = sneakButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	const targetColor = isStealthMode ? UI_THEME.danger : UI_THEME.textMuted;
+	const targetTransparency = isStealthMode ? 0.1 : 0.2;
+
+	if (btnStroke) {
+		btnStroke.Color = targetColor;
+	}
+
+	sneakButton.BackgroundTransparency = targetTransparency;
+
+	// Set the attribute so other systems know about stealth state
+	Players.LocalPlayer.SetAttribute("IsStealthing", isStealthMode);
+
+	// Fire the movement remote to toggle on server
+	const movementRemote = getOrCreateMovementRemote();
+	movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
+}
 
 function setXP(xp: number) {
 	if (!xpFill || !xpBar) return;
@@ -320,17 +563,17 @@ function clearWanted(): void {
 /** Update the eye indicator count. Always runs — widget may be hidden. */
 function setEyeCount(viewers: string[]): void {
 	// Guard: viewers can arrive as nil from the remote if no one has been added yet
-	if (viewers === undefined) {
-		return;
+	if (viewers === undefined || viewers.size() === 0) {
+		lastViewerCount = 0;
+	} else {
+		lastViewerCount = viewers.size();
 	}
-	const count = (viewers as defined as string[]).size();
-	lastViewerCount = count;
-	print("[EYE] ViewsUpdated received, count=", count);
+	print("[EYE] ViewsUpdated received, count=", lastViewerCount);
 	if (!eyeCountLabel || !eyeWidget) return;
 	// Always keep label text up-to-date even if widget is hidden — when stealth
 	// is toggled on the correct count will already be in the label.
-	const isSpotted = count > 0;
-	eyeCountLabel.Text = "Eye: " + count;
+	const isSpotted = lastViewerCount > 0;
+	eyeCountLabel.Text = "Eye: " + lastViewerCount;
 	eyeCountLabel.TextColor3 = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
 	const stroke = eyeWidget.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
 	if (stroke !== undefined) stroke.Color = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
@@ -352,6 +595,8 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildPlayerPanel(screenGui);
+	buildSneakButton(screenGui);
+	buildCampfireButton(screenGui);
 
 	// Fetch initial values from server
 	const initXP = GetPlayerExpierence.InvokeServer() as number;
@@ -409,9 +654,34 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 		setEyeCount((viewers ?? []) as string[]);
 	});
 
-	// Eye indicator — show/hide when stealth is toggled (Q key sets this attribute)
+	// Eye indicator — show/hide when stealth is toggled (Q key or sneak button sets this attribute)
 	Players.LocalPlayer.GetAttributeChangedSignal("IsStealthing").Connect(() => {
 		const stealthing = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
-		setEyeStealth(stealthing === true);
+		const stealthState = stealthing === true;
+		setEyeStealth(stealthState);
+		isStealthMode = stealthState;
+		updateButtonStateFromAttribute();
+	});
+
+	// Support Q key for stealth toggle (syncs with button)
+	UserInputService.InputBegan.Connect((input, gameProcessed) => {
+		if (gameProcessed) return;
+		if (input.KeyCode === Enum.KeyCode.Q) {
+			toggleSneak();
+		} else if (input.KeyCode === Enum.KeyCode.Z) {
+			placeCampfire();
+		}
 	});
 });
+
+function updateButtonStateFromAttribute(): void {
+	if (!sneakButton) return;
+	const btnStroke = sneakButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	const targetColor = isStealthMode ? UI_THEME.danger : UI_THEME.textMuted;
+	const targetTransparency = isStealthMode ? 0.1 : 0.2;
+
+	if (btnStroke) {
+		btnStroke.Color = targetColor;
+	}
+	sneakButton.BackgroundTransparency = targetTransparency;
+}

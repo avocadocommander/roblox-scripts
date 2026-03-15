@@ -8,6 +8,7 @@ export interface NPCBountyPayload {
 	gold: number;
 	xp: number;
 	offence: string;
+	route?: string; // Location/route name where the NPC is patrolling
 }
 
 /** Sent to ALL clients when a player becomes wanted. */

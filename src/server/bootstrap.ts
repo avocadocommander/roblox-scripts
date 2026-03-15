@@ -6,6 +6,7 @@ import { initializeStealthTracker } from "./modules/stealth-tracker";
 import { initializeAssassinationHandler } from "./modules/assassination-handler";
 import { initializeBountyManager } from "./modules/bounty-manager";
 import { initializeKillBookRemotes } from "./modules/kill-book-server";
+import { initializeCampfireSystem } from "./modules/campfire-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -18,6 +19,7 @@ export async function bootstrapServer() {
 	initializeAssassinationHandler();
 	initializeBountyManager();
 	initializeKillBookRemotes();
+	initializeCampfireSystem();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }
