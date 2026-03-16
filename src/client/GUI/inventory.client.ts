@@ -1,33 +1,27 @@
-import { Players, TweenService, UserInputService } from "@rbxts/services";
+import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
-	getEquipItemRemote,
-	getUnequipSlotRemote,
+	getActivateItemRemote,
 	getInventorySyncRemote,
 	getRequestInventoryRemote,
 	getMockBountyKillRemote,
 	getTurnInBountyRemote,
 } from "shared/remotes/inventory-remote";
 import {
-	SLOT_LAYOUT,
 	ITEMS,
 	ITEM_LIST,
 	RARITY_COLORS,
 	RARITY_LABELS,
 	RARITY_BG_COLORS,
-	MAX_BOUNTY_SLOTS,
-	SlotDef,
 	ItemDef,
 	InventoryPayload,
-	EquippedSlots,
 	BountyScroll,
 	BountyScrollPayload,
 } from "shared/inventory";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 
 const lifecycle = getOrCreateLifecycleRemote();
-const equipRemote = getEquipItemRemote();
-const unequipRemote = getUnequipSlotRemote();
+const activateRemote = getActivateItemRemote();
 const syncRemote = getInventorySyncRemote();
 const requestRemote = getRequestInventoryRemote();
 const mockBountyKillRemote = getMockBountyKillRemote();
@@ -39,21 +33,23 @@ function sc(base: number): number {
 	return base * getUIScale();
 }
 
+// ── Filter type ───────────────────────────────────────────────────────────────
+
+type InventoryFilter = "all" | "weapon" | "poison" | "elixir" | "scroll";
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let inventoryOpen = false;
 let rootFrame: Frame | undefined;
-let selectedSlotId: string | undefined;
 let currentOwned: Record<string, number> = {};
-let currentEquipped: EquippedSlots = {};
+let currentEquippedWeapon: string | undefined;
+let currentActivePoison: string | undefined;
+let currentActiveElixirs: string[] = [];
+let currentBountyScrolls: BountyScrollPayload = [];
+let activeFilter: InventoryFilter = "all";
 
 // Refs for live updates
-const slotButtons: Map<string, TextButton> = new Map();
 let itemGrid: ScrollingFrame | undefined;
-const slotIconLabels: Map<string, TextLabel> = new Map();
-const slotNameLabels: Map<string, TextLabel> = new Map();
-let filterTitle: TextLabel | undefined;
-
 let inventoryButton: TextButton | undefined;
 let tooltipFrame: Frame | undefined;
 let tooltipName: TextLabel | undefined;
@@ -64,22 +60,20 @@ let tooltipEffect: TextLabel | undefined;
 let tooltipConsumable: TextLabel | undefined;
 let currentTooltipItem: string | undefined;
 
-// Bounty scroll state
-let currentBountyScrolls: BountyScrollPayload = [];
-let bountyScrollContainer: Frame | undefined;
-const bountyScrollSlots: TextButton[] = [];
+// Filter button refs
+const filterButtons: Map<InventoryFilter, TextButton> = new Map();
 
-// Track last click time per item for double-click detection
-const lastClickTime: Map<string, number> = new Map();
-const DOUBLE_CLICK_THRESHOLD = 0.35;
+// Active status bar refs
+let activeWeaponLabel: TextLabel | undefined;
+let activePoisonLabel: TextLabel | undefined;
+let activeElixirLabel: TextLabel | undefined;
 
 // ── Build the UI ──────────────────────────────────────────────────────────────
 
 function buildInventoryUI(screenGui: ScreenGui): void {
-	// Main container — centred, dark panel
 	const root = new Instance("Frame");
 	root.Name = "InventoryPanel";
-	root.Size = new UDim2(0, sc(420), 0, sc(560));
+	root.Size = new UDim2(0, sc(420), 0, sc(520));
 	root.Position = new UDim2(0.5, 0, 0.5, 0);
 	root.AnchorPoint = new Vector2(0.5, 0.5);
 	root.BackgroundColor3 = UI_THEME.bg;
@@ -122,54 +116,106 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	header.ZIndex = 31;
 	header.Parent = root;
 
-	// ── Slot bar ──────────────────────────────────────────────────────────
-	const slotBar = new Instance("Frame");
-	slotBar.Name = "SlotBar";
-	slotBar.Size = new UDim2(1, 0, 0, sc(80));
-	slotBar.Position = new UDim2(0, 0, 0, sc(28));
-	slotBar.BackgroundTransparency = 1;
-	slotBar.ZIndex = 31;
-	slotBar.Parent = root;
+	// ── Active status bar ─────────────────────────────────────────────────
+	const statusBar = new Instance("Frame");
+	statusBar.Name = "StatusBar";
+	statusBar.Size = new UDim2(1, 0, 0, sc(32));
+	statusBar.Position = new UDim2(0, 0, 0, sc(26));
+	statusBar.BackgroundColor3 = UI_THEME.bgInset;
+	statusBar.BackgroundTransparency = 0.4;
+	statusBar.BorderSizePixel = 0;
+	statusBar.ZIndex = 31;
+	statusBar.Parent = root;
 
-	const slotLayout = new Instance("UIListLayout");
-	slotLayout.FillDirection = Enum.FillDirection.Horizontal;
-	slotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
-	slotLayout.Padding = new UDim(0, sc(6));
-	slotLayout.Parent = slotBar;
+	const statusCorner = new Instance("UICorner");
+	statusCorner.CornerRadius = new UDim(0, 3);
+	statusCorner.Parent = statusBar;
 
-	for (const slotDef of SLOT_LAYOUT) {
-		buildSlotButton(slotBar, slotDef);
-	}
+	const wLabel = new Instance("TextLabel");
+	wLabel.Name = "ActiveWeapon";
+	wLabel.Size = new UDim2(0.34, 0, 1, 0);
+	wLabel.Position = new UDim2(0, sc(4), 0, 0);
+	wLabel.BackgroundTransparency = 1;
+	wLabel.Text = "/ Fists";
+	wLabel.TextColor3 = UI_THEME.textPrimary;
+	wLabel.Font = UI_THEME.fontBold;
+	wLabel.TextSize = sc(11);
+	wLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	wLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	wLabel.ZIndex = 32;
+	wLabel.Parent = statusBar;
+	activeWeaponLabel = wLabel;
+
+	const pLabel = new Instance("TextLabel");
+	pLabel.Name = "ActivePoison";
+	pLabel.Size = new UDim2(0.33, 0, 1, 0);
+	pLabel.Position = new UDim2(0.34, 0, 0, 0);
+	pLabel.BackgroundTransparency = 1;
+	pLabel.Text = "~ None";
+	pLabel.TextColor3 = UI_THEME.textMuted;
+	pLabel.Font = UI_THEME.fontBody;
+	pLabel.TextSize = sc(11);
+	pLabel.TextXAlignment = Enum.TextXAlignment.Center;
+	pLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	pLabel.ZIndex = 32;
+	pLabel.Parent = statusBar;
+	activePoisonLabel = pLabel;
+
+	const eLabel = new Instance("TextLabel");
+	eLabel.Name = "ActiveElixir";
+	eLabel.Size = new UDim2(0.33, 0, 1, 0);
+	eLabel.Position = new UDim2(0.67, 0, 0, 0);
+	eLabel.BackgroundTransparency = 1;
+	eLabel.Text = "+ None";
+	eLabel.TextColor3 = UI_THEME.textMuted;
+	eLabel.Font = UI_THEME.fontBody;
+	eLabel.TextSize = sc(11);
+	eLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	eLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	eLabel.ZIndex = 32;
+	eLabel.Parent = statusBar;
+	activeElixirLabel = eLabel;
 
 	// ── Divider ───────────────────────────────────────────────────────────
 	const divider = new Instance("Frame");
 	divider.Size = new UDim2(1, 0, 0, 1);
-	divider.Position = new UDim2(0, 0, 0, sc(104));
+	divider.Position = new UDim2(0, 0, 0, sc(62));
 	divider.BackgroundColor3 = UI_THEME.divider;
 	divider.BorderSizePixel = 0;
 	divider.ZIndex = 31;
 	divider.Parent = root;
 
-	// ── Filter title ──────────────────────────────────────────────────────
-	const fTitle = new Instance("TextLabel");
-	fTitle.Name = "FilterTitle";
-	fTitle.Size = new UDim2(1, 0, 0, sc(18));
-	fTitle.Position = new UDim2(0, 0, 0, sc(108));
-	fTitle.BackgroundTransparency = 1;
-	fTitle.Text = "ALL ITEMS";
-	fTitle.TextColor3 = UI_THEME.textSection;
-	fTitle.Font = UI_THEME.fontBold;
-	fTitle.TextSize = sc(13);
-	fTitle.TextXAlignment = Enum.TextXAlignment.Left;
-	fTitle.ZIndex = 31;
-	fTitle.Parent = root;
-	filterTitle = fTitle;
+	// ── Filter bar ────────────────────────────────────────────────────────
+	const filterBar = new Instance("Frame");
+	filterBar.Name = "FilterBar";
+	filterBar.Size = new UDim2(1, 0, 0, sc(22));
+	filterBar.Position = new UDim2(0, 0, 0, sc(66));
+	filterBar.BackgroundTransparency = 1;
+	filterBar.ZIndex = 31;
+	filterBar.Parent = root;
+
+	const filterLayout = new Instance("UIListLayout");
+	filterLayout.FillDirection = Enum.FillDirection.Horizontal;
+	filterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
+	filterLayout.Padding = new UDim(0, sc(4));
+	filterLayout.Parent = filterBar;
+
+	const filters: Array<{ key: InventoryFilter; label: string }> = [
+		{ key: "all", label: "ALL" },
+		{ key: "weapon", label: "WEAPONS" },
+		{ key: "poison", label: "POISONS" },
+		{ key: "elixir", label: "ELIXIRS" },
+		{ key: "scroll", label: "SCROLLS" },
+	];
+	for (const f of filters) {
+		buildFilterButton(filterBar, f.key, f.label);
+	}
 
 	// ── Item grid (scrolling) ─────────────────────────────────────────────
 	const grid = new Instance("ScrollingFrame");
 	grid.Name = "ItemGrid";
-	grid.Size = new UDim2(1, 0, 0, sc(258));
-	grid.Position = new UDim2(0, 0, 0, sc(128));
+	grid.Size = new UDim2(1, 0, 0, sc(390));
+	grid.Position = new UDim2(0, 0, 0, sc(92));
 	grid.BackgroundColor3 = UI_THEME.bgInset;
 	grid.BackgroundTransparency = 0.5;
 	grid.BorderSizePixel = 0;
@@ -197,390 +243,155 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	gridPad.PaddingRight = new UDim(0, sc(4));
 	gridPad.PaddingBottom = new UDim(0, sc(4));
 	gridPad.Parent = grid;
-
-	// ── Bounty Scrolls section ────────────────────────────────────────
-	const bountyDivider = new Instance("Frame");
-	bountyDivider.Size = new UDim2(1, 0, 0, 1);
-	bountyDivider.Position = new UDim2(0, 0, 0, sc(390));
-	bountyDivider.BackgroundColor3 = UI_THEME.divider;
-	bountyDivider.BorderSizePixel = 0;
-	bountyDivider.ZIndex = 31;
-	bountyDivider.Parent = root;
-
-	const bountyTitle = new Instance("TextLabel");
-	bountyTitle.Name = "BountyTitle";
-	bountyTitle.Size = new UDim2(1, 0, 0, sc(16));
-	bountyTitle.Position = new UDim2(0, 0, 0, sc(394));
-	bountyTitle.BackgroundTransparency = 1;
-	bountyTitle.Text = "BOUNTY SCROLLS";
-	bountyTitle.TextColor3 = UI_THEME.textSection;
-	bountyTitle.Font = UI_THEME.fontBold;
-	bountyTitle.TextSize = sc(13);
-	bountyTitle.TextXAlignment = Enum.TextXAlignment.Left;
-	bountyTitle.ZIndex = 31;
-	bountyTitle.Parent = root;
-
-	const bContainer = new Instance("Frame");
-	bContainer.Name = "BountyScrollBar";
-	bContainer.Size = new UDim2(1, 0, 0, sc(80));
-	bContainer.Position = new UDim2(0, 0, 0, sc(412));
-	bContainer.BackgroundTransparency = 1;
-	bContainer.ZIndex = 31;
-	bContainer.Parent = root;
-	bountyScrollContainer = bContainer;
-
-	const bLayout = new Instance("UIListLayout");
-	bLayout.FillDirection = Enum.FillDirection.Horizontal;
-	bLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
-	bLayout.Padding = new UDim(0, sc(6));
-	bLayout.Parent = bContainer;
-
-	// Create the 4 empty scroll slots
-	for (let i = 0; i < MAX_BOUNTY_SLOTS; i++) {
-		const slot = buildBountyScrollSlot(bContainer, i);
-		bountyScrollSlots.push(slot);
-	}
 }
 
-// ── Bounty scroll slot ────────────────────────────────────────────────────────
+// ── Filter button ─────────────────────────────────────────────────────────────
 
-function buildBountyScrollSlot(parent: Frame, index: number): TextButton {
-	const slot = new Instance("TextButton");
-	slot.Name = "BountySlot_" + index;
-	slot.Size = new UDim2(0, sc(82), 0, sc(72));
-	slot.BackgroundColor3 = UI_THEME.bgInset;
-	slot.BackgroundTransparency = 0.3;
-	slot.BorderSizePixel = 0;
-	slot.Text = "";
-	slot.AutoButtonColor = false;
-	slot.ZIndex = 32;
-	slot.Parent = parent;
-
-	const slotCorner = new Instance("UICorner");
-	slotCorner.CornerRadius = new UDim(0, 4);
-	slotCorner.Parent = slot;
-
-	const slotStroke = new Instance("UIStroke");
-	slotStroke.Name = "SlotStroke";
-	slotStroke.Color = UI_THEME.divider;
-	slotStroke.Thickness = 1;
-	slotStroke.Parent = slot;
-
-	// Empty state icon
-	const emptyIcon = new Instance("TextLabel");
-	emptyIcon.Name = "EmptyIcon";
-	emptyIcon.Size = new UDim2(1, 0, 0, sc(24));
-	emptyIcon.Position = new UDim2(0, 0, 0, sc(8));
-	emptyIcon.BackgroundTransparency = 1;
-	emptyIcon.Text = "?";
-	emptyIcon.TextColor3 = UI_THEME.textMuted;
-	emptyIcon.Font = UI_THEME.fontDisplay;
-	emptyIcon.TextSize = sc(22);
-	emptyIcon.ZIndex = 33;
-	emptyIcon.Parent = slot;
-
-	// Target name label
-	const nameLabel = new Instance("TextLabel");
-	nameLabel.Name = "TargetName";
-	nameLabel.Size = new UDim2(1, -4, 0, sc(14));
-	nameLabel.Position = new UDim2(0, 2, 0, sc(32));
-	nameLabel.BackgroundTransparency = 1;
-	nameLabel.Text = "Empty";
-	nameLabel.TextColor3 = UI_THEME.textMuted;
-	nameLabel.Font = UI_THEME.fontBody;
-	nameLabel.TextSize = sc(9);
-	nameLabel.TextWrapped = true;
-	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
-	nameLabel.ZIndex = 33;
-	nameLabel.Parent = slot;
-
-	// Status label at bottom
-	const statusLabel = new Instance("TextLabel");
-	statusLabel.Name = "StatusLabel";
-	statusLabel.Size = new UDim2(1, -4, 0, sc(12));
-	statusLabel.Position = new UDim2(0, 2, 1, sc(-14));
-	statusLabel.BackgroundTransparency = 1;
-	statusLabel.Text = "";
-	statusLabel.TextColor3 = UI_THEME.gold;
-	statusLabel.Font = UI_THEME.fontBold;
-	statusLabel.TextSize = sc(8);
-	statusLabel.ZIndex = 33;
-	statusLabel.Parent = slot;
-
-	// Hover events for tooltip
-	slot.MouseEnter.Connect(() => {
-		const scroll = currentBountyScrolls[index] as BountyScroll | undefined;
-		if (scroll === undefined) return;
-		const rarityColor = RARITY_COLORS[scroll.rarity] ?? UI_THEME.textPrimary;
-		slotStroke.Transparency = 0;
-		slot.BackgroundTransparency = 0;
-		slotStroke.Color = rarityColor;
-		showScrollTooltip(scroll, slot);
-	});
-	slot.MouseLeave.Connect(() => {
-		const scroll = currentBountyScrolls[index] as BountyScroll | undefined;
-		if (scroll !== undefined) {
-			const rarityColor = RARITY_COLORS[scroll.rarity] ?? UI_THEME.textPrimary;
-			slot.BackgroundTransparency = 0.08;
-			slotStroke.Color = rarityColor;
-		} else {
-			slot.BackgroundTransparency = 0.3;
-			slotStroke.Color = UI_THEME.divider;
-		}
-		slotStroke.Transparency = 0;
-		hideTooltip("scroll_" + index);
-	});
-
-	return slot;
-}
-
-function refreshBountyScrolls(): void {
-	for (let i = 0; i < MAX_BOUNTY_SLOTS; i++) {
-		const slot = bountyScrollSlots[i];
-		if (!slot) continue;
-
-		const scroll = currentBountyScrolls[i] as BountyScroll | undefined;
-		const emptyIcon = slot.FindFirstChild("EmptyIcon") as TextLabel | undefined;
-		const nameLabel = slot.FindFirstChild("TargetName") as TextLabel | undefined;
-		const statusLabel = slot.FindFirstChild("StatusLabel") as TextLabel | undefined;
-		const stroke = slot.FindFirstChild("SlotStroke") as UIStroke | undefined;
-
-		if (scroll !== undefined) {
-			const rarityColor = RARITY_COLORS[scroll.rarity] ?? UI_THEME.textPrimary;
-			const rarityBg = RARITY_BG_COLORS[scroll.rarity] ?? UI_THEME.bgInset;
-
-			slot.BackgroundColor3 = rarityBg;
-			slot.BackgroundTransparency = 0.08;
-			if (stroke) stroke.Color = rarityColor;
-
-			if (emptyIcon) {
-				emptyIcon.Text = "#";
-				emptyIcon.TextColor3 = rarityColor;
-			}
-			if (nameLabel) {
-				nameLabel.Text = scroll.targetName;
-				nameLabel.TextColor3 = rarityColor;
-			}
-			if (statusLabel) {
-				statusLabel.Text = "COLLECTED";
-				statusLabel.TextColor3 = UI_THEME.gold;
-			}
-		} else {
-			// Empty slot
-			slot.BackgroundColor3 = UI_THEME.bgInset;
-			slot.BackgroundTransparency = 0.3;
-			if (stroke) stroke.Color = UI_THEME.divider;
-
-			if (emptyIcon) {
-				emptyIcon.Text = "?";
-				emptyIcon.TextColor3 = UI_THEME.textMuted;
-			}
-			if (nameLabel) {
-				nameLabel.Text = "Empty";
-				nameLabel.TextColor3 = UI_THEME.textMuted;
-			}
-			if (statusLabel) {
-				statusLabel.Text = "";
-			}
-		}
-	}
-}
-
-// ── Slot button ───────────────────────────────────────────────────────────────
-
-function buildSlotButton(parent: Frame, slotDef: SlotDef): void {
+function buildFilterButton(parent: Frame, key: InventoryFilter, label: string): void {
 	const btn = new Instance("TextButton");
-	btn.Name = "Slot_" + slotDef.id;
-	btn.Size = new UDim2(0, sc(70), 0, sc(80));
+	btn.Name = "Filter_" + key;
+	btn.Size = new UDim2(0, sc(key === "all" ? 40 : 68), 0, sc(20));
 	btn.BackgroundColor3 = UI_THEME.bgInset;
-	btn.BackgroundTransparency = 0.3;
+	btn.BackgroundTransparency = key === activeFilter ? 0.1 : 0.6;
 	btn.BorderSizePixel = 0;
-	btn.Text = "";
+	btn.Text = label;
+	btn.TextColor3 = key === activeFilter ? UI_THEME.gold : UI_THEME.textMuted;
+	btn.Font = UI_THEME.fontBold;
+	btn.TextSize = sc(10);
 	btn.AutoButtonColor = false;
 	btn.ZIndex = 32;
 	btn.Parent = parent;
 
-	const btnCorner = new Instance("UICorner");
-	btnCorner.CornerRadius = new UDim(0, 4);
-	btnCorner.Parent = btn;
+	const c = new Instance("UICorner");
+	c.CornerRadius = new UDim(0, 3);
+	c.Parent = btn;
 
-	const btnStroke = new Instance("UIStroke");
-	btnStroke.Color = UI_THEME.divider;
-	btnStroke.Thickness = 1;
-	btnStroke.Parent = btn;
+	const s = new Instance("UIStroke");
+	s.Color = key === activeFilter ? UI_THEME.gold : UI_THEME.divider;
+	s.Thickness = 1;
+	s.Parent = btn;
 
-	// Slot type label at top
-	const typeLabel = new Instance("TextLabel");
-	typeLabel.Name = "SlotType";
-	typeLabel.Size = new UDim2(1, 0, 0, sc(12));
-	typeLabel.Position = new UDim2(0, 0, 0, sc(2));
-	typeLabel.BackgroundTransparency = 1;
-	typeLabel.Text = slotDef.label.upper();
-	typeLabel.TextColor3 = UI_THEME.textMuted;
-	typeLabel.Font = UI_THEME.fontBold;
-	typeLabel.TextSize = sc(10);
-	typeLabel.ZIndex = 33;
-	typeLabel.Parent = btn;
+	filterButtons.set(key, btn);
 
-	// Icon / item name in centre
-	const iconLabel = new Instance("TextLabel");
-	iconLabel.Name = "SlotIcon";
-	iconLabel.Size = new UDim2(1, 0, 0, sc(28));
-	iconLabel.Position = new UDim2(0, 0, 0, sc(16));
-	iconLabel.BackgroundTransparency = 1;
-	iconLabel.Text = slotDef.emptyIcon;
-	iconLabel.TextColor3 = UI_THEME.textMuted;
-	iconLabel.Font = UI_THEME.fontDisplay;
-	iconLabel.TextSize = sc(24);
-	iconLabel.ZIndex = 33;
-	iconLabel.Parent = btn;
-	slotIconLabels.set(slotDef.id, iconLabel);
-
-	// Item name at bottom
-	const nameLabel = new Instance("TextLabel");
-	nameLabel.Name = "SlotName";
-	nameLabel.Size = new UDim2(1, 0, 0, sc(14));
-	nameLabel.Position = new UDim2(0, 0, 1, sc(-16));
-	nameLabel.BackgroundTransparency = 1;
-	nameLabel.Text = "Empty";
-	nameLabel.TextColor3 = UI_THEME.textMuted;
-	nameLabel.Font = UI_THEME.fontBody;
-	nameLabel.TextSize = sc(10);
-	nameLabel.ZIndex = 33;
-	nameLabel.Parent = btn;
-	slotNameLabels.set(slotDef.id, nameLabel);
-
-	slotButtons.set(slotDef.id, btn);
-
-	// Click: select this slot (or deselect if already selected)
-	btn.MouseButton1Click.Connect(() => {
-		if (selectedSlotId === slotDef.id) {
-			selectedSlotId = undefined;
-		} else {
-			selectedSlotId = slotDef.id;
-		}
-		refreshSlotHighlights();
+	btn.Activated.Connect(() => {
+		activeFilter = key;
+		refreshFilterButtons();
 		refreshItemGrid();
-	});
-
-	// Right-click: unequip
-	btn.MouseButton2Click.Connect(() => {
-		// Don't allow unequipping the weapon slot — always need fists at minimum
-		if (slotDef.id === "weapon") return;
-		unequipRemote.FireServer(slotDef.id);
 	});
 }
 
-// ── Slot highlight state ──────────────────────────────────────────────────────
-
-function refreshSlotHighlights(): void {
-	for (const [slotId, btn] of slotButtons) {
-		const btnStroke = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-		if (slotId === selectedSlotId) {
-			btn.BackgroundTransparency = 0.1;
-			if (btnStroke) btnStroke.Color = UI_THEME.gold;
-		} else {
-			btn.BackgroundTransparency = 0.3;
-			if (btnStroke) btnStroke.Color = UI_THEME.divider;
-		}
+function refreshFilterButtons(): void {
+	for (const [key, btn] of filterButtons) {
+		const isActive = key === activeFilter;
+		btn.BackgroundTransparency = isActive ? 0.1 : 0.6;
+		btn.TextColor3 = isActive ? UI_THEME.gold : UI_THEME.textMuted;
+		const s = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+		if (s) s.Color = isActive ? UI_THEME.gold : UI_THEME.divider;
 	}
 }
 
-// ── Refresh equipped slot display ─────────────────────────────────────────────
+// ── Active status display ─────────────────────────────────────────────────────
 
-function refreshSlotDisplays(): void {
-	for (const slotDef of SLOT_LAYOUT) {
-		const equippedItemId = currentEquipped[slotDef.id];
-		const iconLabel = slotIconLabels.get(slotDef.id);
-		const nameLabel = slotNameLabels.get(slotDef.id);
-		const btn = slotButtons.get(slotDef.id);
+function refreshActiveStatusBar(): void {
+	if (activeWeaponLabel) {
+		const wId = currentEquippedWeapon ?? "fists";
+		const wDef = ITEMS[wId];
+		if (wDef) {
+			const wColor = RARITY_COLORS[wDef.rarity] ?? UI_THEME.textPrimary;
+			activeWeaponLabel.Text = wDef.icon + " " + wDef.name;
+			activeWeaponLabel.TextColor3 = wColor;
+		} else {
+			activeWeaponLabel.Text = "/ Fists";
+			activeWeaponLabel.TextColor3 = UI_THEME.textPrimary;
+		}
+	}
 
-		if (equippedItemId !== undefined) {
-			const itemDef = ITEMS[equippedItemId];
-			if (itemDef && iconLabel && nameLabel) {
-				iconLabel.Text = itemDef.icon;
-				iconLabel.TextColor3 = RARITY_COLORS[itemDef.rarity] ?? UI_THEME.textPrimary;
-				nameLabel.Text = itemDef.name;
-				nameLabel.TextColor3 = RARITY_COLORS[itemDef.rarity] ?? UI_THEME.textPrimary;
-			}
-			// Tint the slot stroke with rarity colour
-			if (btn && itemDef) {
-				const s = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-				if (s && slotDef.id !== selectedSlotId) {
-					s.Color = RARITY_COLORS[itemDef.rarity] ?? UI_THEME.divider;
-				}
+	if (activePoisonLabel) {
+		if (currentActivePoison !== undefined) {
+			const pDef = ITEMS[currentActivePoison];
+			if (pDef) {
+				const pColor = RARITY_COLORS[pDef.rarity] ?? UI_THEME.textPrimary;
+				activePoisonLabel.Text = "~ " + pDef.name;
+				activePoisonLabel.TextColor3 = pColor;
 			}
 		} else {
-			if (iconLabel) {
-				iconLabel.Text = slotDef.emptyIcon;
-				iconLabel.TextColor3 = UI_THEME.textMuted;
+			activePoisonLabel.Text = "~ None";
+			activePoisonLabel.TextColor3 = UI_THEME.textMuted;
+		}
+	}
+
+	if (activeElixirLabel) {
+		if (currentActiveElixirs.size() > 0) {
+			const names: string[] = [];
+			for (const eId of currentActiveElixirs) {
+				const eDef = ITEMS[eId];
+				if (eDef) names.push(eDef.name);
 			}
-			if (nameLabel) {
-				nameLabel.Text = "Empty";
-				nameLabel.TextColor3 = UI_THEME.textMuted;
-			}
+			activeElixirLabel.Text = "+ " + (names.size() > 0 ? names.join(", ") : "None");
+			activeElixirLabel.TextColor3 = UI_THEME.gold;
+		} else {
+			activeElixirLabel.Text = "+ None";
+			activeElixirLabel.TextColor3 = UI_THEME.textMuted;
 		}
 	}
 }
 
 // ── Refresh the item grid ─────────────────────────────────────────────────────
 
+const RARITY_ORDER: Record<string, number> = {
+	common: 0,
+	uncommon: 1,
+	rare: 2,
+	epic: 3,
+	legendary: 4,
+	player: 5,
+};
+
 function refreshItemGrid(): void {
 	if (itemGrid === undefined) return;
 
-	// Clear old tiles
 	for (const child of itemGrid.GetChildren()) {
 		if (child.IsA("TextButton")) {
 			child.Destroy();
 		}
 	}
 
-	// Determine which slot type to filter by
-	let filterSlotType: string | undefined;
-	if (selectedSlotId !== undefined) {
-		const slotDef = SLOT_LAYOUT.find((s) => s.id === selectedSlotId);
-		if (slotDef) {
-			filterSlotType = slotDef.slotType;
-		}
-	}
-
-	// Update filter title
-	if (filterTitle) {
-		if (filterSlotType !== undefined) {
-			filterTitle.Text = filterSlotType.upper() + " ITEMS";
-		} else {
-			filterTitle.Text = "ALL ITEMS";
-		}
-	}
-
-	// Build sorted item list
-	const items: ItemDef[] = [];
-	for (const item of ITEM_LIST) {
-		const count = currentOwned[item.id] ?? 0;
-		if (count <= 0) continue;
-		if (filterSlotType !== undefined && item.slotType !== filterSlotType) continue;
-		items.push(item);
-	}
-
-	// Sort by rarity (common first), then name
-	const rarityOrder: Record<string, number> = {
-		common: 0,
-		uncommon: 1,
-		rare: 2,
-		epic: 3,
-		legendary: 4,
-	};
-	items.sort((a, b) => {
-		const ra = rarityOrder[a.rarity] ?? 0;
-		const rb = rarityOrder[b.rarity] ?? 0;
-		if (ra !== rb) return ra < rb;
-		return a.name < b.name;
-	});
-
 	let layoutOrder = 0;
-	for (const item of items) {
-		buildItemTile(itemGrid, item, layoutOrder);
-		layoutOrder++;
+
+	// ── Regular items ─────────────────────────────────────────────────
+	if (activeFilter !== "scroll") {
+		const items: ItemDef[] = [];
+		for (const item of ITEM_LIST) {
+			const count = currentOwned[item.id] ?? 0;
+			if (count <= 0) continue;
+			if (activeFilter !== "all" && item.category !== activeFilter) continue;
+			items.push(item);
+		}
+
+		items.sort((a, b) => {
+			const catOrder: Record<string, number> = { weapon: 0, poison: 1, elixir: 2 };
+			const ca = catOrder[a.category] ?? 3;
+			const cb = catOrder[b.category] ?? 3;
+			if (ca !== cb) return ca < cb;
+
+			const ra = RARITY_ORDER[a.rarity] ?? 0;
+			const rb = RARITY_ORDER[b.rarity] ?? 0;
+			if (ra !== rb) return ra < rb;
+			return a.name < b.name;
+		});
+
+		for (const item of items) {
+			buildItemTile(itemGrid, item, layoutOrder);
+			layoutOrder++;
+		}
+	}
+
+	// ── Bounty scrolls ────────────────────────────────────────────────
+	if (activeFilter === "all" || activeFilter === "scroll") {
+		for (const scroll of currentBountyScrolls) {
+			buildScrollTile(itemGrid, scroll, layoutOrder);
+			layoutOrder++;
+		}
 	}
 }
 
@@ -590,11 +401,16 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	const count = currentOwned[item.id] ?? 0;
 	const rarityColor = RARITY_COLORS[item.rarity] ?? UI_THEME.textPrimary;
 
+	const isActive =
+		(item.category === "weapon" && currentEquippedWeapon === item.id) ||
+		(item.category === "poison" && currentActivePoison === item.id) ||
+		(item.category === "elixir" && currentActiveElixirs.includes(item.id));
+
 	const tile = new Instance("TextButton");
 	tile.Name = "Item_" + item.id;
 	tile.LayoutOrder = order;
-	tile.BackgroundColor3 = UI_THEME.bgInset;
-	tile.BackgroundTransparency = 0.15;
+	tile.BackgroundColor3 = isActive ? (RARITY_BG_COLORS[item.rarity] ?? UI_THEME.bgInset) : UI_THEME.bgInset;
+	tile.BackgroundTransparency = isActive ? 0 : 0.15;
 	tile.BorderSizePixel = 0;
 	tile.Text = "";
 	tile.AutoButtonColor = false;
@@ -607,11 +423,10 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 
 	const tileStroke = new Instance("UIStroke");
 	tileStroke.Color = rarityColor;
-	tileStroke.Thickness = 1;
-	tileStroke.Transparency = 0.4;
+	tileStroke.Thickness = isActive ? 2 : 1;
+	tileStroke.Transparency = isActive ? 0 : 0.4;
 	tileStroke.Parent = tile;
 
-	// Icon
 	const icon = new Instance("TextLabel");
 	icon.Size = new UDim2(1, 0, 0, sc(28));
 	icon.Position = new UDim2(0, 0, 0, sc(4));
@@ -623,7 +438,6 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	icon.ZIndex = 33;
 	icon.Parent = tile;
 
-	// Name
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Size = new UDim2(1, -4, 0, sc(20));
 	nameLabel.Position = new UDim2(0, 2, 0, sc(32));
@@ -637,7 +451,6 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	nameLabel.ZIndex = 33;
 	nameLabel.Parent = tile;
 
-	// Count badge
 	if (count > 1) {
 		const badge = new Instance("TextLabel");
 		badge.Size = new UDim2(0, sc(18), 0, sc(12));
@@ -648,6 +461,7 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 		badge.TextColor3 = UI_THEME.gold;
 		badge.Font = UI_THEME.fontBold;
 		badge.TextSize = sc(10);
+		badge.ZIndex = 34;
 		badge.Parent = tile;
 
 		const badgeCorner = new Instance("UICorner");
@@ -655,52 +469,129 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 		badgeCorner.Parent = badge;
 	}
 
-	// Rarity bar at bottom
-	const rarityBar = new Instance("Frame");
-	rarityBar.Size = new UDim2(0.6, 0, 0, sc(2));
-	rarityBar.Position = new UDim2(0.2, 0, 1, sc(-5));
-	rarityBar.BackgroundColor3 = rarityColor;
-	rarityBar.BackgroundTransparency = 0.3;
-	rarityBar.BorderSizePixel = 0;
-	rarityBar.ZIndex = 33;
-	rarityBar.Parent = tile;
+	if (isActive) {
+		const activeTag = new Instance("TextLabel");
+		activeTag.Size = new UDim2(1, 0, 0, sc(10));
+		activeTag.Position = new UDim2(0, 0, 1, sc(-12));
+		activeTag.BackgroundTransparency = 1;
+		activeTag.Text = "ACTIVE";
+		activeTag.TextColor3 = UI_THEME.gold;
+		activeTag.Font = UI_THEME.fontBold;
+		activeTag.TextSize = sc(8);
+		activeTag.ZIndex = 34;
+		activeTag.Parent = tile;
+	} else {
+		const rarityBar = new Instance("Frame");
+		rarityBar.Size = new UDim2(0.6, 0, 0, sc(2));
+		rarityBar.Position = new UDim2(0.2, 0, 1, sc(-5));
+		rarityBar.BackgroundColor3 = rarityColor;
+		rarityBar.BackgroundTransparency = 0.3;
+		rarityBar.BorderSizePixel = 0;
+		rarityBar.ZIndex = 33;
+		rarityBar.Parent = tile;
+	}
 
-	// ── Click / double-click handling ─────────────────────────────────────
 	tile.MouseButton1Click.Connect(() => {
-		const now = tick();
-		const prev = lastClickTime.get(item.id) ?? 0;
-		lastClickTime.set(item.id, now);
-
-		const isDoubleClick = now - prev < DOUBLE_CLICK_THRESHOLD;
-
-		if (isDoubleClick) {
-			// Double click: auto-equip to first compatible empty slot
-			autoEquip(item);
-		} else if (selectedSlotId !== undefined) {
-			// Single click with slot selected: equip into that slot
-			const slotDef = SLOT_LAYOUT.find((s) => s.id === selectedSlotId);
-			if (slotDef && slotDef.slotType === item.slotType) {
-				equipRemote.FireServer(selectedSlotId, item.id);
-			}
-		}
-
-		// Brief highlight flash on tile
+		activateRemote.FireServer(item.id);
 		tileStroke.Transparency = 0;
 		TweenService.Create(tileStroke, new TweenInfo(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Transparency: 0.4,
 		}).Play();
 	});
 
-	// Hover effect + tooltip
 	tile.MouseEnter.Connect(() => {
 		tile.BackgroundTransparency = 0;
 		tileStroke.Transparency = 0;
-		showTooltip(item, tile);
+		showItemTooltip(item, tile);
 	});
 	tile.MouseLeave.Connect(() => {
-		tile.BackgroundTransparency = 0.15;
-		tileStroke.Transparency = 0.4;
+		tile.BackgroundTransparency = isActive ? 0 : 0.15;
+		tileStroke.Transparency = isActive ? 0 : 0.4;
 		hideTooltip(item.id);
+	});
+}
+
+// ── Bounty scroll tile ────────────────────────────────────────────────────────
+
+function buildScrollTile(parent: ScrollingFrame, scroll: BountyScroll, order: number): void {
+	const rarityColor = RARITY_COLORS[scroll.rarity] ?? UI_THEME.textPrimary;
+	const rarityBg = RARITY_BG_COLORS[scroll.rarity] ?? UI_THEME.bgInset;
+	const scrollKey = "scroll_" + scroll.slotIndex;
+
+	const tile = new Instance("TextButton");
+	tile.Name = scrollKey;
+	tile.LayoutOrder = order;
+	tile.BackgroundColor3 = rarityBg;
+	tile.BackgroundTransparency = 0.08;
+	tile.BorderSizePixel = 0;
+	tile.Text = "";
+	tile.AutoButtonColor = false;
+	tile.ZIndex = 32;
+	tile.Parent = parent;
+
+	const tileCorner = new Instance("UICorner");
+	tileCorner.CornerRadius = new UDim(0, 4);
+	tileCorner.Parent = tile;
+
+	const tileStroke = new Instance("UIStroke");
+	tileStroke.Color = rarityColor;
+	tileStroke.Thickness = 1;
+	tileStroke.Transparency = 0;
+	tileStroke.Parent = tile;
+
+	const icon = new Instance("TextLabel");
+	icon.Size = new UDim2(1, 0, 0, sc(28));
+	icon.Position = new UDim2(0, 0, 0, sc(4));
+	icon.BackgroundTransparency = 1;
+	icon.Text = "#";
+	icon.TextColor3 = rarityColor;
+	icon.Font = UI_THEME.fontDisplay;
+	icon.TextSize = sc(24);
+	icon.ZIndex = 33;
+	icon.Parent = tile;
+
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Size = new UDim2(1, -4, 0, sc(20));
+	nameLabel.Position = new UDim2(0, 2, 0, sc(32));
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.Text = scroll.targetName;
+	nameLabel.TextColor3 = UI_THEME.textPrimary;
+	nameLabel.Font = UI_THEME.fontBody;
+	nameLabel.TextSize = sc(9);
+	nameLabel.TextWrapped = true;
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	nameLabel.ZIndex = 33;
+	nameLabel.Parent = tile;
+
+	const scrollTag = new Instance("TextLabel");
+	scrollTag.Size = new UDim2(1, 0, 0, sc(10));
+	scrollTag.Position = new UDim2(0, 0, 1, sc(-12));
+	scrollTag.BackgroundTransparency = 1;
+	scrollTag.Text = "SCROLL";
+	scrollTag.TextColor3 = rarityColor;
+	scrollTag.Font = UI_THEME.fontBold;
+	scrollTag.TextSize = sc(8);
+	scrollTag.ZIndex = 34;
+	scrollTag.Parent = tile;
+
+	const rarityBar = new Instance("Frame");
+	rarityBar.Size = new UDim2(0.6, 0, 0, sc(2));
+	rarityBar.Position = new UDim2(0.2, 0, 1, sc(-3));
+	rarityBar.BackgroundColor3 = rarityColor;
+	rarityBar.BackgroundTransparency = 0.3;
+	rarityBar.BorderSizePixel = 0;
+	rarityBar.ZIndex = 33;
+	rarityBar.Parent = tile;
+
+	tile.MouseEnter.Connect(() => {
+		tile.BackgroundTransparency = 0;
+		tileStroke.Thickness = 2;
+		showScrollTooltip(scroll, tile);
+	});
+	tile.MouseLeave.Connect(() => {
+		tile.BackgroundTransparency = 0.08;
+		tileStroke.Thickness = 1;
+		hideTooltip(scrollKey);
 	});
 }
 
@@ -735,7 +626,6 @@ function buildTooltip(screenGui: ScreenGui): void {
 	ttPad.PaddingRight = new UDim(0, sc(8));
 	ttPad.Parent = tt;
 
-	// Row 1: Item name (full width, left-aligned)
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TT_Name";
 	nameLabel.Size = new UDim2(1, 0, 0, sc(16));
@@ -749,7 +639,6 @@ function buildTooltip(screenGui: ScreenGui): void {
 	nameLabel.Parent = tt;
 	tooltipName = nameLabel;
 
-	// Row 2 left: Item type
 	const typeLabel = new Instance("TextLabel");
 	typeLabel.Name = "TT_Type";
 	typeLabel.Size = new UDim2(0.5, 0, 0, sc(12));
@@ -764,7 +653,6 @@ function buildTooltip(screenGui: ScreenGui): void {
 	typeLabel.Parent = tt;
 	tooltipType = typeLabel;
 
-	// Row 2 right: Rarity label
 	const rarityLabel = new Instance("TextLabel");
 	rarityLabel.Name = "TT_Rarity";
 	rarityLabel.Size = new UDim2(0.5, 0, 0, sc(12));
@@ -779,16 +667,14 @@ function buildTooltip(screenGui: ScreenGui): void {
 	rarityLabel.Parent = tt;
 	tooltipRarity = rarityLabel;
 
-	// Divider
-	const divider = new Instance("Frame");
-	divider.Size = new UDim2(1, 0, 0, 1);
-	divider.Position = new UDim2(0, 0, 0, sc(34));
-	divider.BackgroundColor3 = UI_THEME.divider;
-	divider.BorderSizePixel = 0;
-	divider.ZIndex = 51;
-	divider.Parent = tt;
+	const ttDiv = new Instance("Frame");
+	ttDiv.Size = new UDim2(1, 0, 0, 1);
+	ttDiv.Position = new UDim2(0, 0, 0, sc(34));
+	ttDiv.BackgroundColor3 = UI_THEME.divider;
+	ttDiv.BorderSizePixel = 0;
+	ttDiv.ZIndex = 51;
+	ttDiv.Parent = tt;
 
-	// Description (wrapping text)
 	const descLabel = new Instance("TextLabel");
 	descLabel.Name = "TT_Desc";
 	descLabel.Size = new UDim2(1, 0, 0, sc(32));
@@ -804,7 +690,6 @@ function buildTooltip(screenGui: ScreenGui): void {
 	descLabel.Parent = tt;
 	tooltipDesc = descLabel;
 
-	// Effect line (mechanical stats)
 	const effectLabel = new Instance("TextLabel");
 	effectLabel.Name = "TT_Effect";
 	effectLabel.Size = new UDim2(1, 0, 0, sc(28));
@@ -820,7 +705,6 @@ function buildTooltip(screenGui: ScreenGui): void {
 	effectLabel.Parent = tt;
 	tooltipEffect = effectLabel;
 
-	// Consumable tag (bottom)
 	const consumeLabel = new Instance("TextLabel");
 	consumeLabel.Name = "TT_Consumable";
 	consumeLabel.Size = new UDim2(1, 0, 0, sc(12));
@@ -836,156 +720,96 @@ function buildTooltip(screenGui: ScreenGui): void {
 	tooltipConsumable = consumeLabel;
 }
 
-function showTooltip(item: ItemDef, tile: TextButton): void {
+function positionTooltip(anchor: GuiObject): void {
+	if (tooltipFrame === undefined) return;
+	const aPos = anchor.AbsolutePosition;
+	const aSize = anchor.AbsoluteSize;
+	const ttW = sc(210);
+	const ttH = sc(140);
+	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
+	const vpX = camera ? camera.ViewportSize.X : 1920;
+
+	let posX = aPos.X + aSize.X + sc(6);
+	if (posX + ttW > vpX - 10) {
+		posX = aPos.X - ttW - sc(6);
+	}
+	const posY = aPos.Y;
+
+	tooltipFrame.Position = new UDim2(0, posX, 0, posY);
+	tooltipFrame.Size = new UDim2(0, ttW, 0, ttH);
+	tooltipFrame.Visible = true;
+}
+
+function showItemTooltip(item: ItemDef, tile: TextButton): void {
 	if (tooltipFrame === undefined) return;
 	currentTooltipItem = item.id;
 
 	const rarityColor = RARITY_COLORS[item.rarity] ?? UI_THEME.textPrimary;
 	const rarityBg = RARITY_BG_COLORS[item.rarity] ?? UI_THEME.bg;
-	const rarityLabel = RARITY_LABELS[item.rarity] ?? "Common";
+	const rarityLbl = RARITY_LABELS[item.rarity] ?? "Common";
 
-	// Populate text
 	if (tooltipName) {
 		tooltipName.Text = item.name;
 		tooltipName.TextColor3 = rarityColor;
 	}
-	if (tooltipType) {
-		tooltipType.Text = item.itemType;
-	}
+	if (tooltipType) tooltipType.Text = item.itemType;
 	if (tooltipRarity) {
-		tooltipRarity.Text = rarityLabel;
+		tooltipRarity.Text = rarityLbl;
 		tooltipRarity.TextColor3 = rarityColor;
 	}
-	if (tooltipDesc) {
-		tooltipDesc.Text = item.description;
-	}
-	if (tooltipEffect) {
-		tooltipEffect.Text = item.effect;
-	}
+	if (tooltipDesc) tooltipDesc.Text = item.description;
+	if (tooltipEffect) tooltipEffect.Text = item.effect;
 	if (tooltipConsumable) {
-		tooltipConsumable.Text = item.consumable ? "Consumable - used on activation" : "";
+		tooltipConsumable.Text = item.consumable ? "Consumable - click to activate" : "Click to equip";
 	}
 
-	// Style the card border + background to match rarity
 	tooltipFrame.BackgroundColor3 = rarityBg;
-	const stroke = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
-	if (stroke) stroke.Color = rarityColor;
+	const strokeRef = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
+	if (strokeRef) strokeRef.Color = rarityColor;
 
-	// Position the tooltip to the right of the tile (or left if it would overflow)
-	const tileAbsPos = tile.AbsolutePosition;
-	const tileAbsSize = tile.AbsoluteSize;
-	const tooltipWidth = sc(210);
-	const tooltipHeight = sc(140);
-	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
-	const vpX = camera ? camera.ViewportSize.X : 1920;
-
-	let posX = tileAbsPos.X + tileAbsSize.X + sc(6);
-	// If tooltip would go off screen right, show it to the left
-	if (posX + tooltipWidth > vpX - 10) {
-		posX = tileAbsPos.X - tooltipWidth - sc(6);
-	}
-	const posY = tileAbsPos.Y;
-
-	tooltipFrame.Position = new UDim2(0, posX, 0, posY);
-	tooltipFrame.Size = new UDim2(0, tooltipWidth, 0, tooltipHeight);
-	tooltipFrame.Visible = true;
+	positionTooltip(tile);
 }
 
-function showScrollTooltip(scroll: BountyScroll, slot: TextButton): void {
+function showScrollTooltip(scroll: BountyScroll, tile: TextButton): void {
 	if (tooltipFrame === undefined) return;
 	const scrollKey = "scroll_" + scroll.slotIndex;
 	currentTooltipItem = scrollKey;
 
 	const rarityColor = RARITY_COLORS[scroll.rarity] ?? UI_THEME.textPrimary;
 	const rarityBg = RARITY_BG_COLORS[scroll.rarity] ?? UI_THEME.bg;
-	const rarityLabel = RARITY_LABELS[scroll.rarity] ?? "Common";
+	const rarityLbl = RARITY_LABELS[scroll.rarity] ?? "Common";
 
-	// Populate text
 	if (tooltipName) {
 		tooltipName.Text = "Bounty: " + scroll.targetName;
 		tooltipName.TextColor3 = rarityColor;
 	}
-	if (tooltipType) {
-		tooltipType.Text = "Bounty Scroll";
-	}
+	if (tooltipType) tooltipType.Text = "Bounty Scroll";
 	if (tooltipRarity) {
-		tooltipRarity.Text = rarityLabel;
+		tooltipRarity.Text = rarityLbl;
 		tooltipRarity.TextColor3 = rarityColor;
 	}
-	if (tooltipDesc) {
-		tooltipDesc.Text = "Proof of assassination. Turn in to claim your reward.";
-	}
-	if (tooltipEffect) {
-		tooltipEffect.Text = "+" + scroll.gold + " Gold  |  +" + scroll.xp + " XP";
-	}
-	if (tooltipConsumable) {
-		tooltipConsumable.Text = "COLLECTED - press N to turn in";
-	}
+	if (tooltipDesc) tooltipDesc.Text = "Proof of assassination. Turn in to claim your reward.";
+	if (tooltipEffect) tooltipEffect.Text = "+" + scroll.gold + " Gold  |  +" + scroll.xp + " XP";
+	if (tooltipConsumable) tooltipConsumable.Text = "COLLECTED - press N to turn in";
 
-	// Style the card
 	tooltipFrame.BackgroundColor3 = rarityBg;
-	const stroke = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
-	if (stroke) stroke.Color = rarityColor;
+	const strokeRef = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
+	if (strokeRef) strokeRef.Color = rarityColor;
 
-	// Position above the slot (scrolls are near the bottom of the panel)
-	const slotAbsPos = slot.AbsolutePosition;
-	const slotAbsSize = slot.AbsoluteSize;
-	const tooltipWidth = sc(210);
-	const tooltipHeight = sc(140);
-	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
-	const vpX = camera ? camera.ViewportSize.X : 1920;
-
-	let posX = slotAbsPos.X + slotAbsSize.X + sc(6);
-	if (posX + tooltipWidth > vpX - 10) {
-		posX = slotAbsPos.X - tooltipWidth - sc(6);
-	}
-	// Position above the slot so it doesn't go off-screen at the bottom
-	const posY = slotAbsPos.Y - tooltipHeight - sc(4);
-
-	tooltipFrame.Position = new UDim2(0, posX, 0, posY > 0 ? posY : slotAbsPos.Y);
-	tooltipFrame.Size = new UDim2(0, tooltipWidth, 0, tooltipHeight);
-	tooltipFrame.Visible = true;
+	positionTooltip(tile);
 }
 
 function hideTooltip(itemId: string): void {
-	// Only hide if this item is still the one being shown (prevents flicker)
 	if (currentTooltipItem !== itemId) return;
 	if (tooltipFrame) tooltipFrame.Visible = false;
 	currentTooltipItem = undefined;
 }
 
-// ── Auto-equip logic ──────────────────────────────────────────────────────────
-
-function autoEquip(item: ItemDef): void {
-	// Find the first compatible slot that is empty
-	let targetSlot: string | undefined;
-	for (const slotDef of SLOT_LAYOUT) {
-		if (slotDef.slotType !== item.slotType) continue;
-		if (currentEquipped[slotDef.id] === undefined) {
-			targetSlot = slotDef.id;
-			break;
-		}
-	}
-	// If all slots occupied, equip into the first compatible slot (replace)
-	if (targetSlot === undefined) {
-		for (const slotDef of SLOT_LAYOUT) {
-			if (slotDef.slotType === item.slotType) {
-				targetSlot = slotDef.id;
-				break;
-			}
-		}
-	}
-	if (targetSlot !== undefined) {
-		equipRemote.FireServer(targetSlot, item.id);
-	}
-}
-
-// ── Inventory button (bottom-right, left of campfire) ─────────────────────────
+// ── Inventory button (bottom-right) ───────────────────────────────────────────
 
 function buildInventoryButton(screenGui: ScreenGui): void {
 	const buttonSize = sc(50);
 	const buttonPadding = sc(12);
-	// Position: 3rd button from right (sneak = 1st, campfire = 2nd, inventory = 3rd)
 	const offsetX = (buttonSize + buttonPadding) * 3;
 
 	const container = new Instance("Frame");
@@ -1057,18 +881,15 @@ function toggleInventory(): void {
 	updateInventoryButtonState();
 
 	if (inventoryOpen) {
-		// Reset selection
-		selectedSlotId = undefined;
-		refreshSlotHighlights();
-		refreshSlotDisplays();
+		refreshFilterButtons();
+		refreshActiveStatusBar();
 		refreshItemGrid();
-		refreshBountyScrolls();
 
 		rootFrame.Visible = true;
 		rootFrame.Size = new UDim2(0, sc(200), 0, sc(220));
 		rootFrame.BackgroundTransparency = 0.6;
 		TweenService.Create(rootFrame, new TweenInfo(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Size: new UDim2(0, sc(380), 0, sc(520)),
+			Size: new UDim2(0, sc(380), 0, sc(500)),
 			BackgroundTransparency: UI_THEME.bgTransparency,
 		}).Play();
 	} else {
@@ -1091,10 +912,11 @@ function toggleInventory(): void {
 
 function applyInventorySync(payload: InventoryPayload): void {
 	currentOwned = payload.ownedItems;
-	currentEquipped = payload.equipped;
+	currentEquippedWeapon = payload.equippedWeapon;
+	currentActivePoison = payload.activePoison;
+	currentActiveElixirs = payload.activeElixirs ?? [];
 	currentBountyScrolls = payload.bountyScrolls ?? [];
-	refreshSlotDisplays();
-	refreshBountyScrolls();
+	refreshActiveStatusBar();
 	if (inventoryOpen) {
 		refreshItemGrid();
 	}
@@ -1112,12 +934,10 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 	buildInventoryButton(screenGui);
 	buildTooltip(screenGui);
 
-	// Listen for inventory syncs from server
 	syncRemote.OnClientEvent.Connect((data: unknown) => {
 		applyInventorySync(data as InventoryPayload);
 	});
 
-	// Fetch initial inventory
 	task.spawn(() => {
 		const data = requestRemote.InvokeServer() as InventoryPayload | undefined;
 		if (data !== undefined) {
@@ -1125,7 +945,6 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 		}
 	});
 
-	// ── B / N key bindings (bounty scroll testing) ────────────────────────
 	UserInputService.InputBegan.Connect((io, gameProcessed) => {
 		if (gameProcessed) return;
 		if (io.KeyCode === Enum.KeyCode.B) {

@@ -32,6 +32,8 @@ let npcOffenceLabel: TextLabel | undefined;
 let npcSectionFrame: Frame | undefined;
 let wantedList: Frame | undefined;
 let wantedCount = 0;
+let wantedEntries: PlayerWantedPayload[] = [];
+const MAX_WANTED_DISPLAY = 5;
 let infoMVPButton: TextButton | undefined;
 let minimizeButton: TextButton | undefined;
 let isInfoMode = true; // true = INFO, false = MVP
@@ -278,7 +280,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	wantedHeader.LayoutOrder = 2;
 	wantedHeader.Size = new UDim2(1, -20, 0, 22);
 	wantedHeader.BackgroundTransparency = 1;
-	wantedHeader.Text = "WANTED";
+	wantedHeader.Text = "WANTED - TOP 5";
 	wantedHeader.TextColor3 = UI_THEME.danger;
 	wantedHeader.Font = UI_THEME.fontBold;
 	wantedHeader.TextSize = scaleSize(13);
@@ -446,22 +448,56 @@ function clearNPCBounty(): void {
 }
 
 function addWantedRow(payload: PlayerWantedPayload): void {
+	const idx = wantedEntries.findIndex((e) => e.playerName === payload.playerName);
+	if (idx !== -1) {
+		wantedEntries[idx] = payload;
+	} else {
+		wantedEntries.push(payload);
+	}
+	refreshWantedDisplay();
+}
+
+function refreshWantedDisplay(): void {
 	if (!wantedList) return;
 
-	// If a row already exists for this player, update gold + scroll indicators
-	const existing = wantedList.FindFirstChild(`Wanted_${payload.playerName}`) as Frame | undefined;
-	if (existing) {
-		const goldL = existing.FindFirstChild("Gold") as TextLabel | undefined;
-		if (goldL) goldL.Text = payload.gold + "g";
-		updateScrollIndicators(existing, payload.scrollRarities ?? []);
+	// Clear all existing rows
+	for (const child of wantedList.GetChildren()) {
+		if (child.IsA("Frame") || (child.IsA("TextLabel") && child.Name === "Empty")) {
+			child.Destroy();
+		}
+	}
+
+	// Sort by gold descending and take top 5
+	const sorted = [...wantedEntries];
+	sorted.sort((a, b) => a.gold > b.gold);
+	const limit = math.min(sorted.size(), MAX_WANTED_DISPLAY);
+	wantedCount = limit;
+
+	if (limit === 0) {
+		const empty = new Instance("TextLabel");
+		empty.Name = "Empty";
+		empty.Size = new UDim2(1, 0, 0, 18);
+		empty.BackgroundTransparency = 1;
+		empty.Text = "No known criminals";
+		empty.TextColor3 = UI_THEME.textMuted;
+		empty.Font = UI_THEME.fontBody;
+		empty.TextSize = scaleSize(12);
+		empty.TextXAlignment = Enum.TextXAlignment.Left;
+		empty.Parent = wantedList;
 		return;
 	}
 
-	wantedList.FindFirstChild("Empty")?.Destroy();
-	wantedCount++;
+	for (let i = 0; i < limit; i++) {
+		buildWantedRow(sorted[i], i);
+	}
+}
+
+function buildWantedRow(payload: PlayerWantedPayload, order: number): void {
+	if (!wantedList) return;
 
 	const row = new Instance("Frame");
 	row.Name = `Wanted_${payload.playerName}`;
+	row.LayoutOrder = order;
 	row.Size = new UDim2(1, 0, 0, isInfoMode ? 22 : 18);
 	row.BackgroundTransparency = 1;
 	row.Parent = wantedList;
@@ -478,7 +514,7 @@ function addWantedRow(payload: PlayerWantedPayload): void {
 	nameL.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameL.Parent = row;
 
-	// Scroll rarity indicators container (up to 4 colored #)
+	// Scroll rarity indicators container (colored #)
 	const scrollBar = new Instance("Frame");
 	scrollBar.Name = "ScrollIndicators";
 	scrollBar.Size = new UDim2(0.22, 0, 1, 0);
@@ -493,7 +529,6 @@ function addWantedRow(payload: PlayerWantedPayload): void {
 	scrollLayout.Padding = new UDim(0, 1);
 	scrollLayout.Parent = scrollBar;
 
-	// Create the # labels
 	updateScrollIndicators(row, payload.scrollRarities ?? []);
 
 	const goldL = new Instance("TextLabel");
@@ -518,7 +553,6 @@ function updateScrollIndicators(row: Frame, rarities: string[]): void {
 		if (child.IsA("TextLabel")) child.Destroy();
 	}
 
-	// Add up to 4 colored # symbols
 	for (let i = 0; i < rarities.size(); i++) {
 		const rarity = rarities[i];
 		const color = RARITY_COLORS[rarity] ?? UI_THEME.textMuted;
@@ -537,22 +571,8 @@ function updateScrollIndicators(row: Frame, rarities: string[]): void {
 }
 
 function removeWantedRow(playerName: string): void {
-	if (!wantedList) return;
-	wantedList.FindFirstChild(`Wanted_${playerName}`)?.Destroy();
-	wantedCount = math.max(0, wantedCount - 1);
-
-	if (wantedCount === 0) {
-		const empty = new Instance("TextLabel");
-		empty.Name = "Empty";
-		empty.Size = new UDim2(1, 0, 0, 18);
-		empty.BackgroundTransparency = 1;
-		empty.Text = "No known criminals";
-		empty.TextColor3 = UI_THEME.textMuted;
-		empty.Font = UI_THEME.fontBody;
-		empty.TextSize = scaleSize(12);
-		empty.TextXAlignment = Enum.TextXAlignment.Left;
-		empty.Parent = wantedList;
-	}
+	wantedEntries = wantedEntries.filter((e) => e.playerName !== playerName);
+	refreshWantedDisplay();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
