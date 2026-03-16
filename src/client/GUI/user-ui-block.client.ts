@@ -558,7 +558,7 @@ function setEyeCount(viewers: string[]): void {
 	} else {
 		lastViewerCount = viewers.size();
 	}
-	print("[EYE] ViewsUpdated received, count=", lastViewerCount);
+
 	if (!eyeCountLabel || !eyeWidget) return;
 	// Always keep label text up-to-date even if widget is hidden — when stealth
 	// is toggled on the correct count will already be in the label.
@@ -640,7 +640,6 @@ lifecycle.OnClientEvent.Connect((message: string) => {
 
 	// Eye indicator — NPC visibility updates from server
 	ViewsUpdated.OnClientEvent.Connect((viewers: unknown) => {
-		print("[EYE] ViewsUpdated event fired on client, raw viewers:", viewers);
 		setEyeCount((viewers ?? []) as string[]);
 	});
 

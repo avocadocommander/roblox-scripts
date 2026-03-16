@@ -12,10 +12,8 @@ function initializeStealthTracker() {
 
 		if (stealthState) {
 			stealthingPlayers.add(player);
-			log(`[STEALTH] ${player.Name} entered stealth mode`);
 		} else {
 			stealthingPlayers.delete(player);
-			log(`[STEALTH] ${player.Name} exited stealth mode`);
 		}
 	});
 
@@ -23,7 +21,7 @@ function initializeStealthTracker() {
 	const Players = game.GetService("Players");
 	Players.PlayerRemoving.Connect((player) => {
 		stealthingPlayers.delete(player);
-		log(`[STEALTH] ${player.Name} left - removed from stealth tracking`);
+
 	});
 }
 

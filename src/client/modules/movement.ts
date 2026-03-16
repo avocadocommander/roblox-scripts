@@ -19,13 +19,10 @@ function setupMovementInput() {
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 
-	log("[MOVEMENT] Setting up movement input for new character");
-
 	// Reset air jump when player touches ground
 	humanoid.StateChanged.Connect((oldState, newState) => {
 		if (newState === Enum.HumanoidStateType.Running || newState === Enum.HumanoidStateType.Landed) {
 			hasAirJump = true;
-			log("[MOVEMENT] Air jump reset - player grounded");
 		}
 	});
 
@@ -42,14 +39,12 @@ function setupMovementInput() {
 		// Left Shift - Start Running
 		if (input.KeyCode === Enum.KeyCode.LeftShift) {
 			isRunning = true;
-			log("[MOVEMENT] Starting run - firing remote");
 			movementRemote.FireServer("StartRun");
 		}
 
 		// Q - Toggle Stealth Mode
 		if (input.KeyCode === Enum.KeyCode.Q) {
 			isStealthMode = !isStealthMode;
-			log(`[MOVEMENT] Toggling stealth mode: ${isStealthMode}`);
 			setStealthing(isStealthMode);
 			movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
 			// Broadcast stealth state as an attribute so other LocalScripts
@@ -71,7 +66,6 @@ function setupMovementInput() {
 				hasAirJump = false;
 				lastJumpTime = tick();
 
-				log("[MOVEMENT] Performing double jump");
 				movementRemote.FireServer("Jump");
 			}
 		}
@@ -90,7 +84,6 @@ function setupMovementInput() {
 		// Left Shift - Stop Running, go back to Walk or Stealth
 		if (input.KeyCode === Enum.KeyCode.LeftShift) {
 			isRunning = false;
-			log("[MOVEMENT] Stopping run");
 			// If stealth is active, go back to stealth speed. Otherwise walk.
 			movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
 		}
