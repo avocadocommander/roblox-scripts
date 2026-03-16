@@ -2,8 +2,6 @@ import { Players } from "@rbxts/services";
 import { log } from "shared/helpers";
 import {
 	ITEMS,
-	SLOT_LAYOUT,
-	EquippedSlots,
 	InventoryPayload,
 	BountyScroll,
 	BountyScrollPayload,
@@ -11,22 +9,38 @@ import {
 	STATUS_TO_SCROLL_RARITY,
 } from "shared/inventory";
 import {
-	getEquipItemRemote,
-	getUnequipSlotRemote,
+	getActivateItemRemote,
 	getInventorySyncRemote,
 	getRequestInventoryRemote,
 	getMockBountyKillRemote,
 	getTurnInBountyRemote,
 } from "shared/remotes/inventory-remote";
-import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
+import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, Status } from "shared/module";
+
+// Lazy import to avoid circular dependency with bounty-manager
+let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
+function notifyWantedScrollChange(player: Player): void {
+	if (!_broadcastWantedScrollUpdate) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const bm = require(script.Parent!.FindFirstChild("bounty-manager") as ModuleScript) as {
+			broadcastWantedScrollUpdate: (player: Player) => void;
+		};
+		_broadcastWantedScrollUpdate = bm.broadcastWantedScrollUpdate;
+	}
+	_broadcastWantedScrollUpdate(player);
+}
 
 // ── Per-player inventory state ────────────────────────────────────────────────
 
 interface PlayerInventory {
 	/** Item ID -> quantity owned. */
 	owned: Map<string, number>;
-	/** Slot ID -> equipped item ID. */
-	equipped: Map<string, string>;
+	/** Currently equipped weapon ID. */
+	equippedWeapon: string;
+	/** Currently active poison ID (or undefined). */
+	activePoison: string | undefined;
+	/** Currently active elixir IDs. */
+	activeElixirs: string[];
 	/** Collected bounty scrolls (up to MAX_BOUNTY_SLOTS). */
 	bountyScrolls: BountyScroll[];
 }
@@ -35,8 +49,7 @@ const PLAYER_INVENTORIES = new Map<Player, PlayerInventory>();
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
-const equipRemote = getEquipItemRemote();
-const unequipRemote = getUnequipSlotRemote();
+const activateRemote = getActivateItemRemote();
 const syncRemote = getInventorySyncRemote();
 const requestRemote = getRequestInventoryRemote();
 const mockBountyKillRemote = getMockBountyKillRemote();
@@ -49,11 +62,13 @@ function buildPayload(inv: PlayerInventory): InventoryPayload {
 	for (const [id, count] of inv.owned) {
 		ownedItems[id] = count;
 	}
-	const equipped: EquippedSlots = {};
-	for (const slot of SLOT_LAYOUT) {
-		equipped[slot.id] = inv.equipped.get(slot.id);
-	}
-	return { ownedItems, equipped, bountyScrolls: inv.bountyScrolls };
+	return {
+		ownedItems,
+		equippedWeapon: inv.equippedWeapon,
+		activePoison: inv.activePoison,
+		activeElixirs: [...inv.activeElixirs],
+		bountyScrolls: inv.bountyScrolls,
+	};
 }
 
 function pushSync(player: Player): void {
@@ -65,23 +80,75 @@ function pushSync(player: Player): void {
 /** Give a player starter items and default equips. */
 function initPlayerInventory(player: Player): PlayerInventory {
 	const owned = new Map<string, number>();
-	// Everyone starts with fists, one minor heal, and one swiftness
+
+	// Default: just fists. For testing, add all items with max stacks.
 	owned.set("fists", 1);
-	owned.set("rusty_dagger", 1);
-	owned.set("shadow_blade", 1);
-	owned.set("nightshade", 1);
-	owned.set("serpent_venom", 1);
-	owned.set("minor_heal", 3);
-	owned.set("swiftness", 2);
-	owned.set("invisibility", 1);
-	owned.set("fortify", 2);
+	owned.set("dagger", 1);
+	// Poisons (5 each for testing)
+	owned.set("floating_death", 5);
+	owned.set("slow_decay", 5);
+	owned.set("paralysis_toxin", 5);
+	owned.set("dragons_breath", 5);
+	owned.set("phantom_venom", 5);
+	// Elixirs (5 each for testing)
+	owned.set("swiftness_elixir", 5);
+	owned.set("sky_step", 5);
+	owned.set("shadow_cloak", 5);
+	owned.set("eagle_eye", 5);
+	owned.set("vitality_draught", 5);
+	owned.set("ghost_oil", 5);
 
-	const equipped = new Map<string, string>();
-	equipped.set("weapon", "fists"); // Default weapon
-
-	const inv: PlayerInventory = { owned, equipped, bountyScrolls: [] };
+	const inv: PlayerInventory = {
+		owned,
+		equippedWeapon: "fists",
+		activePoison: undefined,
+		activeElixirs: [],
+		bountyScrolls: [],
+	};
 	PLAYER_INVENTORIES.set(player, inv);
 	return inv;
+}
+
+// ── Activation logic ──────────────────────────────────────────────────────────
+
+function handleActivateItem(player: Player, itemId: string): void {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return;
+
+	const itemDef = ITEMS[itemId];
+	if (!itemDef) return;
+
+	const ownedCount = inv.owned.get(itemId) ?? 0;
+	if (ownedCount <= 0) return;
+
+	if (itemDef.category === "weapon") {
+		// Equip weapon (toggle — if already equipped, switch back to fists)
+		if (inv.equippedWeapon === itemId) {
+			inv.equippedWeapon = "fists";
+			log(`[INVENTORY] ${player.Name} unequipped ${itemDef.name}, back to Fists`);
+		} else {
+			inv.equippedWeapon = itemId;
+			log(`[INVENTORY] ${player.Name} equipped weapon: ${itemDef.name}`);
+		}
+	} else if (itemDef.category === "poison") {
+		// Activate poison (replaces current active poison, consumes 1)
+		inv.activePoison = itemId;
+		inv.owned.set(itemId, ownedCount - 1);
+		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
+		log(`[INVENTORY] ${player.Name} activated poison: ${itemDef.name}`);
+	} else if (itemDef.category === "elixir") {
+		// Activate elixir (add to active list if not already active, consumes 1)
+		if (inv.activeElixirs.includes(itemId)) {
+			log(`[INVENTORY] ${player.Name} already has ${itemDef.name} active`);
+			return; // Don't consume if already active
+		}
+		inv.activeElixirs.push(itemId);
+		inv.owned.set(itemId, ownedCount - 1);
+		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
+		log(`[INVENTORY] ${player.Name} activated elixir: ${itemDef.name}`);
+	}
+
+	pushSync(player);
 }
 
 // ── Bounty scroll helpers ─────────────────────────────────────────────────────
@@ -109,7 +176,6 @@ function canAcceptBountyScroll(inv: PlayerInventory): boolean {
 }
 
 function nextScrollSlotIndex(inv: PlayerInventory): number {
-	// Find the lowest unused slot index (0-3)
 	const used = new Set<number>();
 	for (const scroll of inv.bountyScrolls) {
 		used.add(scroll.slotIndex);
@@ -117,7 +183,7 @@ function nextScrollSlotIndex(inv: PlayerInventory): number {
 	for (let i = 0; i < MAX_BOUNTY_SLOTS; i++) {
 		if (!used.has(i)) return i;
 	}
-	return 0; // fallback (should not happen)
+	return 0;
 }
 
 /** Generate a mock bounty kill: pick a random NPC, create a scroll. */
@@ -169,7 +235,6 @@ const RARITY_PRIORITY: Record<string, number> = {
  * Transfer bounty scrolls from victim to killer on PvP kill.
  * Highest rarity scrolls transfer first. Killer only receives
  * as many as they have room for. Remaining scrolls are erased.
- * Returns the number of scrolls transferred.
  */
 export function transferBountyScrolls(victim: Player, killer: Player): number {
 	const victimInv = PLAYER_INVENTORIES.get(victim);
@@ -178,7 +243,6 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 
 	if (victimInv.bountyScrolls.size() === 0) return 0;
 
-	// Sort victim's scrolls by rarity descending (highest first)
 	const sorted = [...victimInv.bountyScrolls];
 	sorted.sort((a, b) => {
 		const ra = RARITY_PRIORITY[a.rarity] ?? 0;
@@ -190,7 +254,6 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 	for (const scroll of sorted) {
 		if (!canAcceptBountyScroll(killerInv)) break;
 
-		// Re-assign slot index for the killer's inventory
 		const newScroll: BountyScroll = {
 			slotIndex: nextScrollSlotIndex(killerInv),
 			targetName: scroll.targetName,
@@ -202,12 +265,12 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 		transferred++;
 	}
 
-	// Erase all scrolls from victim regardless
 	victimInv.bountyScrolls = [];
 
-	// Sync both inventories
 	pushSync(victim);
 	pushSync(killer);
+	notifyWantedScrollChange(victim);
+	notifyWantedScrollChange(killer);
 
 	log(
 		"[BOUNTY-SCROLL] Transferred " +
@@ -226,8 +289,6 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 
 /**
  * Award a "player" rarity bounty scroll to the killer after a PvP wanted kill.
- * Uses the victim's name as the target and the bounty gold/xp as the reward.
- * Returns true if the scroll was added (killer had room).
  */
 export function addPlayerBountyScroll(killer: Player, victimName: string, gold: number, xp: number): boolean {
 	const inv = PLAYER_INVENTORIES.get(killer);
@@ -242,6 +303,7 @@ export function addPlayerBountyScroll(killer: Player, victimName: string, gold: 
 	};
 	inv.bountyScrolls.push(scroll);
 	pushSync(killer);
+	notifyWantedScrollChange(killer);
 	log("[BOUNTY-SCROLL] " + killer.Name + " earned PLAYER scroll: " + victimName + " (" + gold + "g)");
 	return true;
 }
@@ -266,54 +328,33 @@ export function addBountyScrollFromKill(
 	};
 	inv.bountyScrolls.push(scroll);
 	pushSync(player);
+	notifyWantedScrollChange(player);
 	log("[BOUNTY-SCROLL] " + player.Name + " collected scroll: " + npcName + " (" + scroll.rarity + ")");
 	return true;
+}
+
+/** Get the player's currently active poison ID (for assassination-handler to query). */
+export function getPlayerActivePoison(player: Player): string | undefined {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return undefined;
+	return inv.activePoison;
+}
+
+/** Get the player's currently equipped weapon ID. */
+export function getPlayerEquippedWeapon(player: Player): string {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return "fists";
+	return inv.equippedWeapon;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function initializeInventorySystem(): void {
-	// Handle equip requests
-	equipRemote.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {
-		const slotId = args[0] as string | undefined;
-		const itemId = args[1] as string | undefined;
-		if (slotId === undefined || itemId === undefined) return;
-
-		const inv = PLAYER_INVENTORIES.get(player);
-		if (!inv) return;
-
-		// Validate item exists
-		const itemDef = ITEMS[itemId];
-		if (!itemDef) return;
-
-		// Validate slot exists
-		const slotDef = SLOT_LAYOUT.find((s) => s.id === slotId);
-		if (!slotDef) return;
-
-		// Validate item fits in this slot type
-		if (itemDef.slotType !== slotDef.slotType) return;
-
-		// Validate player owns the item
-		const ownedCount = inv.owned.get(itemId) ?? 0;
-		if (ownedCount <= 0) return;
-
-		// Equip it
-		inv.equipped.set(slotId, itemId);
-		log(`[INVENTORY] ${player.Name} equipped ${itemDef.name} in slot ${slotId}`);
-		pushSync(player);
-	});
-
-	// Handle unequip requests
-	unequipRemote.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {
-		const slotId = args[0] as string | undefined;
-		if (slotId === undefined) return;
-
-		const inv = PLAYER_INVENTORIES.get(player);
-		if (!inv) return;
-
-		inv.equipped.delete(slotId);
-		log(`[INVENTORY] ${player.Name} unequipped slot ${slotId}`);
-		pushSync(player);
+	// Handle item activation (equip weapon / use poison / drink elixir)
+	activateRemote.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {
+		const itemId = args[0] as string | undefined;
+		if (itemId === undefined) return;
+		handleActivateItem(player, itemId);
 	});
 
 	// Handle full inventory request
@@ -362,6 +403,7 @@ export function initializeInventorySystem(): void {
 					")",
 			);
 			pushSync(player);
+			notifyWantedScrollChange(player);
 		}
 	});
 
@@ -375,7 +417,6 @@ export function initializeInventorySystem(): void {
 			return;
 		}
 
-		// Turn in the first scroll (FIFO)
 		const scroll = inv.bountyScrolls[0];
 		inv.bountyScrolls = inv.bountyScrolls.filter((_, i) => i !== 0);
 
@@ -391,6 +432,7 @@ export function initializeInventorySystem(): void {
 				"xp)",
 		);
 		pushSync(player);
+		notifyWantedScrollChange(player);
 	});
 
 	log("[INVENTORY] Inventory system initialised");

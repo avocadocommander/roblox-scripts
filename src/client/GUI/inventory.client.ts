@@ -79,7 +79,7 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	// Main container — centred, dark panel
 	const root = new Instance("Frame");
 	root.Name = "InventoryPanel";
-	root.Size = new UDim2(0, sc(380), 0, sc(520));
+	root.Size = new UDim2(0, sc(420), 0, sc(560));
 	root.Position = new UDim2(0.5, 0, 0.5, 0);
 	root.AnchorPoint = new Vector2(0.5, 0.5);
 	root.BackgroundColor3 = UI_THEME.bg;
@@ -118,14 +118,14 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	header.Text = "-- INVENTORY --";
 	header.TextColor3 = UI_THEME.textHeader;
 	header.Font = UI_THEME.fontDisplay;
-	header.TextSize = sc(16);
+	header.TextSize = sc(20);
 	header.ZIndex = 31;
 	header.Parent = root;
 
 	// ── Slot bar ──────────────────────────────────────────────────────────
 	const slotBar = new Instance("Frame");
 	slotBar.Name = "SlotBar";
-	slotBar.Size = new UDim2(1, 0, 0, sc(72));
+	slotBar.Size = new UDim2(1, 0, 0, sc(80));
 	slotBar.Position = new UDim2(0, 0, 0, sc(28));
 	slotBar.BackgroundTransparency = 1;
 	slotBar.ZIndex = 31;
@@ -159,7 +159,7 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	fTitle.Text = "ALL ITEMS";
 	fTitle.TextColor3 = UI_THEME.textSection;
 	fTitle.Font = UI_THEME.fontBold;
-	fTitle.TextSize = sc(10);
+	fTitle.TextSize = sc(13);
 	fTitle.TextXAlignment = Enum.TextXAlignment.Left;
 	fTitle.ZIndex = 31;
 	fTitle.Parent = root;
@@ -186,8 +186,8 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	gridCorner.Parent = grid;
 
 	const gridLayout = new Instance("UIGridLayout");
-	gridLayout.CellSize = new UDim2(0, sc(64), 0, sc(76));
-	gridLayout.CellPadding = new UDim2(0, sc(6), 0, sc(6));
+	gridLayout.CellSize = new UDim2(0, sc(72), 0, sc(84));
+	gridLayout.CellPadding = new UDim2(0, sc(7), 0, sc(7));
 	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder;
 	gridLayout.Parent = grid;
 
@@ -215,7 +215,7 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	bountyTitle.Text = "BOUNTY SCROLLS";
 	bountyTitle.TextColor3 = UI_THEME.textSection;
 	bountyTitle.Font = UI_THEME.fontBold;
-	bountyTitle.TextSize = sc(10);
+	bountyTitle.TextSize = sc(13);
 	bountyTitle.TextXAlignment = Enum.TextXAlignment.Left;
 	bountyTitle.ZIndex = 31;
 	bountyTitle.Parent = root;
@@ -275,7 +275,7 @@ function buildBountyScrollSlot(parent: Frame, index: number): TextButton {
 	emptyIcon.Text = "?";
 	emptyIcon.TextColor3 = UI_THEME.textMuted;
 	emptyIcon.Font = UI_THEME.fontDisplay;
-	emptyIcon.TextSize = sc(18);
+	emptyIcon.TextSize = sc(22);
 	emptyIcon.ZIndex = 33;
 	emptyIcon.Parent = slot;
 
@@ -288,7 +288,7 @@ function buildBountyScrollSlot(parent: Frame, index: number): TextButton {
 	nameLabel.Text = "Empty";
 	nameLabel.TextColor3 = UI_THEME.textMuted;
 	nameLabel.Font = UI_THEME.fontBody;
-	nameLabel.TextSize = sc(7);
+	nameLabel.TextSize = sc(9);
 	nameLabel.TextWrapped = true;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameLabel.ZIndex = 33;
@@ -303,7 +303,7 @@ function buildBountyScrollSlot(parent: Frame, index: number): TextButton {
 	statusLabel.Text = "";
 	statusLabel.TextColor3 = UI_THEME.gold;
 	statusLabel.Font = UI_THEME.fontBold;
-	statusLabel.TextSize = sc(6);
+	statusLabel.TextSize = sc(8);
 	statusLabel.ZIndex = 33;
 	statusLabel.Parent = slot;
 
@@ -391,7 +391,7 @@ function refreshBountyScrolls(): void {
 function buildSlotButton(parent: Frame, slotDef: SlotDef): void {
 	const btn = new Instance("TextButton");
 	btn.Name = "Slot_" + slotDef.id;
-	btn.Size = new UDim2(0, sc(62), 0, sc(72));
+	btn.Size = new UDim2(0, sc(70), 0, sc(80));
 	btn.BackgroundColor3 = UI_THEME.bgInset;
 	btn.BackgroundTransparency = 0.3;
 	btn.BorderSizePixel = 0;
@@ -418,7 +418,7 @@ function buildSlotButton(parent: Frame, slotDef: SlotDef): void {
 	typeLabel.Text = slotDef.label.upper();
 	typeLabel.TextColor3 = UI_THEME.textMuted;
 	typeLabel.Font = UI_THEME.fontBold;
-	typeLabel.TextSize = sc(8);
+	typeLabel.TextSize = sc(10);
 	typeLabel.ZIndex = 33;
 	typeLabel.Parent = btn;
 
@@ -431,7 +431,7 @@ function buildSlotButton(parent: Frame, slotDef: SlotDef): void {
 	iconLabel.Text = slotDef.emptyIcon;
 	iconLabel.TextColor3 = UI_THEME.textMuted;
 	iconLabel.Font = UI_THEME.fontDisplay;
-	iconLabel.TextSize = sc(22);
+	iconLabel.TextSize = sc(24);
 	iconLabel.ZIndex = 33;
 	iconLabel.Parent = btn;
 	slotIconLabels.set(slotDef.id, iconLabel);
@@ -445,8 +445,7 @@ function buildSlotButton(parent: Frame, slotDef: SlotDef): void {
 	nameLabel.Text = "Empty";
 	nameLabel.TextColor3 = UI_THEME.textMuted;
 	nameLabel.Font = UI_THEME.fontBody;
-	nameLabel.TextSize = sc(8);
-	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	nameLabel.TextSize = sc(10);
 	nameLabel.ZIndex = 33;
 	nameLabel.Parent = btn;
 	slotNameLabels.set(slotDef.id, nameLabel);
@@ -620,7 +619,7 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	icon.Text = item.icon;
 	icon.TextColor3 = rarityColor;
 	icon.Font = UI_THEME.fontDisplay;
-	icon.TextSize = sc(22);
+	icon.TextSize = sc(24);
 	icon.ZIndex = 33;
 	icon.Parent = tile;
 
@@ -632,7 +631,7 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	nameLabel.Text = item.name;
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontBody;
-	nameLabel.TextSize = sc(8);
+	nameLabel.TextSize = sc(10);
 	nameLabel.TextWrapped = true;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameLabel.ZIndex = 33;
@@ -648,8 +647,7 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 		badge.Text = "x" + count;
 		badge.TextColor3 = UI_THEME.gold;
 		badge.Font = UI_THEME.fontBold;
-		badge.TextSize = sc(8);
-		badge.ZIndex = 34;
+		badge.TextSize = sc(10);
 		badge.Parent = tile;
 
 		const badgeCorner = new Instance("UICorner");
@@ -711,7 +709,7 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 function buildTooltip(screenGui: ScreenGui): void {
 	const tt = new Instance("Frame");
 	tt.Name = "ItemTooltip";
-	tt.Size = new UDim2(0, sc(210), 0, sc(140));
+	tt.Size = new UDim2(0, sc(230), 0, sc(155));
 	tt.BackgroundColor3 = UI_THEME.bg;
 	tt.BackgroundTransparency = 0.04;
 	tt.BorderSizePixel = 0;
@@ -746,8 +744,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	nameLabel.Text = "";
 	nameLabel.TextColor3 = UI_THEME.textHeader;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = sc(14);
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	nameLabel.TextSize = sc(16);
 	nameLabel.ZIndex = 51;
 	nameLabel.Parent = tt;
 	tooltipName = nameLabel;
@@ -761,7 +758,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	typeLabel.Text = "";
 	typeLabel.TextColor3 = UI_THEME.textMuted;
 	typeLabel.Font = UI_THEME.fontBody;
-	typeLabel.TextSize = sc(9);
+	typeLabel.TextSize = sc(11);
 	typeLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	typeLabel.ZIndex = 51;
 	typeLabel.Parent = tt;
@@ -776,7 +773,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	rarityLabel.Text = "";
 	rarityLabel.TextColor3 = UI_THEME.textMuted;
 	rarityLabel.Font = UI_THEME.fontBold;
-	rarityLabel.TextSize = sc(9);
+	rarityLabel.TextSize = sc(11);
 	rarityLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	rarityLabel.ZIndex = 51;
 	rarityLabel.Parent = tt;
@@ -800,8 +797,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	descLabel.Text = "";
 	descLabel.TextColor3 = UI_THEME.textPrimary;
 	descLabel.Font = UI_THEME.fontBody;
-	descLabel.TextSize = sc(9);
-	descLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	descLabel.TextSize = sc(11);
 	descLabel.TextYAlignment = Enum.TextYAlignment.Top;
 	descLabel.TextWrapped = true;
 	descLabel.ZIndex = 51;
@@ -817,8 +813,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	effectLabel.Text = "";
 	effectLabel.TextColor3 = UI_THEME.gold;
 	effectLabel.Font = UI_THEME.fontBold;
-	effectLabel.TextSize = sc(9);
-	effectLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	effectLabel.TextSize = sc(11);
 	effectLabel.TextYAlignment = Enum.TextYAlignment.Top;
 	effectLabel.TextWrapped = true;
 	effectLabel.ZIndex = 51;
@@ -834,7 +829,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	consumeLabel.Text = "";
 	consumeLabel.TextColor3 = UI_THEME.textMuted;
 	consumeLabel.Font = UI_THEME.fontBody;
-	consumeLabel.TextSize = sc(8);
+	consumeLabel.TextSize = sc(10);
 	consumeLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	consumeLabel.ZIndex = 51;
 	consumeLabel.Parent = tt;

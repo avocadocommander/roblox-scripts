@@ -2,35 +2,59 @@
  * Inventory system — shared types and item catalogue.
  *
  * Design:
- *   - Fixed slot bar: WEAPON, POISON, POTION_1, POTION_2, POTION_3
- *   - Each item has a `slotType` that determines which slot(s) it fits
- *   - A generic inventory grid shows ALL owned items; selecting a slot
- *     filters the grid to items that fit that slot
- *   - Click an item while a slot is selected → equip it there
- *   - Double-click an item in the general view → auto-equip to first
- *     compatible empty slot (or swap if all occupied)
+ *   - Three item categories: Weapon, Poison, Elixir
+ *   - Weapons: equip from inventory (one active weapon at a time)
+ *   - Poisons: activate from inventory, last 1 hour — affect assassination kills
+ *   - Elixirs: activate from inventory, immediate or long-term buff on the player
+ *   - No fixed equip slot bar — items are used/activated directly from the grid
  */
 
-// ── Slot types ────────────────────────────────────────────────────────────────
+// ── Item categories ───────────────────────────────────────────────────────────
 
-export type SlotType = "weapon" | "poison" | "potion";
+export type ItemCategory = "weapon" | "poison" | "elixir";
 
-/** The fixed slot layout. Index = visual position left-to-right. */
-export interface SlotDef {
-	id: string;
-	label: string;
-	slotType: SlotType;
-	/** Short icon character shown in the slot when empty. */
-	emptyIcon: string;
-}
+// ── Poison effect constants (hook up logic later) ─────────────────────────────
 
-export const SLOT_LAYOUT: SlotDef[] = [
-	{ id: "weapon", label: "Weapon", slotType: "weapon", emptyIcon: "/" },
-	{ id: "poison", label: "Poison", slotType: "poison", emptyIcon: "~" },
-	{ id: "potion1", label: "Potion", slotType: "potion", emptyIcon: "+" },
-	{ id: "potion2", label: "Potion", slotType: "potion", emptyIcon: "+" },
-	{ id: "potion3", label: "Potion", slotType: "potion", emptyIcon: "+" },
-];
+export type PoisonEffect =
+	| "floating_death"   // target floats upward for N seconds then dies
+	| "slow_decay"       // target slowed then dies after delay
+	| "paralysis"        // target frozen in place then dies
+	| "combustion"       // target bursts into flame then dies
+	| "phantom_fade";    // target becomes translucent, fades out, then dies
+
+export const POISON_EFFECT_LABELS: Record<PoisonEffect, string> = {
+	floating_death: "Float",
+	slow_decay: "Decay",
+	paralysis: "Paralyse",
+	combustion: "Combust",
+	phantom_fade: "Fade",
+};
+
+// ── Elixir effect constants (hook up logic later) ─────────────────────────────
+
+export type ElixirEffect =
+	| "speed_boost"       // +move speed
+	| "jump_boost"        // +jump height
+	| "detection_shrink"  // reduced detection radius
+	| "target_outline"    // see your bounty target outlined
+	| "health_regen"      // passive HP regen
+	| "stealth_boost";    // harder to detect while sneaking
+
+export const ELIXIR_EFFECT_LABELS: Record<ElixirEffect, string> = {
+	speed_boost: "Swiftness",
+	jump_boost: "Leap",
+	detection_shrink: "Shadow",
+	target_outline: "Eagle Eye",
+	health_regen: "Vitality",
+	stealth_boost: "Ghost",
+};
+
+// ── Duration constants ────────────────────────────────────────────────────────
+
+/** Default poison duration in seconds (1 hour). */
+export const POISON_DURATION_SECS = 3600;
+/** Default elixir duration in seconds (1 hour for long-term effects). */
+export const ELIXIR_DURATION_SECS = 3600;
 
 // ── Item definitions ──────────────────────────────────────────────────────────
 
@@ -39,18 +63,26 @@ export interface ItemDef {
 	name: string;
 	/** Flavour text shown in the tooltip. */
 	description: string;
-	/** Mechanical effect description (e.g. "+20 HP over 5s"). */
+	/** Mechanical effect description shown in gold text. */
 	effect: string;
-	/** Display type label for the tooltip (e.g. "Blade", "Elixir", "Vial"). */
+	/** Display type label for the tooltip (e.g. "Blade", "Vial", "Elixir"). */
 	itemType: string;
-	/** Which slot type this item can fit into. */
-	slotType: SlotType;
+	/** Which category this item belongs to. */
+	category: ItemCategory;
 	/** Short icon character for the inventory grid tile. */
 	icon: string;
-	/** Rarity tier — drives border colour via STATUS_RARITY-like mapping. */
+	/** Rarity tier — drives border colour. */
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
-	/** Whether this item is consumed on use (potions, poisons). */
+	/** Whether this item is consumed on use (poisons, elixirs). */
 	consumable: boolean;
+	/** Poison effect type (only for category "poison"). */
+	poisonEffect?: PoisonEffect;
+	/** Delay in seconds between assassination and NPC death (poisons). */
+	poisonDelaySecs?: number;
+	/** Elixir effect type (only for category "elixir"). */
+	elixirEffect?: ElixirEffect;
+	/** Duration in seconds for the effect (0 = instant). */
+	effectDurationSecs?: number;
 }
 
 /** Master item catalogue — keyed by item ID. */
@@ -62,102 +94,173 @@ export const ITEMS: Record<string, ItemDef> = {
 		description: "Your bare knuckles. Better than nothing.",
 		effect: "Base melee. No bonus damage.",
 		itemType: "Unarmed",
-		slotType: "weapon",
+		category: "weapon",
 		icon: "/",
 		rarity: "common",
 		consumable: false,
 	},
-	rusty_dagger: {
-		id: "rusty_dagger",
-		name: "Rusty Dagger",
-		description: "A pitted blade that has seen better days. Unreliable but sharp enough.",
-		effect: "+5 melee damage. 10% chance to inflict Tetanus (slow).",
+	dagger: {
+		id: "dagger",
+		name: "Dagger",
+		description: "A short, sharp blade. Quick and quiet.",
+		effect: "+8 melee damage. Fast attack speed.",
 		itemType: "Blade",
-		slotType: "weapon",
+		category: "weapon",
 		icon: "/",
 		rarity: "uncommon",
-		consumable: false,
-	},
-	shadow_blade: {
-		id: "shadow_blade",
-		name: "Shadow Blade",
-		description: "Forged in darkness. Whispers when drawn. The edge drinks light.",
-		effect: "+18 melee damage. Stealth kills deal 2x. Silent strikes.",
-		itemType: "Blade",
-		slotType: "weapon",
-		icon: "/",
-		rarity: "epic",
 		consumable: false,
 	},
 
 	// ── Poisons ────────────────────────────────────────────────────────────
-	nightshade: {
-		id: "nightshade",
-		name: "Nightshade Extract",
-		description: "Distilled from deadly nightshade berries. Coat your blade before the kill.",
-		effect: "Applied to weapon. Target slowed 40% for 6s on hit.",
+	floating_death: {
+		id: "floating_death",
+		name: "Floating Death",
+		description: "A spectral toxin that severs the body from the earth. The victim drifts skyward before the end.",
+		effect: "Target floats upward for 4s, then dies.",
 		itemType: "Vial",
-		slotType: "poison",
+		category: "poison",
 		icon: "~",
 		rarity: "rare",
 		consumable: true,
+		poisonEffect: "floating_death",
+		poisonDelaySecs: 4,
+		effectDurationSecs: POISON_DURATION_SECS,
 	},
-	serpent_venom: {
-		id: "serpent_venom",
-		name: "Serpent Venom",
-		description: "Milked from a pit viper. Burns from within — fast and agonising.",
-		effect: "Applied to weapon. 8 damage/s for 4s. Stacks up to 3x.",
+	slow_decay: {
+		id: "slow_decay",
+		name: "Nightshade Extract",
+		description: "Distilled from deadly nightshade. The victim's movements slow to a crawl.",
+		effect: "Target slowed 50% for 6s, then dies.",
 		itemType: "Vial",
-		slotType: "poison",
+		category: "poison",
+		icon: "~",
+		rarity: "uncommon",
+		consumable: true,
+		poisonEffect: "slow_decay",
+		poisonDelaySecs: 6,
+		effectDurationSecs: POISON_DURATION_SECS,
+	},
+	paralysis_toxin: {
+		id: "paralysis_toxin",
+		name: "Paralysis Toxin",
+		description: "Extracted from a cave spider's glands. Locks every muscle in place.",
+		effect: "Target frozen for 3s, then dies.",
+		itemType: "Vial",
+		category: "poison",
 		icon: "~",
 		rarity: "epic",
 		consumable: true,
+		poisonEffect: "paralysis",
+		poisonDelaySecs: 3,
+		effectDurationSecs: POISON_DURATION_SECS,
+	},
+	dragons_breath: {
+		id: "dragons_breath",
+		name: "Dragon's Breath",
+		description: "Volatile alchemical fire condensed into a vial. Burns from within.",
+		effect: "Target bursts into flame for 5s, then dies.",
+		itemType: "Vial",
+		category: "poison",
+		icon: "~",
+		rarity: "legendary",
+		consumable: true,
+		poisonEffect: "combustion",
+		poisonDelaySecs: 5,
+		effectDurationSecs: POISON_DURATION_SECS,
+	},
+	phantom_venom: {
+		id: "phantom_venom",
+		name: "Phantom Venom",
+		description: "A ghostly substance that dissolves the body into mist. Eerie and silent.",
+		effect: "Target fades to translucent over 4s, then dies.",
+		itemType: "Vial",
+		category: "poison",
+		icon: "~",
+		rarity: "rare",
+		consumable: true,
+		poisonEffect: "phantom_fade",
+		poisonDelaySecs: 4,
+		effectDurationSecs: POISON_DURATION_SECS,
 	},
 
-	// ── Potions / Elixirs ────────────────────────────────────────────────────
-	minor_heal: {
-		id: "minor_heal",
-		name: "Minor Healing Draught",
-		description: "A murky tincture brewed from swamp moss. Tastes foul, works fast.",
-		effect: "Restores 20 HP instantly.",
-		itemType: "Elixir",
-		slotType: "potion",
-		icon: "+",
-		rarity: "common",
-		consumable: true,
-	},
-	swiftness: {
-		id: "swiftness",
+	// ── Elixirs ────────────────────────────────────────────────────────────
+	swiftness_elixir: {
+		id: "swiftness_elixir",
 		name: "Elixir of Swiftness",
 		description: "Quicksilver and ginger root. Your legs tingle, then blur.",
-		effect: "+30% move speed for 8s.",
+		effect: "+30% move speed for 1 hour.",
 		itemType: "Elixir",
-		slotType: "potion",
+		category: "elixir",
 		icon: "+",
 		rarity: "uncommon",
 		consumable: true,
+		elixirEffect: "speed_boost",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
 	},
-	invisibility: {
-		id: "invisibility",
-		name: "Cloak Draught",
-		description: "Light bends around you. Even your shadow fades.",
-		effect: "Invisible for 5s. Breaks on attack or damage taken.",
+	sky_step: {
+		id: "sky_step",
+		name: "Sky Step Tonic",
+		description: "Infused with powdered cloud crystal. Gravity loosens its grip on you.",
+		effect: "+50% jump height for 1 hour.",
 		itemType: "Elixir",
-		slotType: "potion",
+		category: "elixir",
 		icon: "+",
 		rarity: "rare",
 		consumable: true,
+		elixirEffect: "jump_boost",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
 	},
-	fortify: {
-		id: "fortify",
-		name: "Ironhide Tonic",
-		description: "Powdered iron filings in a thick ale. Your skin hardens like scale.",
-		effect: "-40% damage taken for 10s.",
+	shadow_cloak: {
+		id: "shadow_cloak",
+		name: "Shadow Cloak Draught",
+		description: "Brewed from midnight moss. Your presence shrinks from the world's notice.",
+		effect: "Detection radius reduced 40% for 1 hour.",
 		itemType: "Elixir",
-		slotType: "potion",
+		category: "elixir",
+		icon: "+",
+		rarity: "rare",
+		consumable: true,
+		elixirEffect: "detection_shrink",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
+	},
+	eagle_eye: {
+		id: "eagle_eye",
+		name: "Eagle Eye Serum",
+		description: "Distilled raptor essence. Your vision sharpens beyond mortal limits.",
+		effect: "See your bounty target outlined for 1 hour.",
+		itemType: "Elixir",
+		category: "elixir",
+		icon: "+",
+		rarity: "epic",
+		consumable: true,
+		elixirEffect: "target_outline",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
+	},
+	vitality_draught: {
+		id: "vitality_draught",
+		name: "Vitality Draught",
+		description: "A warm tincture of troll blood and willow bark. Wounds close on their own.",
+		effect: "Passive HP regeneration for 1 hour.",
+		itemType: "Elixir",
+		category: "elixir",
 		icon: "+",
 		rarity: "uncommon",
 		consumable: true,
+		elixirEffect: "health_regen",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
+	},
+	ghost_oil: {
+		id: "ghost_oil",
+		name: "Ghost Oil",
+		description: "Rendered from spectral fat. Your footsteps vanish, your breath silences.",
+		effect: "Harder to detect while sneaking for 1 hour.",
+		itemType: "Elixir",
+		category: "elixir",
+		icon: "+",
+		rarity: "epic",
+		consumable: true,
+		elixirEffect: "stealth_boost",
+		effectDurationSecs: ELIXIR_DURATION_SECS,
 	},
 };
 
@@ -201,11 +304,6 @@ export const RARITY_BG_COLORS: Record<string, Color3> = {
 	player: Color3.fromRGB(32, 10, 10),
 };
 
-// ── Equipped state (sent over the wire) ───────────────────────────────────────
-
-/** Maps slot ID → equipped item ID (or undefined if empty). */
-export type EquippedSlots = Record<string, string | undefined>;
-
 // ── Bounty scrolls ────────────────────────────────────────────────────────────
 
 /** Maximum bounty scroll slots a player can hold. */
@@ -246,8 +344,12 @@ export type BountyScrollPayload = BountyScroll[];
 export interface InventoryPayload {
 	/** All item IDs the player owns (with counts). */
 	ownedItems: Record<string, number>;
-	/** Currently equipped slot mapping. */
-	equipped: EquippedSlots;
+	/** Currently equipped weapon ID (or undefined if fists). */
+	equippedWeapon: string | undefined;
+	/** Currently active poison ID (or undefined if none). */
+	activePoison: string | undefined;
+	/** Active elixir IDs (can have multiple at once). */
+	activeElixirs: string[];
 	/** Collected bounty scrolls (up to MAX_BOUNTY_SLOTS). */
 	bountyScrolls: BountyScrollPayload;
 }

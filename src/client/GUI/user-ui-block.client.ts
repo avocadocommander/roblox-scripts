@@ -60,7 +60,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// Outer panel — bottom-left
 	const panel = new Instance("Frame");
 	panel.Name = "PlayerHUD";
-	const baseWidth = 230;
+	const baseWidth = 260;
 	const scaledWidth = scaleSize(baseWidth);
 	panel.Size = new UDim2(0, scaledWidth, 0, 0);
 	panel.Position = new UDim2(0, 12, 1, -12);
@@ -95,19 +95,19 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// ── Name + title row ───────────────────────────────────────────────────
 	const nameRow = new Instance("Frame");
 	nameRow.LayoutOrder = 0;
-	nameRow.Size = new UDim2(1, 0, 0, scaleSize(38));
+	nameRow.Size = new UDim2(1, 0, 0, scaleSize(44));
 	nameRow.BackgroundTransparency = 1;
 	nameRow.Parent = panel;
 
 	nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "PlayerName";
-	nameLabel.Size = new UDim2(0.68, 0, 0, scaleSize(22));
+	nameLabel.Size = new UDim2(0.68, 0, 0, scaleSize(26));
 	nameLabel.Position = new UDim2(0, 0, 0, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.Text = "—";
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = scaleSize(18);
+	nameLabel.TextSize = scaleSize(22);
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	nameLabel.Parent = nameRow;
 
@@ -139,19 +139,19 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	eyeLabel.Text = "👁 0";
 	eyeLabel.TextColor3 = UI_THEME.textMuted;
 	eyeLabel.Font = UI_THEME.fontBold;
-	eyeLabel.TextSize = scaleSize(10);
+	eyeLabel.TextSize = scaleSize(13);
 	eyeLabel.Parent = eyeFrame;
 	eyeCountLabel = eyeLabel;
 
 	titleLabel = new Instance("TextLabel");
 	titleLabel.Name = "PlayerTitle";
-	titleLabel.Size = new UDim2(1, 0, 0, scaleSize(13));
-	titleLabel.Position = new UDim2(0, 0, 0, scaleSize(23));
+	titleLabel.Size = new UDim2(1, 0, 0, scaleSize(16));
+	titleLabel.Position = new UDim2(0, 0, 0, scaleSize(27));
 	titleLabel.BackgroundTransparency = 1;
 	titleLabel.Text = "";
 	titleLabel.TextColor3 = UI_THEME.textSection;
 	titleLabel.Font = UI_THEME.fontBold;
-	titleLabel.TextSize = scaleSize(10);
+	titleLabel.TextSize = scaleSize(13);
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	titleLabel.Parent = nameRow;
 
@@ -159,7 +159,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	const wantedRowFrame = new Instance("Frame");
 	wantedRowFrame.Name = "WantedBadge";
 	wantedRowFrame.LayoutOrder = 1;
-	wantedRowFrame.Size = new UDim2(1, 0, 0, scaleSize(18));
+	wantedRowFrame.Size = new UDim2(1, 0, 0, scaleSize(22));
 	wantedRowFrame.BackgroundColor3 = UI_THEME.danger;
 	wantedRowFrame.BackgroundTransparency = 0.4;
 	wantedRowFrame.BorderSizePixel = 0;
@@ -182,7 +182,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedTitleLabel.Text = "⚑  WANTED";
 	wantedTitleLabel.TextColor3 = UI_THEME.textPrimary;
 	wantedTitleLabel.Font = UI_THEME.fontBold;
-	wantedTitleLabel.TextSize = scaleSize(10);
+	wantedTitleLabel.TextSize = scaleSize(13);
 	wantedTitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	wantedTitleLabel.Parent = wantedRowFrame;
 
@@ -194,7 +194,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedGoldLabel.Text = "";
 	wantedGoldLabel.TextColor3 = UI_THEME.gold;
 	wantedGoldLabel.Font = UI_THEME.fontBold;
-	wantedGoldLabel.TextSize = scaleSize(10);
+	wantedGoldLabel.TextSize = scaleSize(13);
 	wantedGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	wantedGoldLabel.Parent = wantedRowFrame;
 
@@ -210,7 +210,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// ── Stats row (level | coins) ─────────────────────────────────────────
 	const statsRow = new Instance("Frame");
 	statsRow.LayoutOrder = 3;
-	statsRow.Size = new UDim2(1, 0, 0, scaleSize(18));
+	statsRow.Size = new UDim2(1, 0, 0, scaleSize(22));
 	statsRow.BackgroundTransparency = 1;
 	statsRow.Parent = panel;
 
@@ -221,7 +221,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	lvlCap.Text = "LVL";
 	lvlCap.TextColor3 = UI_THEME.textSection;
 	lvlCap.Font = UI_THEME.fontBold;
-	lvlCap.TextSize = scaleSize(9);
+	lvlCap.TextSize = scaleSize(12);
 	lvlCap.TextXAlignment = Enum.TextXAlignment.Left;
 	lvlCap.TextYAlignment = Enum.TextYAlignment.Center;
 	lvlCap.Parent = statsRow;
@@ -234,7 +234,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	levelLabel.Text = "1";
 	levelLabel.TextColor3 = UI_THEME.textPrimary;
 	levelLabel.Font = UI_THEME.fontDisplay;
-	levelLabel.TextSize = scaleSize(15);
+	levelLabel.TextSize = scaleSize(18);
 	levelLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	levelLabel.Parent = statsRow;
 
@@ -246,7 +246,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	coinCap.Text = "🪙";
 	coinCap.TextColor3 = UI_THEME.gold;
 	coinCap.Font = UI_THEME.fontBold;
-	coinCap.TextSize = scaleSize(12);
+	coinCap.TextSize = scaleSize(14);
 	coinCap.TextXAlignment = Enum.TextXAlignment.Left;
 	coinCap.TextYAlignment = Enum.TextYAlignment.Center;
 	coinCap.Parent = statsRow;
@@ -259,14 +259,14 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	coinsLabel.Text = "0";
 	coinsLabel.TextColor3 = UI_THEME.gold;
 	coinsLabel.Font = UI_THEME.fontDisplay;
-	coinsLabel.TextSize = scaleSize(14);
+	coinsLabel.TextSize = scaleSize(17);
 	coinsLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	coinsLabel.Parent = statsRow;
 
 	// ── XP bar ────────────────────────────────────────────────────────────────
 	const xpRow = new Instance("Frame");
 	xpRow.LayoutOrder = 4;
-	xpRow.Size = new UDim2(1, 0, 0, scaleSize(14));
+	xpRow.Size = new UDim2(1, 0, 0, scaleSize(18));
 	xpRow.BackgroundTransparency = 1;
 	xpRow.Parent = panel;
 
@@ -276,14 +276,14 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	xpCap.Text = "XP";
 	xpCap.TextColor3 = UI_THEME.textSection;
 	xpCap.Font = UI_THEME.fontBold;
-	xpCap.TextSize = scaleSize(9);
+	xpCap.TextSize = scaleSize(12);
 	xpCap.TextXAlignment = Enum.TextXAlignment.Left;
 	xpCap.TextYAlignment = Enum.TextYAlignment.Center;
 	xpCap.Parent = xpRow;
 
 	xpBar = new Instance("Frame");
-	xpBar.Size = new UDim2(0.82, 0, 0, scaleSize(6));
-	xpBar.Position = new UDim2(0.18, 0, 0.5, scaleSize(-3));
+	xpBar.Size = new UDim2(0.82, 0, 0, scaleSize(8));
+	xpBar.Position = new UDim2(0.18, 0, 0.5, scaleSize(-4));
 	xpBar.BackgroundColor3 = UI_THEME.bgInset;
 	xpBar.BackgroundTransparency = 0;
 	xpBar.BorderSizePixel = 0;

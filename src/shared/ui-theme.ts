@@ -116,12 +116,12 @@ export const STATUS_RARITY: Record<
 
 /**
  * Returns a uniform scale factor based on the current viewport relative to a
- * 1920x1080 baseline. Clamped to a minimum of MIN_SCALE so the UI never
- * becomes unreadably small on laptops / tablets.
+ * 1280x720 baseline (designed for mobile-first). Clamped so the UI never
+ * becomes unreadably small on low-res phones or tablets.
  */
-const MIN_SCALE = 0.85;
-const BASE_WIDTH = 1920;
-const BASE_HEIGHT = 1080;
+const MIN_SCALE = 1.0;
+const BASE_WIDTH = 1280;
+const BASE_HEIGHT = 720;
 
 export function getUIScale(): number {
 	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;

@@ -10,25 +10,13 @@ function getRemotesFolder(): Folder {
 	return folder;
 }
 
-/** Client -> Server: request to equip an item into a specific slot. */
-export function getEquipItemRemote(): RemoteEvent {
+/** Client -> Server: activate / use an item (equip weapon, drink elixir, apply poison). */
+export function getActivateItemRemote(): RemoteEvent {
 	const folder = getRemotesFolder();
-	let remote = folder.FindFirstChild("EquipItem") as RemoteEvent | undefined;
+	let remote = folder.FindFirstChild("ActivateItem") as RemoteEvent | undefined;
 	if (!remote) {
 		remote = new Instance("RemoteEvent");
-		remote.Name = "EquipItem";
-		remote.Parent = folder;
-	}
-	return remote;
-}
-
-/** Client -> Server: request to unequip a slot. */
-export function getUnequipSlotRemote(): RemoteEvent {
-	const folder = getRemotesFolder();
-	let remote = folder.FindFirstChild("UnequipSlot") as RemoteEvent | undefined;
-	if (!remote) {
-		remote = new Instance("RemoteEvent");
-		remote.Name = "UnequipSlot";
+		remote.Name = "ActivateItem";
 		remote.Parent = folder;
 	}
 	return remote;
