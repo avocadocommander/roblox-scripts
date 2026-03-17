@@ -1,5 +1,5 @@
 import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import {
 	getActivateItemRemote,
 	getInventorySyncRemote,
@@ -20,7 +20,6 @@ import {
 } from "shared/inventory";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 
-const lifecycle = getOrCreateLifecycleRemote();
 const activateRemote = getActivateItemRemote();
 const syncRemote = getInventorySyncRemote();
 const requestRemote = getRequestInventoryRemote();
@@ -924,9 +923,7 @@ function applyInventorySync(payload: InventoryPayload): void {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-lifecycle.OnClientEvent.Connect((message: string) => {
-	if (message !== "InitializePlayer") return;
-
+onPlayerInitialized(() => {
 	const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 

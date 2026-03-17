@@ -1,21 +1,5 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { getRemotesFolder, getRemoteEvent } from "shared/remote-utils";
 
 export function getOrCreateSprintRemote(): RemoteEvent {
-	let remotesFolder = ReplicatedStorage.FindFirstChild("Remotes");
-
-	if (!remotesFolder) {
-		remotesFolder = new Instance("Folder");
-		remotesFolder.Name = "Remotes";
-		remotesFolder.Parent = ReplicatedStorage;
-	}
-
-	let lifecycle = remotesFolder.FindFirstChild("Sprint") as RemoteEvent | undefined;
-
-	if (!lifecycle) {
-		lifecycle = new Instance("RemoteEvent");
-		lifecycle.Name = "Sprint";
-		lifecycle.Parent = remotesFolder;
-	}
-
-	return lifecycle;
+	return getRemoteEvent(getRemotesFolder(), "Sprint");
 }

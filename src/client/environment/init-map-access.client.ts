@@ -1,6 +1,6 @@
 import { CollectionService, ReplicatedStorage, TweenService, UserInputService } from "@rbxts/services";
 import { log } from "shared/helpers";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import { getMockAchievementRemote } from "shared/remotes/achievement-remote";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
@@ -11,8 +11,6 @@ const GetPlayerLevel = playerState.WaitForChild("GetLevel") as RemoteFunction;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 const TAG = "LevelAccessRequired";
 
-const lifecycle = getOrCreateLifecycleRemote();
-
 const mockAchievementRemote = getMockAchievementRemote();
 
 UserInputService.InputBegan.Connect((io, gp) => {
@@ -22,10 +20,8 @@ UserInputService.InputBegan.Connect((io, gp) => {
 	if (io.KeyCode === Enum.KeyCode.C) RequestAddCoins.InvokeServer(20);
 });
 
-lifecycle.OnClientEvent.Connect((message: string) => {
-	if (message === "InitializePlayer") {
-		initializeMapAccess();
-	}
+onPlayerInitialized(() => {
+	initializeMapAccess();
 });
 
 function initializeMapAccess() {

@@ -3,6 +3,7 @@ import { log } from "../helpers";
 import { NPCData, Race } from "../module";
 import { RouteConfig } from "../npc-manager";
 import { makeSeededRandom } from "./utils";
+import { STATUS_CLOTHING } from "../config/npc-clothing";
 
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
@@ -57,18 +58,10 @@ function getGenericSeededAppearance(
 	if (!npc) {
 		error("NOT npc");
 	}
-	const shirtColors: Color3[] = [
-		Color3.fromHex("#9B2E2E"),
-		Color3.fromHex("#556B2F"),
-		Color3.fromHex("#1E2B44"),
-		Color3.fromHex("#6B4C2E"),
-	];
-	const pantsColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#556B2F"), Color3.fromHex("#D8C9A8")];
-	const shoeColors: Color3[] = [Color3.fromHex("#6B4C2E"), Color3.fromHex("#2C2C2C"), Color3.fromHex("#A1886F")];
 
-	if (!shirtColors) {
-		error("NOT shirtColors");
-	}
+	// ── Tier-based clothing from config ───────────────────────────────────────
+	const tierClothing = STATUS_CLOTHING[data.status];
+
 	const shirt = npc
 		.WaitForChild("BasicShirt")
 		.WaitForChild("Handle")
@@ -110,6 +103,7 @@ function getGenericSeededAppearance(
 		error("NOT SHIRT");
 	}
 
+	// Route-specific overrides (Guards, Preachers) take priority
 	if (routeData?.position === "Guard") {
 		shirt.Color = new Color3(0, 0, 0);
 		pants.Color = new Color3(0, 0, 0);
@@ -119,12 +113,49 @@ function getGenericSeededAppearance(
 		pants.Color = new Color3(0.59, 0.03, 0.03);
 		shoes.Color = new Color3(0, 0, 0);
 	} else {
-		shirt.Color = getRandomAssetFromListBasedOnSeed(shirtColors, seed());
-		pants.Color = getRandomAssetFromListBasedOnSeed(pantsColors, seed());
-		shoes.Color = getRandomAssetFromListBasedOnSeed(shoeColors, seed());
+		// Use status-tier palette
+		shirt.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shirtColors, seed());
+		pants.Color = getRandomAssetFromListBasedOnSeed(tierClothing.pantsColors, seed());
+		shoes.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shoeColors, seed());
 	}
 
+	// ── Tier accessories are applied AFTER ApplyDescription in setHumanoidDefaults
+	// so the welds target the final body parts, not pre-description ones.
+
 	return humanoidDescription;
+}
+
+function attachTierAccessories(npc: Model, data: NPCData, seed: () => number): void {
+	const tierClothing = STATUS_CLOTHING[data.status];
+	const chance = tierClothing.accessoryChance ?? 1;
+	log("[APPEARANCE] Status=" + data.status + " accessories=" + tierClothing.accessories.size() + " chance=" + chance);
+
+	for (const accDef of tierClothing.accessories) {
+		const roll = seed();
+		log("[APPEARANCE] Accessory roll: " + roll + " vs chance " + chance + " for " + accDef.name);
+		if (roll > chance) continue;
+
+		const template = ReplicatedStorage.FindFirstChild(accDef.name) as Accessory | undefined;
+		if (!template) {
+			log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
+			continue;
+		}
+
+		const accessory = template.Clone();
+		if (accDef.color !== undefined) {
+			const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
+			if (handle) handle.Color = accDef.color;
+		}
+
+		const humanoid = npc.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.AddAccessory(accessory);
+		} else {
+			accessory.Parent = npc;
+		}
+
+		log("[APPEARANCE] Attached accessory: " + accDef.name);
+	}
 }
 
 function setHumanoidDefaults(
@@ -161,6 +192,13 @@ function setHumanoidDefaults(
 
 	if (!appearenceDescription) return;
 	humanoid.ApplyDescription(appearenceDescription);
+
+	// Attach tier accessories AFTER ApplyDescription so the body parts are final
+	const npc = humanoid.Parent as Model;
+	if (npc) {
+		const accRand = makeSeededRandom(seed);
+		attachTierAccessories(npc, data, accRand);
+	}
 
 	return humanoid;
 }

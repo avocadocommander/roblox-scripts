@@ -1,5 +1,5 @@
 import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import {
 	getBountyAssignedRemote,
 	getBountyCompletedRemote,
@@ -13,8 +13,6 @@ import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { RARITY_COLORS } from "shared/inventory";
 
-const lifecycle = getOrCreateLifecycleRemote();
-
 // ── Screen ratio scaling helpers ──────────────────────────────────────────────
 
 function scaleSize(baseSize: number): number {
@@ -26,7 +24,6 @@ function scaleSize(baseSize: number): number {
 // Module-level refs so update functions can reach the labels
 let npcNameLabel: TextLabel | undefined;
 let npcGoldLabel: TextLabel | undefined;
-let npcStatusLabel: TextLabel | undefined;
 let npcRouteLabel: TextLabel | undefined;
 let npcOffenceLabel: TextLabel | undefined;
 let npcSectionFrame: Frame | undefined;
@@ -169,7 +166,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	// ── "YOUR MARK" section ──────────────────────────────────────────────────
 	const npcSection = new Instance("Frame");
 	npcSection.LayoutOrder = 0;
-	npcSection.Size = new UDim2(1, -20, 0, 85);
+	npcSection.Size = new UDim2(1, -20, 0, 68);
 	npcSection.BackgroundTransparency = 1;
 	npcSection.Parent = contentsWrapper;
 	npcSectionFrame = npcSection;
@@ -200,11 +197,12 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcNameLabel.Name = "NPCName";
 	npcNameLabel.Size = new UDim2(0.62, 0, 1, 0);
 	npcNameLabel.BackgroundTransparency = 1;
-	npcNameLabel.Text = "—";
+	npcNameLabel.Text = "---";
 	npcNameLabel.TextColor3 = UI_THEME.textPrimary;
 	npcNameLabel.Font = UI_THEME.fontDisplay;
-	npcNameLabel.TextSize = scaleSize(18);
+	npcNameLabel.TextSize = scaleSize(16);
 	npcNameLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	npcNameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	npcNameLabel.Parent = nameRow;
 
 	npcGoldLabel = new Instance("TextLabel");
@@ -218,19 +216,6 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcGoldLabel.TextSize = scaleSize(16);
 	npcGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	npcGoldLabel.Parent = nameRow;
-
-	npcStatusLabel = new Instance("TextLabel");
-	npcStatusLabel.Name = "NPCStatus";
-	npcStatusLabel.Size = new UDim2(1, 0, 0, 16);
-	npcStatusLabel.Position = new UDim2(0, 0, 0, 44);
-	npcStatusLabel.BackgroundTransparency = 1;
-	npcStatusLabel.Text = "";
-	npcStatusLabel.TextColor3 = UI_THEME.textMuted;
-	npcStatusLabel.Font = UI_THEME.fontBody;
-	npcStatusLabel.TextSize = scaleSize(12);
-	npcStatusLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	npcStatusLabel.Visible = true;
-	npcStatusLabel.Parent = npcSection;
 
 	npcRouteLabel = new Instance("TextLabel");
 	npcRouteLabel.Name = "NPCRoute";
@@ -248,7 +233,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	npcOffenceLabel = new Instance("TextLabel");
 	npcOffenceLabel.Name = "NPCOffence";
 	npcOffenceLabel.Size = new UDim2(1, 0, 0, 15);
-	npcOffenceLabel.Position = new UDim2(0, 0, 0, 62);
+	npcOffenceLabel.Position = new UDim2(0, 0, 0, 44);
 	npcOffenceLabel.BackgroundTransparency = 1;
 	npcOffenceLabel.Text = "";
 	npcOffenceLabel.TextColor3 = UI_THEME.textMuted;
@@ -340,7 +325,6 @@ function toggleInfoMVPMode(): void {
 	if (!isInfoMode) {
 		// MVP mode: compact, show route, keep wanted visible
 		npcSectionFrame.Size = new UDim2(1, -20, 0, 42);
-		if (npcStatusLabel) npcStatusLabel.Visible = false;
 		if (npcRouteLabel) npcRouteLabel.Visible = true;
 		if (npcOffenceLabel) npcOffenceLabel.Visible = false;
 		dividerWrapFrame.Visible = true;
@@ -348,8 +332,7 @@ function toggleInfoMVPMode(): void {
 		wantedList.Visible = true;
 	} else {
 		// Info mode: full detail
-		npcSectionFrame.Size = new UDim2(1, -20, 0, 85);
-		if (npcStatusLabel) npcStatusLabel.Visible = true;
+		npcSectionFrame.Size = new UDim2(1, -20, 0, 68);
 		if (npcRouteLabel) npcRouteLabel.Visible = false;
 		if (npcOffenceLabel) npcOffenceLabel.Visible = true;
 		dividerWrapFrame.Visible = true;
@@ -420,18 +403,11 @@ function applyNPCBounty(bounty: NPCBountyPayload): void {
 	const npcData = MEDIEVAL_NPCS[bounty.npcName] as NPCData | undefined;
 	const rarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
 	if (npcNameLabel) {
-		npcNameLabel.Text = bounty.npcName;
+		const prefix = npcData ? npcData.status + " " : "";
+		npcNameLabel.Text = prefix + bounty.npcName;
 		npcNameLabel.TextColor3 = rarity ? rarity.color : UI_THEME.textPrimary;
 	}
 	if (npcGoldLabel) npcGoldLabel.Text = bounty.gold + "g";
-	if (npcStatusLabel) {
-		if (npcData && rarity) {
-			npcStatusLabel.Text = npcData.status + "  |  " + rarity.label;
-			npcStatusLabel.TextColor3 = rarity.color;
-		} else {
-			npcStatusLabel.Text = "";
-		}
-	}
 	if (npcRouteLabel) npcRouteLabel.Text = bounty.route ? "📍 " + bounty.route : "";
 	if (npcOffenceLabel) npcOffenceLabel.Text = `"${bounty.offence}"`;
 }
@@ -442,7 +418,6 @@ function clearNPCBounty(): void {
 		npcNameLabel.TextColor3 = UI_THEME.textPrimary;
 	}
 	if (npcGoldLabel) npcGoldLabel.Text = "";
-	if (npcStatusLabel) npcStatusLabel.Text = "";
 	if (npcRouteLabel) npcRouteLabel.Text = "";
 	if (npcOffenceLabel) npcOffenceLabel.Text = "";
 }
@@ -577,41 +552,39 @@ function removeWantedRow(playerName: string): void {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-lifecycle.OnClientEvent.Connect((message: unknown) => {
-	if (message === "InitializePlayer") {
-		const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
-		const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
+onPlayerInitialized(() => {
+	const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
+	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
-		makeParchment(screenGui);
+	makeParchment(screenGui);
 
-		// Personal NPC bounty assigned / renewed
-		getBountyAssignedRemote().OnClientEvent.Connect((data: unknown) => {
-			applyNPCBounty(data as NPCBountyPayload);
-		});
+	// Personal NPC bounty assigned / renewed
+	getBountyAssignedRemote().OnClientEvent.Connect((data: unknown) => {
+		applyNPCBounty(data as NPCBountyPayload);
+	});
 
-		// Personal NPC bounty completed (target died)
-		getBountyCompletedRemote().OnClientEvent.Connect(() => {
-			clearNPCBounty();
-		});
+	// Personal NPC bounty completed (target died)
+	getBountyCompletedRemote().OnClientEvent.Connect(() => {
+		clearNPCBounty();
+	});
 
-		// A player became wanted
-		getPlayerWantedRemote().OnClientEvent.Connect((data: unknown) => {
-			addWantedRow(data as PlayerWantedPayload);
-		});
+	// A player became wanted
+	getPlayerWantedRemote().OnClientEvent.Connect((data: unknown) => {
+		addWantedRow(data as PlayerWantedPayload);
+	});
 
-		// A wanted player was cleared
-		getPlayerWantedClearedRemote().OnClientEvent.Connect((playerName: unknown) => {
-			removeWantedRow(playerName as string);
-		});
+	// A wanted player was cleared
+	getPlayerWantedClearedRemote().OnClientEvent.Connect((playerName: unknown) => {
+		removeWantedRow(playerName as string);
+	});
 
-		// Full state sync fired once when server receives "ClientReady"
-		getBountyListSyncRemote().OnClientEvent.Connect((npcBounty: unknown, wanted: unknown) => {
-			if (npcBounty !== undefined) {
-				applyNPCBounty(npcBounty as NPCBountyPayload);
-			}
-			for (const entry of wanted as PlayerWantedPayload[]) {
-				addWantedRow(entry);
-			}
-		});
-	}
+	// Full state sync fired once when server receives "ClientReady"
+	getBountyListSyncRemote().OnClientEvent.Connect((npcBounty: unknown, wanted: unknown) => {
+		if (npcBounty !== undefined) {
+			applyNPCBounty(npcBounty as NPCBountyPayload);
+		}
+		for (const entry of wanted as PlayerWantedPayload[]) {
+			addWantedRow(entry);
+		}
+	});
 });

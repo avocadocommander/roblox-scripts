@@ -1,5 +1,5 @@
 import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
 import { UI_THEME } from "shared/ui-theme";
 
@@ -7,8 +7,6 @@ const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const ExpierenceUpdated = playerState.WaitForChild("ExpierenceUpdated") as RemoteEvent;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
-
-const lifecycle = getOrCreateLifecycleRemote();
 
 // Track previous totals to derive deltas. -1 = not yet initialised, skip
 // animation on the very first event (which would show the full saved total).
@@ -308,9 +306,7 @@ function showAchievement(achievementName: string, description: string, icon: str
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-lifecycle.OnClientEvent.Connect((message: string) => {
-	if (message !== "InitializePlayer") return;
-
+onPlayerInitialized(() => {
 	const playerGui = Players.LocalPlayer!.WaitForChild("PlayerGui") as PlayerGui;
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 

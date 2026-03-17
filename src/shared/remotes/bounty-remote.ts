@@ -1,4 +1,4 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { getRemoteSubFolder, getRemoteEvent } from "shared/remote-utils";
 
 // ─── Payload types (shared between server and client) ────────────────────────
 
@@ -30,58 +30,39 @@ export interface BountySyncPayload {
 // ─── Remote getters ───────────────────────────────────────────────────────────
 
 function getFolder(): Folder {
-	let remotes = ReplicatedStorage.FindFirstChild("Remotes") as Folder | undefined;
-	if (!remotes) {
-		remotes = new Instance("Folder");
-		remotes.Name = "Remotes";
-		remotes.Parent = ReplicatedStorage;
-	}
-	let bounty = remotes.FindFirstChild("Bounty") as Folder | undefined;
-	if (!bounty) {
-		bounty = new Instance("Folder");
-		bounty.Name = "Bounty";
-		bounty.Parent = remotes;
-	}
-	return bounty;
+	return getRemoteSubFolder("Bounty");
 }
 
-function getOrCreateEvent(name: string): RemoteEvent {
-	const folder = getFolder();
-	let remote = folder.FindFirstChild(name) as RemoteEvent | undefined;
-	if (!remote) {
-		remote = new Instance("RemoteEvent");
-		remote.Name = name;
-		remote.Parent = folder;
-	}
-	return remote;
+function getBountyEvent(name: string): RemoteEvent {
+	return getRemoteEvent(getFolder(), name);
 }
 
-/** Server → specific client: their NPC bounty was assigned / renewed. */
+/** Server -> specific client: their NPC bounty was assigned / renewed. */
 export function getBountyAssignedRemote(): RemoteEvent {
-	return getOrCreateEvent("BountyAssigned");
+	return getBountyEvent("BountyAssigned");
 }
 
-/** Server → specific client: their NPC bounty target died (cleared). */
+/** Server -> specific client: their NPC bounty target died (cleared). */
 export function getBountyCompletedRemote(): RemoteEvent {
-	return getOrCreateEvent("BountyCompleted");
+	return getBountyEvent("BountyCompleted");
 }
 
-/** Server → all clients: a player is now wanted. */
+/** Server -> all clients: a player is now wanted. */
 export function getPlayerWantedRemote(): RemoteEvent {
-	return getOrCreateEvent("PlayerWanted");
+	return getBountyEvent("PlayerWanted");
 }
 
-/** Server → all clients: a wanted player's bounty was cleared. */
+/** Server -> all clients: a wanted player's bounty was cleared. */
 export function getPlayerWantedClearedRemote(): RemoteEvent {
-	return getOrCreateEvent("PlayerWantedCleared");
+	return getBountyEvent("PlayerWantedCleared");
 }
 
-/** Server → specific client: full state sync on first load. */
+/** Server -> specific client: full state sync on first load. */
 export function getBountyListSyncRemote(): RemoteEvent {
-	return getOrCreateEvent("BountyListSync");
+	return getBountyEvent("BountyListSync");
 }
 
-/** Client → server: player attempting to assassinate a wanted player. */
+/** Client -> server: player attempting to assassinate a wanted player. */
 export function getPlayerAssassinationRemote(): RemoteEvent {
-	return getOrCreateEvent("PlayerAssassination");
+	return getBountyEvent("PlayerAssassination");
 }

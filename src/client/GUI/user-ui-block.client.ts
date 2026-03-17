@@ -1,5 +1,5 @@
 import { Players, ReplicatedStorage, TweenService, UserInputService, Workspace } from "@rbxts/services";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import {
 	getBountyListSyncRemote,
 	getPlayerWantedClearedRemote,
@@ -23,8 +23,6 @@ const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 // NPC visibility — fires from server whenever an NPC starts/stops seeing this player
 const npcStateFolder = ReplicatedStorage.WaitForChild("NPCState") as Folder;
 const ViewsUpdated = npcStateFolder.WaitForChild("ViewsUpdated") as RemoteEvent;
-
-const lifecycle = getOrCreateLifecycleRemote();
 
 // ── Screen ratio scaling helpers ──────────────────────────────────────────────
 
@@ -576,9 +574,7 @@ function setEyeStealth(stealthing: boolean): void {
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 
-lifecycle.OnClientEvent.Connect((message: string) => {
-	if (message !== "InitializePlayer") return;
-
+onPlayerInitialized(() => {
 	const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 

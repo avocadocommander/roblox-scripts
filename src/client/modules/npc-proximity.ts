@@ -64,11 +64,10 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 
 	const titleDef = titleId !== undefined ? TITLES[titleId] : undefined;
 	const borderColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
-	const billboardHeight = titleDef !== undefined ? 1.6 : 1.1;
 
 	const billboard = new Instance("BillboardGui");
 	billboard.Name = "PlayerBillboard";
-	billboard.Size = new UDim2(4.5, 0, billboardHeight, 0);
+	billboard.Size = new UDim2(5, 0, 1.1, 0);
 	billboard.MaxDistance = 60;
 	billboard.StudsOffset = new Vector3(0, 2, 0);
 	billboard.AlwaysOnTop = false;
@@ -90,46 +89,24 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 	cardStroke.Thickness = 1.2;
 	cardStroke.Parent = card;
 
-	if (titleDef !== undefined) {
-		const isPrepend = titleDef.position === "prepend";
+	// Single-line: "Symbol TitleName PlayerName" or just "PlayerName"
+	const displayText =
+		titleDef !== undefined
+			? titleDef.symbol + " " + titleDef.name + " " + playerName
+			: playerName;
+	const textColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
 
-		// Title row (symbol + title name)
-		const titleLabel = new Instance("TextLabel");
-		titleLabel.Size = new UDim2(1, -6, 0.38, 0);
-		titleLabel.Position = isPrepend ? new UDim2(0, 3, 0.04, 0) : new UDim2(0, 3, 0.58, 0);
-		titleLabel.BackgroundTransparency = 1;
-		titleLabel.TextColor3 = titleDef.color;
-		titleLabel.Font = UI_THEME.fontBold;
-		titleLabel.TextSize = 10;
-		titleLabel.TextTransparency = 0.1;
-		titleLabel.Text = titleDef.symbol + " " + titleDef.name;
-		titleLabel.TextXAlignment = isPrepend ? Enum.TextXAlignment.Left : Enum.TextXAlignment.Right;
-		titleLabel.BorderSizePixel = 0;
-		titleLabel.Parent = card;
-
-		// Player name row
-		const nameLabel = new Instance("TextLabel");
-		nameLabel.Size = new UDim2(1, -6, 0.52, 0);
-		nameLabel.Position = isPrepend ? new UDim2(0, 3, 0.44, 0) : new UDim2(0, 3, 0.04, 0);
-		nameLabel.BackgroundTransparency = 1;
-		nameLabel.TextColor3 = UI_THEME.gold;
-		nameLabel.Font = UI_THEME.fontDisplay;
-		nameLabel.TextSize = 13;
-		nameLabel.Text = playerName;
-		nameLabel.BorderSizePixel = 0;
-		nameLabel.Parent = card;
-	} else {
-		const nameLabel = new Instance("TextLabel");
-		nameLabel.Size = new UDim2(1, -6, 1, 0);
-		nameLabel.Position = new UDim2(0, 3, 0, 0);
-		nameLabel.BackgroundTransparency = 1;
-		nameLabel.TextColor3 = UI_THEME.gold;
-		nameLabel.Font = UI_THEME.fontDisplay;
-		nameLabel.TextSize = 13;
-		nameLabel.Text = playerName;
-		nameLabel.BorderSizePixel = 0;
-		nameLabel.Parent = card;
-	}
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Size = new UDim2(1, -6, 1, 0);
+	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = textColor;
+	nameLabel.Font = UI_THEME.fontDisplay;
+	nameLabel.TextSize = 13;
+	nameLabel.Text = displayText;
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	nameLabel.BorderSizePixel = 0;
+	nameLabel.Parent = card;
 
 	playerBillboards.set(playerName, billboard);
 }

@@ -1,4 +1,4 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { getRemoteSubFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
 import { CompletedBountyEntry } from "shared/player-state";
 import { KillLog } from "shared/kill-log";
 
@@ -31,54 +31,20 @@ export interface TurnInResult {
 // ─── Remote getters ───────────────────────────────────────────────────────────
 
 function getFolder(): Folder {
-	let remotes = ReplicatedStorage.FindFirstChild("Remotes") as Folder | undefined;
-	if (!remotes) {
-		remotes = new Instance("Folder");
-		remotes.Name = "Remotes";
-		remotes.Parent = ReplicatedStorage;
-	}
-	let killBook = remotes.FindFirstChild("KillBook") as Folder | undefined;
-	if (!killBook) {
-		killBook = new Instance("Folder");
-		killBook.Name = "KillBook";
-		killBook.Parent = remotes;
-	}
-	return killBook;
+	return getRemoteSubFolder("KillBook");
 }
 
-function getOrCreateFunction(name: string): RemoteFunction {
-	const folder = getFolder();
-	let rf = folder.FindFirstChild(name) as RemoteFunction | undefined;
-	if (!rf) {
-		rf = new Instance("RemoteFunction");
-		rf.Name = name;
-		rf.Parent = folder;
-	}
-	return rf;
-}
-
-function getOrCreateEvent(name: string): RemoteEvent {
-	const folder = getFolder();
-	let re = folder.FindFirstChild(name) as RemoteEvent | undefined;
-	if (!re) {
-		re = new Instance("RemoteEvent");
-		re.Name = name;
-		re.Parent = folder;
-	}
-	return re;
-}
-
-/** Client → server: request full kill book data snapshot. */
+/** Client -> server: request full kill book data snapshot. */
 export function getKillBookDataRemote(): RemoteFunction {
-	return getOrCreateFunction("GetKillBookData");
+	return getRemoteFunction(getFolder(), "GetKillBookData");
 }
 
-/** Client → server: turn in all completed bounties. */
+/** Client -> server: turn in all completed bounties. */
 export function getTurnInBountiesRemote(): RemoteFunction {
-	return getOrCreateFunction("TurnInBounties");
+	return getRemoteFunction(getFolder(), "TurnInBounties");
 }
 
-/** Server → client: achievement unlocked notification. */
+/** Server -> client: achievement unlocked notification. */
 export function getAchievementUnlockedRemote(): RemoteEvent {
-	return getOrCreateEvent("AchievementUnlocked");
+	return getRemoteEvent(getFolder(), "AchievementUnlocked");
 }

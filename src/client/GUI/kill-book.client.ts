@@ -1,5 +1,5 @@
 import { Players, UserInputService } from "@rbxts/services";
-import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { onPlayerInitialized } from "../modules/client-init";
 import {
 	getAchievementUnlockedRemote,
 	getKillBookDataRemote,
@@ -13,8 +13,6 @@ import { getEquipTitleRemote } from "shared/remotes/title-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
-
-const lifecycle = getOrCreateLifecycleRemote();
 
 let bookGui: ScreenGui | undefined;
 let bookFrame: Frame | undefined;
@@ -959,9 +957,7 @@ function toggleBook(): void {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-lifecycle.OnClientEvent.Connect((message: string) => {
-	if (message !== "InitializePlayer") return;
-
+onPlayerInitialized(() => {
 	const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
 	buildKillBook(playerGui);
 	isReady = true;
