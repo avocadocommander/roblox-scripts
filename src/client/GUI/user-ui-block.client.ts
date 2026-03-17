@@ -48,7 +48,7 @@ let eyeCountLabel: TextLabel | undefined;
 let lastViewerCount = 0;
 let sneakButton: TextButton | undefined;
 let isStealthMode = false;
-let campfireButton: TextButton | undefined;
+let campfireButton: ImageButton | undefined;
 let campfireOnCooldown = false;
 const CAMPFIRE_COOLDOWN = 2; // seconds
 
@@ -389,16 +389,14 @@ function buildCampfireButton(screenGui: ScreenGui): void {
 	buttonContainer.Parent = screenGui;
 
 	// The actual button
-	campfireButton = new Instance("TextButton");
+	campfireButton = new Instance("ImageButton");
 	campfireButton.Name = "CampfireButton";
 	campfireButton.Size = new UDim2(1, 0, 1, 0);
 	campfireButton.BackgroundColor3 = UI_THEME.bgInset;
 	campfireButton.BackgroundTransparency = 0.2;
 	campfireButton.BorderSizePixel = 0;
-	campfireButton.Text = "🔥";
-	campfireButton.TextColor3 = UI_THEME.textMuted;
-	campfireButton.Font = UI_THEME.fontBold;
-	campfireButton.TextSize = scaleSize(24);
+	campfireButton.Image = "rbxassetid://73329209522657"; // ← paste your rbxassetid://XXXXXXX here after uploading
+	campfireButton.ImageTransparency = 0;
 	campfireButton.Parent = buttonContainer;
 
 	// Rounded corners for campfire button

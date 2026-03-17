@@ -15,6 +15,10 @@ export interface KillBookData {
 	unlockedAchievements: string[];
 	activeBountyName: string | undefined;
 	score: number;
+	/** All title IDs owned by the player. */
+	ownedTitles: string[];
+	/** Currently equipped title ID. */
+	equippedTitle: string;
 }
 
 /** Result of turning in bounties. */

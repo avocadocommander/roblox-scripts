@@ -2,6 +2,8 @@
 
 ## Project Overview
 
+Roblox game being created in Roblox Studio and roblox-ts in vscode with rojo
+
 Medieval assassin RPG built with **roblox-ts** (TypeScript → Luau transpiler). Players assassinate NPCs for bounties, craft with poisons/elixirs, and hunt other wanted players. Dark pirate-guild aesthetic.
 
 Create config or config map files that make it easy to add new items, NPCs, or mechanics without changing core logic. For example, `shared/config/weapons.ts` defines all weapons in a simple data structure — to add a new weapon, just add an entry there. Avoid hardcoding values in logic files. Follow the existing patterns for new features/systems.

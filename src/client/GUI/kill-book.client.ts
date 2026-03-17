@@ -8,6 +8,8 @@ import {
 	TurnInResult,
 } from "shared/remotes/kill-book-remote";
 import { ACHIEVEMENT_LIST, AchievementDef } from "shared/achievements";
+import { TITLES, TITLE_LIST } from "shared/config/titles";
+import { getEquipTitleRemote } from "shared/remotes/title-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
@@ -24,6 +26,7 @@ let isReady = false;
 const TAB_NAMES = ["BOUNTIES", "BESTIARY", "PVP", "ACHIEVEMENTS"];
 let activeTab = 0;
 let tabButtons: TextButton[] = [];
+let titleDropdownOpen = false;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -597,6 +600,111 @@ function renderAchievementsTab(data: KillBookData): void {
 	if (!contentFrame) return;
 	let order = 0;
 
+	// ── Title selector ────────────────────────────────────────────────────────
+	makeSectionHeader(contentFrame, "ACTIVE TITLE", order++);
+
+	const equippedTitleId = data.equippedTitle;
+	const equippedTitleDef = TITLES[equippedTitleId];
+
+	const currentTitleRow = new Instance("Frame");
+	currentTitleRow.Size = new UDim2(1, 0, 0, 36);
+	currentTitleRow.BackgroundColor3 = UI_THEME.bgInset;
+	currentTitleRow.BackgroundTransparency = 0.3;
+	currentTitleRow.BorderSizePixel = 0;
+	currentTitleRow.LayoutOrder = order++;
+	currentTitleRow.Parent = contentFrame;
+
+	const ctCorner = new Instance("UICorner");
+	ctCorner.CornerRadius = new UDim(0, 4);
+	ctCorner.Parent = currentTitleRow;
+
+	if (equippedTitleDef !== undefined) {
+		const ctStroke = new Instance("UIStroke");
+		ctStroke.Color = equippedTitleDef.color;
+		ctStroke.Thickness = 0.8;
+		ctStroke.Parent = currentTitleRow;
+	}
+
+	const currentLbl = new Instance("TextLabel");
+	currentLbl.Size = new UDim2(1, -62, 1, 0);
+	currentLbl.Position = new UDim2(0, 8, 0, 0);
+	currentLbl.BackgroundTransparency = 1;
+	currentLbl.TextColor3 = equippedTitleDef !== undefined ? equippedTitleDef.color : UI_THEME.textMuted;
+	currentLbl.Font = UI_THEME.fontDisplay;
+	currentLbl.TextSize = 13;
+	currentLbl.Text = equippedTitleDef !== undefined ? equippedTitleDef.symbol + " " + equippedTitleDef.name : "None";
+	currentLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	currentLbl.Parent = currentTitleRow;
+
+	const changeBtn = new Instance("TextButton");
+	changeBtn.Size = new UDim2(0, 52, 0, 24);
+	changeBtn.Position = new UDim2(1, -58, 0.5, -12);
+	changeBtn.BackgroundColor3 = UI_THEME.headerBg;
+	changeBtn.BackgroundTransparency = 0.2;
+	changeBtn.TextColor3 = UI_THEME.textSection;
+	changeBtn.Font = UI_THEME.fontBold;
+	changeBtn.TextSize = 10;
+	changeBtn.Text = titleDropdownOpen ? "CLOSE" : "CHANGE";
+	changeBtn.BorderSizePixel = 0;
+	changeBtn.Parent = currentTitleRow;
+
+	const changeBtnCorner = new Instance("UICorner");
+	changeBtnCorner.CornerRadius = new UDim(0, 3);
+	changeBtnCorner.Parent = changeBtn;
+
+	changeBtn.MouseButton1Click.Connect(() => {
+		titleDropdownOpen = !titleDropdownOpen;
+		fetchAndRender(3);
+	});
+
+	// Dropdown list of owned titles
+	if (titleDropdownOpen) {
+		for (const td of TITLE_LIST) {
+			if (!data.ownedTitles.includes(td.id)) continue;
+			const isEquipped = td.id === equippedTitleId;
+
+			const optBtn = new Instance("TextButton");
+			optBtn.Size = new UDim2(1, 0, 0, 30);
+			optBtn.BackgroundColor3 = isEquipped ? UI_THEME.bgInset : UI_THEME.bg;
+			optBtn.BackgroundTransparency = isEquipped ? 0.2 : 0.5;
+			optBtn.BorderSizePixel = 0;
+			optBtn.Text = "";
+			optBtn.LayoutOrder = order++;
+			optBtn.Parent = contentFrame;
+
+			const optCorner = new Instance("UICorner");
+			optCorner.CornerRadius = new UDim(0, 3);
+			optCorner.Parent = optBtn;
+
+			const optStroke = new Instance("UIStroke");
+			optStroke.Color = td.color;
+			optStroke.Thickness = isEquipped ? 1.2 : 0.5;
+			optStroke.Parent = optBtn;
+
+			const optLbl = new Instance("TextLabel");
+			optLbl.Size = new UDim2(1, -8, 1, 0);
+			optLbl.Position = new UDim2(0, 8, 0, 0);
+			optLbl.BackgroundTransparency = 1;
+			optLbl.TextColor3 = td.color;
+			optLbl.Font = UI_THEME.fontDisplay;
+			optLbl.TextSize = 12;
+			optLbl.Text = td.symbol + " " + td.name + (isEquipped ? "  [active]" : "");
+			optLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			optLbl.Parent = optBtn;
+
+			if (!isEquipped) {
+				optBtn.MouseButton1Click.Connect(() => {
+					getEquipTitleRemote().FireServer(td.id);
+					titleDropdownOpen = false;
+					fetchAndRender(3);
+				});
+			}
+		}
+	}
+
+	makeDivider(contentFrame, order++);
+
+	// ── Achievements list ─────────────────────────────────────────────────────
 	const unlocked = data.unlockedAchievements.size();
 	const total = ACHIEVEMENT_LIST.size();
 	makeSectionHeader(contentFrame, "ACHIEVEMENTS  " + unlocked + "/" + total, order++);
@@ -641,7 +749,7 @@ function renderAchievementsTab(data: KillBookData): void {
 		badgeCorner.CornerRadius = new UDim(0, 4);
 		badgeCorner.Parent = badge;
 
-		// Name
+		// Achievement name
 		const nameLbl = new Instance("TextLabel");
 		nameLbl.Size = new UDim2(1, -54, 0, 20);
 		nameLbl.Position = new UDim2(0, 50, 0, 4);
@@ -653,15 +761,19 @@ function renderAchievementsTab(data: KillBookData): void {
 		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
 		nameLbl.Parent = row;
 
-		// Description
+		// Description — show linked title reward if unlocked has a title
+		const rewardText =
+			isUnlocked && achievement.titleId
+				? achievement.description + "  +" + (TITLES[achievement.titleId]?.name ?? "")
+				: achievement.description;
 		const descLbl = new Instance("TextLabel");
 		descLbl.Size = new UDim2(1, -54, 0, 16);
 		descLbl.Position = new UDim2(0, 50, 0, 26);
 		descLbl.BackgroundTransparency = 1;
-		descLbl.TextColor3 = UI_THEME.textMuted;
+		descLbl.TextColor3 = isUnlocked && achievement.titleId ? UI_THEME.gold : UI_THEME.textMuted;
 		descLbl.Font = UI_THEME.fontBody;
 		descLbl.TextSize = 11;
-		descLbl.Text = isUnlocked ? achievement.description : "Locked";
+		descLbl.Text = isUnlocked ? rewardText : "Locked";
 		descLbl.TextXAlignment = Enum.TextXAlignment.Left;
 		descLbl.Parent = row;
 	}

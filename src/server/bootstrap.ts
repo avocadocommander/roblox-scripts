@@ -9,13 +9,14 @@ import { initializeKillBookRemotes } from "./modules/kill-book-server";
 import { initializeCampfireSystem } from "./modules/campfire-handler";
 import { initializeAchievementHandler } from "./modules/achievement-handler";
 import { initializeInventorySystem } from "./modules/inventory-handler";
+import { initializeTitleHandler } from "./modules/title-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
 
 export async function bootstrapServer() {
 	// load assets / systems
-	task.wait(5);
+	//task.wait(5);
 	initializeMovementSystem();
 	initializeStealthTracker();
 	initializeAssassinationHandler();
@@ -24,6 +25,7 @@ export async function bootstrapServer() {
 	initializeCampfireSystem();
 	initializeAchievementHandler();
 	initializeInventorySystem();
+	initializeTitleHandler();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }

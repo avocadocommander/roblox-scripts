@@ -3,6 +3,10 @@ import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
 import { UI_THEME } from "shared/ui-theme";
+import { MEDIEVAL_NPCS } from "shared/module";
+import { RARITY_COLORS } from "shared/inventory";
+import { TITLES } from "shared/config/titles";
+import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
 import {
 	getPlayerAssassinationRemote,
 	getPlayerWantedRemote,
@@ -10,6 +14,27 @@ import {
 	getBountyListSyncRemote,
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
+
+// ── Status → rarity colour mapping ───────────────────────────────────────────
+const STATUS_COLORS: Record<string, Color3> = {
+	Serf: RARITY_COLORS["common"],
+	Commoner: RARITY_COLORS["uncommon"],
+	Merchant: RARITY_COLORS["rare"],
+	Nobility: RARITY_COLORS["epic"],
+	Royalty: RARITY_COLORS["legendary"],
+};
+
+function getNPCStatusColor(npcName: string): Color3 {
+	const data = MEDIEVAL_NPCS[npcName];
+	if (!data) return UI_THEME.textPrimary;
+	return STATUS_COLORS[data.status] ?? UI_THEME.textPrimary;
+}
+
+function getNPCStatus(npcName: string): string {
+	const data = MEDIEVAL_NPCS[npcName];
+	if (!data) return "";
+	return data.status;
+}
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const stealthRemote = getOrCreateStealthRemote();
@@ -23,6 +48,132 @@ const wantedPlayerInfo = new Map<string, { gold: number; displayName: string }>(
 const wantedBillboards = new Map<string, BillboardGui>();
 let closestWantedPlayerInRange: Model | undefined = undefined;
 
+// ── Regular (non-wanted) Player Billboards ──────────────────────────────────────
+const playerBillboards = new Map<string, BillboardGui>();
+const playerTitles = new Map<string, string>(); // playerName -> equipped title ID
+
+function createPlayerBillboard(character: Model, playerName: string, titleId?: string): void {
+	removePlayerBillboard(playerName);
+	const head = character.FindFirstChild("Head") as BasePart | undefined;
+	if (!head) return;
+
+	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	if (humanoid) {
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+	}
+
+	const titleDef = titleId !== undefined ? TITLES[titleId] : undefined;
+	const borderColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
+	const billboardHeight = titleDef !== undefined ? 1.6 : 1.1;
+
+	const billboard = new Instance("BillboardGui");
+	billboard.Name = "PlayerBillboard";
+	billboard.Size = new UDim2(4.5, 0, billboardHeight, 0);
+	billboard.MaxDistance = 60;
+	billboard.StudsOffset = new Vector3(0, 2, 0);
+	billboard.AlwaysOnTop = false;
+	billboard.Parent = head;
+
+	const card = new Instance("Frame");
+	card.Size = new UDim2(1, 0, 1, 0);
+	card.BackgroundColor3 = UI_THEME.bg;
+	card.BackgroundTransparency = 0.15;
+	card.BorderSizePixel = 0;
+	card.Parent = billboard;
+
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = new UDim(0, 5);
+	cardCorner.Parent = card;
+
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = borderColor;
+	cardStroke.Thickness = 1.2;
+	cardStroke.Parent = card;
+
+	if (titleDef !== undefined) {
+		const isPrepend = titleDef.position === "prepend";
+
+		// Title row (symbol + title name)
+		const titleLabel = new Instance("TextLabel");
+		titleLabel.Size = new UDim2(1, -6, 0.38, 0);
+		titleLabel.Position = isPrepend ? new UDim2(0, 3, 0.04, 0) : new UDim2(0, 3, 0.58, 0);
+		titleLabel.BackgroundTransparency = 1;
+		titleLabel.TextColor3 = titleDef.color;
+		titleLabel.Font = UI_THEME.fontBold;
+		titleLabel.TextSize = 10;
+		titleLabel.TextTransparency = 0.1;
+		titleLabel.Text = titleDef.symbol + " " + titleDef.name;
+		titleLabel.TextXAlignment = isPrepend ? Enum.TextXAlignment.Left : Enum.TextXAlignment.Right;
+		titleLabel.BorderSizePixel = 0;
+		titleLabel.Parent = card;
+
+		// Player name row
+		const nameLabel = new Instance("TextLabel");
+		nameLabel.Size = new UDim2(1, -6, 0.52, 0);
+		nameLabel.Position = isPrepend ? new UDim2(0, 3, 0.44, 0) : new UDim2(0, 3, 0.04, 0);
+		nameLabel.BackgroundTransparency = 1;
+		nameLabel.TextColor3 = UI_THEME.gold;
+		nameLabel.Font = UI_THEME.fontDisplay;
+		nameLabel.TextSize = 13;
+		nameLabel.Text = playerName;
+		nameLabel.BorderSizePixel = 0;
+		nameLabel.Parent = card;
+	} else {
+		const nameLabel = new Instance("TextLabel");
+		nameLabel.Size = new UDim2(1, -6, 1, 0);
+		nameLabel.Position = new UDim2(0, 3, 0, 0);
+		nameLabel.BackgroundTransparency = 1;
+		nameLabel.TextColor3 = UI_THEME.gold;
+		nameLabel.Font = UI_THEME.fontDisplay;
+		nameLabel.TextSize = 13;
+		nameLabel.Text = playerName;
+		nameLabel.BorderSizePixel = 0;
+		nameLabel.Parent = card;
+	}
+
+	playerBillboards.set(playerName, billboard);
+}
+
+function removePlayerBillboard(playerName: string): void {
+	const billboard = playerBillboards.get(playerName);
+	if (billboard) {
+		billboard.Destroy();
+		playerBillboards.delete(playerName);
+	}
+}
+
+function setupRegularPlayerBillboards(): void {
+	const localPlayer = Players.LocalPlayer;
+	for (const player of Players.GetPlayers()) {
+		if (player === localPlayer) continue;
+		if (wantedPlayerInfo.has(player.Name)) continue; // wanted billboard takes over
+		if (player.Character) {
+			createPlayerBillboard(player.Character, player.Name, playerTitles.get(player.Name));
+		}
+		player.CharacterAdded.Connect((char) => {
+			// Wait briefly for Head to exist
+			task.wait(0.1);
+			if (!wantedPlayerInfo.has(player.Name)) {
+				createPlayerBillboard(char, player.Name, playerTitles.get(player.Name));
+			}
+		});
+	}
+
+	Players.PlayerAdded.Connect((player) => {
+		if (player === localPlayer) return;
+		player.CharacterAdded.Connect((char) => {
+			task.wait(0.1);
+			if (!wantedPlayerInfo.has(player.Name)) {
+				createPlayerBillboard(char, player.Name, playerTitles.get(player.Name));
+			}
+		});
+	});
+
+	Players.PlayerRemoving.Connect((player) => {
+		removePlayerBillboard(player.Name);
+	});
+}
+
 interface NPCProximityUI {
 	billboard: BillboardGui;
 	nameLabel: TextLabel;
@@ -33,33 +184,46 @@ const npcUIMap = new Map<Model, NPCProximityUI>();
 
 function createNPCBillboard(npc: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
-	billboard.Size = new UDim2(4.5, 0, 1.2, 0);
+	billboard.Size = new UDim2(5, 0, 1.6, 0);
 	billboard.MaxDistance = math.huge;
 	billboard.StudsOffset = new Vector3(0, 6.5, 0);
 	billboard.AlwaysOnTop = false;
 	billboard.Parent = npc;
 
-	// Name label — sits below the assassinate prompt
+	const statusColor = getNPCStatusColor(npc.Name);
+	const statusText = getNPCStatus(npc.Name);
+
+	// Outer card frame
+	const card = new Instance("Frame");
+	card.Name = "NPCCard";
+	card.Size = new UDim2(1, 0, 0.7, 0);
+	card.Position = new UDim2(0, 0, 0.3, 0);
+	card.BackgroundColor3 = UI_THEME.bg;
+	card.BackgroundTransparency = 0.15;
+	card.BorderSizePixel = 0;
+	card.Parent = billboard;
+
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = new UDim(0, 5);
+	cardCorner.Parent = card;
+
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = statusColor;
+	cardStroke.Thickness = 1.2;
+	cardStroke.Parent = card;
+
+	// NPC name
 	const nameLabel = new Instance("TextLabel");
-	nameLabel.Size = new UDim2(1, 0, 0.55, 0);
-	nameLabel.Position = new UDim2(0, 0, 0.45, 0);
-	nameLabel.BackgroundColor3 = UI_THEME.bg;
-	nameLabel.BackgroundTransparency = 0.25;
-	nameLabel.TextColor3 = UI_THEME.textPrimary;
+	nameLabel.Name = "TextLabel";
+	nameLabel.Size = new UDim2(1, -6, 1, 0);
+	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = statusColor;
 	nameLabel.Font = UI_THEME.fontDisplay;
 	nameLabel.TextSize = 13;
 	nameLabel.Text = npc.Name;
 	nameLabel.BorderSizePixel = 0;
-	nameLabel.Parent = billboard;
-
-	const nameCorner = new Instance("UICorner");
-	nameCorner.CornerRadius = new UDim(0, 4);
-	nameCorner.Parent = nameLabel;
-
-	const nameStroke = new Instance("UIStroke");
-	nameStroke.Color = UI_THEME.border;
-	nameStroke.Thickness = 0.8;
-	nameStroke.Parent = nameLabel;
+	nameLabel.Parent = card;
 
 	return billboard;
 }
@@ -212,6 +376,8 @@ function removeWantedBillboard(playerName: string): void {
 function handlePlayerWanted(payload: PlayerWantedPayload): void {
 	if (payload.playerName === Players.LocalPlayer.Name) return;
 	wantedPlayerInfo.set(payload.playerName, { gold: payload.gold, displayName: payload.displayName });
+	// Remove the regular gold billboard — wanted one takes over
+	removePlayerBillboard(payload.playerName);
 	const targetPlayer = Players.FindFirstChild(payload.playerName) as Player | undefined;
 	if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
 		if (wantedBillboards.has(payload.playerName)) {
@@ -224,15 +390,16 @@ function handlePlayerWanted(payload: PlayerWantedPayload): void {
 
 function handlePlayerWantedCleared(playerName: string): void {
 	wantedPlayerInfo.delete(playerName);
-	// Restore default Roblox name display
+	removeWantedBillboard(playerName);
+	// Restore regular gold billboard
 	const targetPlayer = Players.FindFirstChild(playerName) as Player | undefined;
 	if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
 		const humanoid = targetPlayer.Character.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
-			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer;
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 		}
+		createPlayerBillboard(targetPlayer.Character, playerName, playerTitles.get(playerName));
 	}
-	removeWantedBillboard(playerName);
 }
 
 /** Re-create billboards for wanted players after respawn or late join. */
@@ -294,11 +461,11 @@ function updateNPCProximityUI() {
 
 		const distance = playerPosition.sub(npcPosition).Magnitude;
 
-		// Update name label visibility based on distance
+		// Update card visibility based on distance
 		const nameVisible = distance <= NAME_VISIBLE_RANGE;
-		const nameLabel = ui.billboard.FindFirstChild("TextLabel") as TextLabel;
-		if (nameLabel) {
-			nameLabel.Visible = nameVisible;
+		const npcCard = ui.billboard.FindFirstChild("NPCCard") as Frame | undefined;
+		if (npcCard) {
+			npcCard.Visible = nameVisible;
 		}
 
 		// Track closest NPC in range (camera frame check optional for tracking)
@@ -407,6 +574,36 @@ function initializeNPCProximity() {
 	// Resolve now — server has created all bounty remotes by this point
 	playerAssassinationRemote = getPlayerAssassinationRemote();
 
+	// Gold billboards for all non-wanted players
+	setupRegularPlayerBillboards();
+
+	// Fetch all players' current titles, then rebuild billboards
+	task.spawn(() => {
+		const allTitles = getAllTitlesRemote().InvokeServer() as Record<string, string>;
+		for (const [pName, tId] of pairs(allTitles)) {
+			playerTitles.set(pName as string, tId as string);
+		}
+		for (const p of Players.GetPlayers()) {
+			if (p === player) continue;
+			if (p.Character && !wantedPlayerInfo.has(p.Name)) {
+				createPlayerBillboard(p.Character, p.Name, playerTitles.get(p.Name));
+			}
+		}
+	});
+
+	// Listen for title changes broadcast from the server
+	getTitleSyncRemote().OnClientEvent.Connect((pNameRaw: unknown, tIdRaw: unknown) => {
+		const pName = pNameRaw as string;
+		const tId = tIdRaw as string;
+		playerTitles.set(pName, tId);
+		if (!wantedPlayerInfo.has(pName)) {
+			const targetPlayer = Players.FindFirstChild(pName) as Player | undefined;
+			if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
+				createPlayerBillboard(targetPlayer.Character, pName, tId);
+			}
+		}
+	});
+
 	// Find existing NPCs in workspace (exclude player characters)
 	const existingNPCs = Workspace.GetDescendants().filter((inst): inst is Model => {
 		if (!inst.IsA("Model") || inst.FindFirstChild("Humanoid") === undefined) return false;
@@ -446,7 +643,7 @@ function initializeNPCProximity() {
 	});
 
 	getBountyListSyncRemote().OnClientEvent.Connect((_npcBounty: unknown, wanted: unknown) => {
-		for (const entry of ((wanted ?? []) as PlayerWantedPayload[])) {
+		for (const entry of (wanted ?? []) as PlayerWantedPayload[]) {
 			handlePlayerWanted(entry);
 		}
 	});

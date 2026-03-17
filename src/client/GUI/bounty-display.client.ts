@@ -54,7 +54,7 @@ function makeParchment(screenGui: ScreenGui): void {
 	const panel = new Instance("Frame");
 	panel.Name = "BountyHUD";
 	panel.Size = new UDim2(0, scaledPanelWidth, 0, 0);
-	panel.Position = new UDim2(1, -scaleSize(300), 0, scaleSize(12));
+	panel.Position = new UDim2(1, -scaleSize(332), 0, scaleSize(12));
 	panel.AutomaticSize = Enum.AutomaticSize.Y;
 	panel.BackgroundColor3 = UI_THEME.bg;
 	panel.BackgroundTransparency = UI_THEME.bgTransparency;

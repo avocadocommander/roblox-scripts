@@ -144,6 +144,8 @@ export interface PlayerState {
 	unlockedAchievements: string[];
 	/** Total NPC assassinations (all-time). */
 	totalNPCKills: number;
+	/** IDs of all titles the player has collected. */
+	ownedTitles: string[];
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -153,7 +155,7 @@ const DEFAULT_STATE: PlayerState = {
 	level: 1,
 	score: 0,
 	name: "Strider",
-	title: "Ranger",
+	title: "sellsword",
 	activeBountyName: undefined,
 	wanted: false,
 	killLog: {},
@@ -163,6 +165,7 @@ const DEFAULT_STATE: PlayerState = {
 	turnedInBounties: [],
 	unlockedAchievements: [],
 	totalNPCKills: 0,
+	ownedTitles: ["sellsword"],
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -443,6 +446,40 @@ export function unlockAchievement(player: Player, achievementId: string): boolea
 /** Check if player has a specific achievement. */
 export function hasAchievement(player: Player, achievementId: string): boolean {
 	return PLAYER_STATES.get(player)?.unlockedAchievements.includes(achievementId) ?? false;
+}
+
+// ── Titles ───────────────────────────────────────────────────────────────────
+
+/** Add a title to the player's collection. Returns true if newly added. */
+export function unlockTitle(player: Player, titleId: string): boolean {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return false;
+	if (state.ownedTitles.includes(titleId)) return false;
+	PLAYER_STATES.set(player, {
+		...state,
+		ownedTitles: [...state.ownedTitles, titleId],
+	});
+	return true;
+}
+
+/** Equip a title from the player's owned collection. Returns true if the title changed. */
+export function equipTitle(player: Player, titleId: string): boolean {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return false;
+	if (!state.ownedTitles.includes(titleId)) return false;
+	if (state.title === titleId) return false;
+	PLAYER_STATES.set(player, { ...state, title: titleId });
+	return true;
+}
+
+/** Get all title IDs owned by the player. */
+export function getOwnedTitles(player: Player): string[] {
+	return PLAYER_STATES.get(player)?.ownedTitles ?? [...DEFAULT_STATE.ownedTitles];
+}
+
+/** Get the player's currently equipped title ID. */
+export function getEquippedTitleId(player: Player): string {
+	return PLAYER_STATES.get(player)?.title ?? DEFAULT_STATE.title;
 }
 
 RequestAddLevel.OnServerInvoke = (player: Player, ...args: unknown[]) => {

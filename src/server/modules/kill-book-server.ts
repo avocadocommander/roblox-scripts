@@ -32,6 +32,8 @@ export function initializeKillBookRemotes(): void {
 			unlockedAchievements: state.unlockedAchievements,
 			activeBountyName: activeBounty?.npcName,
 			score: state.score,
+			ownedTitles: state.ownedTitles,
+			equippedTitle: state.title,
 		};
 	};
 
