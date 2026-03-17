@@ -147,6 +147,12 @@ function attachTierAccessories(npc: Model, data: NPCData, seed: () => number): v
 			if (handle) handle.Color = accDef.color;
 		}
 
+		// Hide the BasicShirt so the jacket renders cleanly on top
+		const basicShirt = npc.FindFirstChild("BasicShirt") as Accessory | undefined;
+		if (basicShirt) {
+			basicShirt.Destroy();
+		}
+
 		const humanoid = npc.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
 			humanoid.AddAccessory(accessory);
