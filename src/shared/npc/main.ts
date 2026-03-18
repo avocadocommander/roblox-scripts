@@ -34,7 +34,11 @@ export function createNPCModelAndGenerateHumanoid(
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeData);
 	humanoid.WalkSpeed = getHumanoidPace(routeData?.pace);
 
-	const animator = humanoid.WaitForChild("Animator") as Animator;
+	const animator = humanoid.FindFirstChildOfClass("Animator");
+	if (!animator) {
+		log("[NPC] No Animator found on " + name + ", skipping animations");
+		return undefined;
+	}
 	const animationInstances = getAnimationTracks(animator);
 
 	return {

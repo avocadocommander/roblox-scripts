@@ -93,9 +93,16 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			if (!npcName) {
 				throw `NPC name is invalid: ${npcName}`;
 			}
+
+			// Guards are always Commoners regardless of their name's status
+			const npcData = { ...MEDIEVAL_NPCS[npcName] };
+			if (routeConfig?.position === "Guard") {
+				npcData.status = "Commoner";
+			}
+
 			const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(
 				npcName,
-				MEDIEVAL_NPCS[npcName],
+				npcData,
 				routeConfig,
 			);
 

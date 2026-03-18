@@ -25,6 +25,8 @@ export interface NPCAccessoryDef {
 	name: string;
 	/** Optional tint applied to the Handle MeshPart. Omit to keep default. */
 	color?: Color3;
+	/** If true, destroy BasicShirt before attaching (for chest pieces that replace the shirt). */
+	hideShirt?: boolean;
 }
 
 /** Full clothing definition for one status tier. */
@@ -128,7 +130,7 @@ const NOBILITY_CLOTHING: TierClothingDef = {
 		Color3.fromHex("#1A1A1A"), // black leather
 		Color3.fromHex("#3E2723"), // dark brown
 	],
-	accessories: [{ name: "rpc" }],
+	accessories: [{ name: "rpc", hideShirt: true }],
 	accessoryChance: 1,
 };
 
@@ -147,7 +149,7 @@ const ROYALTY_CLOTHING: TierClothingDef = {
 		Color3.fromHex("#1A1A1A"), // polished black
 		Color3.fromHex("#C3A032"), // gold-trimmed
 	],
-	accessories: [{ name: "rpc" }],
+	accessories: [{ name: "rpc", hideShirt: true }],
 	accessoryChance: 1,
 };
 
@@ -163,4 +165,14 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
 	Merchant: MERCHANT_CLOTHING,
 	Nobility: NOBILITY_CLOTHING,
 	Royalty: ROYALTY_CLOTHING,
+};
+
+// ── Route-specific accessories (Guards, Preachers, etc.) ──────────────────────
+
+/**
+ * ROUTE_ACCESSORIES maps a route position name to accessories that should
+ * always be added to NPCs on that route, regardless of status tier.
+ */
+export const ROUTE_ACCESSORIES: Record<string, NPCAccessoryDef[]> = {
+	Guard: [{ name: "guardShirt", hideShirt: true }],
 };

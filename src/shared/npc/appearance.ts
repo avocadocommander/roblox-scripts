@@ -3,7 +3,7 @@ import { log } from "../helpers";
 import { NPCData, Race } from "../module";
 import { RouteConfig } from "../npc-manager";
 import { makeSeededRandom } from "./utils";
-import { STATUS_CLOTHING } from "../config/npc-clothing";
+import { STATUS_CLOTHING, ROUTE_ACCESSORIES } from "../config/npc-clothing";
 
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
@@ -62,19 +62,16 @@ function getGenericSeededAppearance(
 	// ── Tier-based clothing from config ───────────────────────────────────────
 	const tierClothing = STATUS_CLOTHING[data.status];
 
-	const shirt = npc
-		.WaitForChild("BasicShirt")
-		.WaitForChild("Handle")
-		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
+	const shirt = npc.FindFirstChild("BasicShirt")?.FindFirstChild("Handle")?.FindFirstChild("SurfaceAppearance") as
+		| SurfaceAppearance
+		| undefined;
 
-	const pants = npc
-		.WaitForChild("BasicPants")
-		.WaitForChild("Handle")
-		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
-	const shoes = npc
-		.WaitForChild("BasicShoes")
-		.WaitForChild("Handle")
-		.WaitForChild("SurfaceAppearance") as SurfaceAppearance;
+	const pants = npc.FindFirstChild("BasicPants")?.FindFirstChild("Handle")?.FindFirstChild("SurfaceAppearance") as
+		| SurfaceAppearance
+		| undefined;
+	const shoes = npc.FindFirstChild("BasicShoes")?.FindFirstChild("Handle")?.FindFirstChild("SurfaceAppearance") as
+		| SurfaceAppearance
+		| undefined;
 
 	let earType: string | undefined = undefined;
 
@@ -92,31 +89,36 @@ function getGenericSeededAppearance(
 		}
 	}
 	if (earType !== undefined) {
-		const replicatedEars = ReplicatedStorage.WaitForChild(earType) as Accessory;
-		const ears = replicatedEars.Clone();
-		const earMesh = ears.WaitForChild("Handle") as MeshPart;
-		earMesh.Color = skinColor;
-		ears.Parent = npc;
+		const replicatedEars = ReplicatedStorage.FindFirstChild(earType) as Accessory | undefined;
+		if (replicatedEars) {
+			const ears = replicatedEars.Clone();
+			const earMesh = ears.FindFirstChild("Handle") as MeshPart | undefined;
+			if (earMesh) earMesh.Color = skinColor;
+			ears.Parent = npc;
+		} else {
+			log("[APPEARANCE] Missing ear accessory: " + earType);
+		}
 	}
 
 	if (!shirt) {
-		error("NOT SHIRT");
+		log("[APPEARANCE] BasicShirt not found on NPC, skipping clothing colors");
+		return humanoidDescription;
 	}
 
 	// Route-specific overrides (Guards, Preachers) take priority
 	if (routeData?.position === "Guard") {
-		shirt.Color = new Color3(0, 0, 0);
-		pants.Color = new Color3(0, 0, 0);
-		shoes.Color = new Color3(0, 0, 0);
+		if (shirt) shirt.Color = new Color3(0, 0, 0);
+		if (pants) pants.Color = new Color3(0, 0, 0);
+		if (shoes) shoes.Color = new Color3(0, 0, 0);
 	} else if (routeData?.position === "Preacher") {
-		shirt.Color = new Color3(0.59, 0.03, 0.03);
-		pants.Color = new Color3(0.59, 0.03, 0.03);
-		shoes.Color = new Color3(0, 0, 0);
+		if (shirt) shirt.Color = new Color3(0.59, 0.03, 0.03);
+		if (pants) pants.Color = new Color3(0.59, 0.03, 0.03);
+		if (shoes) shoes.Color = new Color3(0, 0, 0);
 	} else {
 		// Use status-tier palette
-		shirt.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shirtColors, seed());
-		pants.Color = getRandomAssetFromListBasedOnSeed(tierClothing.pantsColors, seed());
-		shoes.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shoeColors, seed());
+		if (shirt) shirt.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shirtColors, seed());
+		if (pants) pants.Color = getRandomAssetFromListBasedOnSeed(tierClothing.pantsColors, seed());
+		if (shoes) shoes.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shoeColors, seed());
 	}
 
 	// ── Tier accessories are applied AFTER ApplyDescription in setHumanoidDefaults
@@ -125,42 +127,60 @@ function getGenericSeededAppearance(
 	return humanoidDescription;
 }
 
-function attachTierAccessories(npc: Model, data: NPCData, seed: () => number): void {
-	const tierClothing = STATUS_CLOTHING[data.status];
-	const chance = tierClothing.accessoryChance ?? 1;
-	log("[APPEARANCE] Status=" + data.status + " accessories=" + tierClothing.accessories.size() + " chance=" + chance);
+function cloneAndAttachAccessory(npc: Model, accDef: { name: string; color?: Color3; hideShirt?: boolean }): void {
+	const template = ReplicatedStorage.FindFirstChild(accDef.name) as Accessory | undefined;
+	if (!template) {
+		log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
+		return;
+	}
 
-	for (const accDef of tierClothing.accessories) {
-		const roll = seed();
-		log("[APPEARANCE] Accessory roll: " + roll + " vs chance " + chance + " for " + accDef.name);
-		if (roll > chance) continue;
+	const accessory = template.Clone();
+	if (accDef.color !== undefined) {
+		const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
+		if (handle) handle.Color = accDef.color;
+	}
 
-		const template = ReplicatedStorage.FindFirstChild(accDef.name) as Accessory | undefined;
-		if (!template) {
-			log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
-			continue;
-		}
-
-		const accessory = template.Clone();
-		if (accDef.color !== undefined) {
-			const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
-			if (handle) handle.Color = accDef.color;
-		}
-
-		// Hide the BasicShirt so the jacket renders cleanly on top
+	if (accDef.hideShirt === true) {
 		const basicShirt = npc.FindFirstChild("BasicShirt") as Accessory | undefined;
-		if (basicShirt) {
-			basicShirt.Destroy();
-		}
+		if (basicShirt) basicShirt.Destroy();
+	}
 
-		const humanoid = npc.FindFirstChildOfClass("Humanoid");
-		if (humanoid) {
-			humanoid.AddAccessory(accessory);
-		} else {
-			accessory.Parent = npc;
-		}
+	const humanoid = npc.FindFirstChildOfClass("Humanoid");
+	if (humanoid) {
+		humanoid.AddAccessory(accessory);
+	} else {
+		accessory.Parent = npc;
+	}
 
-		log("[APPEARANCE] Attached accessory: " + accDef.name);
+	log("[APPEARANCE] Attached accessory: " + accDef.name);
+}
+
+function attachTierAccessories(
+	npc: Model,
+	data: NPCData,
+	seed: () => number,
+	routeData: RouteConfig | undefined,
+): void {
+	// ── Route-specific accessories (guard shirt, preacher hood, etc.) ─────────
+	const position = routeData?.position;
+	const hasRouteAccessories =
+		position !== undefined && position in ROUTE_ACCESSORIES && ROUTE_ACCESSORIES[position].size() > 0;
+
+	if (hasRouteAccessories) {
+		// Route accessories take priority — skip tier accessories entirely
+		for (const accDef of ROUTE_ACCESSORIES[position!]) {
+			cloneAndAttachAccessory(npc, accDef);
+		}
+	} else {
+		// ── Status-tier accessories (chest pieces, capes, etc.) ──────────────
+		const tierClothing = STATUS_CLOTHING[data.status];
+		const chance = tierClothing.accessoryChance ?? 1;
+
+		for (const accDef of tierClothing.accessories) {
+			const roll = seed();
+			if (roll > chance) continue;
+			cloneAndAttachAccessory(npc, accDef);
+		}
 	}
 }
 
@@ -181,19 +201,23 @@ function setHumanoidDefaults(
 	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeData);
 
 	if (routeData?.position === "Guard" && routeData?.pace !== "Stationary") {
-		const torch = ReplicatedStorage.WaitForChild("HandTorch") as Tool;
-		const animator = humanoid.FindFirstChildOfClass("Animator") ?? (humanoid.WaitForChild("Animator") as Animator);
+		const torch = ReplicatedStorage.FindFirstChild("HandTorch") as Tool | undefined;
+		const animator = humanoid.FindFirstChildOfClass("Animator");
 
-		const anim = new Instance("Animation");
-		anim.AnimationId = `rbxassetid://74875540932204`;
+		if (torch && animator) {
+			const anim = new Instance("Animation");
+			anim.AnimationId = `rbxassetid://74875540932204`;
 
-		const track = animator.LoadAnimation(anim);
-		track.Priority = Enum.AnimationPriority.Action2;
-		track.Looped = true;
+			const track = animator.LoadAnimation(anim);
+			track.Priority = Enum.AnimationPriority.Action2;
+			track.Looped = true;
 
-		track.Play();
+			track.Play();
 
-		humanoid.EquipTool(torch.Clone());
+			humanoid.EquipTool(torch.Clone());
+		} else {
+			log("[APPEARANCE] Guard missing HandTorch or Animator, skipping torch");
+		}
 	}
 
 	if (!appearenceDescription) return;
@@ -203,7 +227,7 @@ function setHumanoidDefaults(
 	const npc = humanoid.Parent as Model;
 	if (npc) {
 		const accRand = makeSeededRandom(seed);
-		attachTierAccessories(npc, data, accRand);
+		attachTierAccessories(npc, data, accRand, routeData);
 	}
 
 	return humanoid;
