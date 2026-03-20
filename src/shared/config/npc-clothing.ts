@@ -27,6 +27,24 @@ export interface NPCAccessoryDef {
 	color?: Color3;
 	/** If true, destroy BasicShirt before attaching (for chest pieces that replace the shirt). */
 	hideShirt?: boolean;
+	/**
+	 * When set, skip AddAccessory and instead manually weld the Handle to this
+	 * named child of the NPC model (e.g. "Torso", "Left Leg").
+	 * Use this for accessories that don't have correct attachment data.
+	 */
+	weldTo?: string;
+	/**
+	 * CFrame offset applied as C0 on the weld (Part0 = weldTo part, Part1 = Handle).
+	 * Tune this so the mesh sits in the right place. Defaults to identity.
+	 */
+	weldCFrame?: CFrame;
+	/**
+	 * Weld the same accessory to multiple parts simultaneously (clones one per entry).
+	 * Each entry is { part: string, cframe?: CFrame }.
+	 * Use for accessories like boots that need to follow both "Left Leg" and "Right Leg".
+	 * Takes priority over weldTo when present.
+	 */
+	weldToMany?: Array<{ part: string; cframe?: CFrame }>;
 }
 
 /** Full clothing definition for one status tier. */
@@ -174,5 +192,14 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
  * always be added to NPCs on that route, regardless of status tier.
  */
 export const ROUTE_ACCESSORIES: Record<string, NPCAccessoryDef[]> = {
-	Guard: [{ name: "guardShirt", hideShirt: true }],
+	Guard: [
+		{ name: "guardShirt", hideShirt: true, weldTo: "Torso", weldCFrame: new CFrame(0, 0, 0) },
+		{
+			name: "leather boots",
+			weldToMany: [
+				{ part: "Left Leg",  cframe: new CFrame(0, -1.0, 0) },
+				{ part: "Right Leg", cframe: new CFrame(0, -1.0, 0) },
+			],
+		},
+	],
 };

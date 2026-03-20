@@ -3,7 +3,7 @@ import { log } from "../helpers";
 import { NPCData, Race } from "../module";
 import { RouteConfig } from "../npc-manager";
 import { makeSeededRandom } from "./utils";
-import { STATUS_CLOTHING, ROUTE_ACCESSORIES } from "../config/npc-clothing";
+import { STATUS_CLOTHING, ROUTE_ACCESSORIES, NPCAccessoryDef } from "../config/npc-clothing";
 
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
@@ -31,6 +31,26 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 
 function getRaceSkinTones(race: Race): Color3[] {
 	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
+}
+
+// ── Body part aliases (R6 <-> R15) ────────────────────────────────────────────
+// Tries the given name first, then falls back to known equivalents.
+const PART_ALIASES: Record<string, string[]> = {
+	Torso:         ["Torso", "UpperTorso"],
+	UpperTorso:    ["UpperTorso", "Torso"],
+	"Left Leg":    ["Left Leg", "LeftFoot", "LeftLowerLeg", "LeftUpperLeg"],
+	"Right Leg":   ["Right Leg", "RightFoot", "RightLowerLeg", "RightUpperLeg"],
+	LeftFoot:      ["LeftFoot", "Left Leg", "LeftLowerLeg"],
+	RightFoot:     ["RightFoot", "Right Leg", "RightLowerLeg"],
+};
+
+function findBodyPart(npc: Model, partName: string): BasePart | undefined {
+	const aliases = PART_ALIASES[partName] ?? [partName];
+	for (const alias of aliases) {
+		const found = npc.FindFirstChild(alias) as BasePart | undefined;
+		if (found) return found;
+	}
+	return undefined;
 }
 
 function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
@@ -127,10 +147,43 @@ function getGenericSeededAppearance(
 	return humanoidDescription;
 }
 
-function cloneAndAttachAccessory(npc: Model, accDef: { name: string; color?: Color3; hideShirt?: boolean }): void {
+function cloneAndAttachAccessory(npc: Model, accDef: NPCAccessoryDef): void {
 	const template = ReplicatedStorage.FindFirstChild(accDef.name);
 	if (!template) {
 		log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
+		return;
+	}
+
+	if (accDef.hideShirt === true) {
+		const basicShirt = npc.FindFirstChild("BasicShirt") as Accessory | undefined;
+		if (basicShirt) basicShirt.Destroy();
+	}
+
+	// weldToMany: clone once per part entry and weld each independently
+	if (accDef.weldToMany !== undefined) {
+		for (const entry of accDef.weldToMany) {
+			const targetPart = findBodyPart(npc, entry.part);
+			if (!targetPart) {
+				log("[APPEARANCE] weldToMany target '" + entry.part + "' not found for " + accDef.name, "WARN");
+				continue;
+			}
+			const clone = template.Clone() as Accessory;
+			if (accDef.color !== undefined) {
+				const h = clone.FindFirstChild("Handle") as BasePart | undefined;
+				if (h) h.Color = accDef.color;
+			}
+			const handle = clone.FindFirstChild("Handle") as BasePart | undefined;
+			if (handle) {
+				handle.Anchored = false;
+				clone.Parent = npc;
+				const weld = new Instance("Weld");
+				weld.Part0 = targetPart;
+				weld.Part1 = handle;
+				weld.C0 = entry.cframe ?? new CFrame(0, 0, 0);
+				weld.Parent = handle;
+				log("[APPEARANCE] Welded " + accDef.name + " to " + targetPart.Name + " (via '" + entry.part + "')");
+			}
+		}
 		return;
 	}
 
@@ -140,17 +193,29 @@ function cloneAndAttachAccessory(npc: Model, accDef: { name: string; color?: Col
 		if (handle) handle.Color = accDef.color;
 	}
 
-	if (accDef.hideShirt === true) {
-		const basicShirt = npc.FindFirstChild("BasicShirt") as Accessory | undefined;
-		if (basicShirt) basicShirt.Destroy();
+	// Single weld path — use when the accessory lacks correct attachment data
+	if (accDef.weldTo !== undefined) {
+		const targetPart = findBodyPart(npc, accDef.weldTo);
+		const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
+		if (targetPart && handle) {
+			handle.Anchored = false;
+			accessory.Parent = npc;
+			const weld = new Instance("Weld");
+			weld.Part0 = targetPart;
+			weld.Part1 = handle;
+			weld.C0 = accDef.weldCFrame ?? new CFrame(0, 0, 0);
+			weld.Parent = handle;
+			log("[APPEARANCE] Welded " + accDef.name + " to " + targetPart.Name + " (via '" + accDef.weldTo + "')");
+		} else {
+			log("[APPEARANCE] weldTo target '" + accDef.weldTo + "' not found for " + accDef.name, "WARN");
+		}
+		return;
 	}
 
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (humanoid) {
-		const [ok, err] = pcall(() => humanoid.AddAccessory(accessory));
+		const [ok] = pcall(() => humanoid.AddAccessory(accessory));
 		if (!ok) {
-			// Layered clothing with incomplete cage data can fail AddAccessory.
-			// Parenting directly to the character still works for wrapped accessories.
 			log("[APPEARANCE] AddAccessory failed for " + accDef.name + ", parenting directly");
 			accessory.Parent = npc;
 		}
