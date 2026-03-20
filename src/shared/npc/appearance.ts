@@ -128,13 +128,13 @@ function getGenericSeededAppearance(
 }
 
 function cloneAndAttachAccessory(npc: Model, accDef: { name: string; color?: Color3; hideShirt?: boolean }): void {
-	const template = ReplicatedStorage.FindFirstChild(accDef.name) as Accessory | undefined;
+	const template = ReplicatedStorage.FindFirstChild(accDef.name);
 	if (!template) {
 		log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
 		return;
 	}
 
-	const accessory = template.Clone();
+	const accessory = template.Clone() as Accessory;
 	if (accDef.color !== undefined) {
 		const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
 		if (handle) handle.Color = accDef.color;
@@ -147,7 +147,13 @@ function cloneAndAttachAccessory(npc: Model, accDef: { name: string; color?: Col
 
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (humanoid) {
-		humanoid.AddAccessory(accessory);
+		const [ok, err] = pcall(() => humanoid.AddAccessory(accessory));
+		if (!ok) {
+			// Layered clothing with incomplete cage data can fail AddAccessory.
+			// Parenting directly to the character still works for wrapped accessories.
+			log("[APPEARANCE] AddAccessory failed for " + accDef.name + ", parenting directly");
+			accessory.Parent = npc;
+		}
 	} else {
 		accessory.Parent = npc;
 	}
@@ -163,12 +169,14 @@ function attachTierAccessories(
 ): void {
 	// ── Route-specific accessories (guard shirt, preacher hood, etc.) ─────────
 	const position = routeData?.position;
-	const hasRouteAccessories =
-		position !== undefined && position in ROUTE_ACCESSORIES && ROUTE_ACCESSORIES[position].size() > 0;
+	const routeAccs = position !== undefined ? ROUTE_ACCESSORIES[position] : undefined;
 
-	if (hasRouteAccessories) {
+	log("[APPEARANCE] position=" + tostring(position) + " routeAccs=" + tostring(routeAccs));
+
+	if (routeAccs !== undefined && routeAccs.size() > 0) {
 		// Route accessories take priority — skip tier accessories entirely
-		for (const accDef of ROUTE_ACCESSORIES[position!]) {
+		log("[APPEARANCE] Applying " + routeAccs.size() + " route accessories for " + tostring(position));
+		for (const accDef of routeAccs) {
 			cloneAndAttachAccessory(npc, accDef);
 		}
 	} else {
