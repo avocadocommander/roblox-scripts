@@ -194,12 +194,5 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
 export const ROUTE_ACCESSORIES: Record<string, NPCAccessoryDef[]> = {
 	Guard: [
 		{ name: "guardShirt", hideShirt: true, weldTo: "Torso", weldCFrame: new CFrame(0, 0, 0) },
-		{
-			name: "leather boots",
-			weldToMany: [
-				{ part: "Left Leg",  cframe: new CFrame(0, -1.0, 0) },
-				{ part: "Right Leg", cframe: new CFrame(0, -1.0, 0) },
-			],
-		},
 	],
 };
