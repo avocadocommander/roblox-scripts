@@ -27,6 +27,7 @@ import {
 } from "./bounty-manager";
 import { transferBountyScrolls, addPlayerBountyScroll } from "./inventory-handler";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
+import { isNPCKillable } from "shared/config/npcs";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 // POISON is a status effect, not a death animation — keep it out of this list.
@@ -62,6 +63,12 @@ function initializeAssassinationHandler() {
 		const model = npcModel as Model;
 		if (!model || !model.Parent) {
 			log(`[ASSASSINATION] ${player.Name} attempted assassination on invalid NPC`, "WARN");
+			return;
+		}
+
+		// Reject if this NPC cannot be killed
+		if (!isNPCKillable(model.Name)) {
+			log(`[ASSASSINATION] ${player.Name} tried to kill unkillable NPC ${model.Name} -- blocked`, "WARN");
 			return;
 		}
 

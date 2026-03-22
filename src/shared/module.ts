@@ -1,214 +1,46 @@
 import { NPC } from "./npc/main";
+import { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "./config/npcs";
 
-export function useAssetId(id: string) {
-	return `rbxassetid://${id}`;
-}
+// Re-export the canonical types and data from config/npcs
+export type { NPCDef, NPCRegistry } from "./config/npcs";
+export { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "./config/npcs";
 
-export const MEDIEVAL_NPC_NAMES = [
-	// Humans
-	"Alaric Thornbald",
-	"Cedric de Ironsart",
-	"Ealdred Cwilmere",
-	"Godfrey de Morwen",
-	"Osric Greydane",
-	"Leofric Æshenford",
-	"Theobald de Vexley",
-	"Wymond Duskwathe",
-	"Merien Chandewick",
-	"Rowan Embermere",
-	"Greta Millstone",
-	"Brenna Wudwhistle",
-	"Ulric Fenwatch",
-	"Isolde Fairbloom",
-	"Bertram de Mere",
-	"Thorne Æshgrave",
-	"Lyra Goldmead",
-	"Edric Thornwell",
-	"Moira Blackfen",
-	"Garrick Hallowmere",
-	"Halric Stonvein",
-	"Ansel Ravendock",
-	"Wulfgar Ironswake",
-	"Thessia Dewmantle",
-	"Magnus Coldmere",
-	"Selwyn Ashthorne",
-	"Idris Moorwatch",
-	"Rowena Brambleholt",
-	"Giselle Dawnmere",
-	"Torvald Ironbriar",
-	"Crispin Hayward",
-	"Merek de Lowenford",
-	"Agnes Hearthwyfe",
-	"Tilda Mossbraid",
-	"Oswyn Blackmere",
-	"Hugh Caskwell",
-	"Sabine de Wintermere",
-	"Frida Thatchbrook",
-	"Geoffrey Saltmarsh",
-	"Alinor Fairholt",
+// ── Backward-compatible aliases ───────────────────────────────────────────────
+// These let existing code keep compiling while it migrates to the new names.
 
-	// Elves
-	"Faelanis Windglen",
-	"Thalion Brightshade",
-	"Elandriel Moonvale",
-	"Caerwyn Duskwhisper",
-	"Aerendyl Silversong",
-	"Thessaly Nywen",
-	"Varethion Hollowmantle",
-	"Seraphina Duskwillow",
-	"Tamsin Silmare",
-	"Yseldra Nightbloom",
-	"Elira Frostbrook",
-	"Fiora Thistlewynd",
-	"Selara Moonpetal",
-	"Fenriel Duskbranch",
-	"Aeloria Silvercrest",
-	"Lorien Blackvale",
-	"Maelis Stormgrove",
-	"Ithariel Dawnsong",
-	"Sylwen Starbrook",
-	"Vaelion Greenmantle",
-	"Orendis Whisperglen",
-	"Nythera Frostpetal",
-	"Thalindra Emberglen",
-	"Corenith Leafwhisper",
-	"Elvandar Duskpetal",
+export type Status = import("./config/npcs").SocialClass;
+export type Gender = import("./config/npcs").Gender;
+export type Race = import("./config/npcs").Race;
 
-	// Goblins
-	"Aldruk Ravensnarl",
-	"Baldric Stonhelm",
-	"Orrug Grimquill",
-	"Tobruk Mudfoot",
-	"Edda Barleyroot",
-	"Hamlin Wainwright",
-	"Aldon Brightforge",
-	"Brandok Oakshield",
-	"Draven Mirefang",
-	"Zara Mudtwig",
-	"Korrin Blackgrit",
-	"Vrixa Thornsnout",
-	"Drogath Greenfang",
-	"Orvar Stoneclad",
-	"Grishka Tallowhide",
-	"Grubnik Sootfang",
-	"Snaga Miregut",
-	"Drekka Ironnose",
-	"Fizzle Toadsnout",
-	"Zogmar Brambletoe",
-	"Krilla Tallowtongue",
-	"Mograt Splinterjaw",
-	"Prixa Coalbriar",
-] as const;
-
-export type MedievalNPCName = (typeof MEDIEVAL_NPC_NAMES)[number];
-
-export type Status = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
-
-export type Gender = "M" | "F";
-export type Race = "Human" | "Elf" | "Goblin";
+/** @deprecated Use NPCDef instead. */
 export interface NPCData {
 	gender: Gender;
 	race: Race;
 	status: Status;
 }
 
+/** @deprecated Use NPCRegistry instead. */
 export type NPCModel = Record<string, NPCData>;
 
-export const MEDIEVAL_NPCS: NPCModel = {
-	// Humans
-	"Alaric Thornbald": { gender: "M", race: "Human", status: "Serf" },
-	"Cedric de Ironsart": { gender: "M", race: "Human", status: "Royalty" },
-	"Ealdred Cwilmere": { gender: "M", race: "Human", status: "Serf" },
-	"Godfrey de Morwen": { gender: "M", race: "Human", status: "Nobility" },
-	"Osric Greydane": { gender: "M", race: "Human", status: "Serf" },
-	"Leofric Æshenford": { gender: "M", race: "Human", status: "Serf" },
-	"Theobald de Vexley": { gender: "M", race: "Human", status: "Serf" },
-	"Wymond Duskwathe": { gender: "M", race: "Human", status: "Serf" },
-	"Merien Chandewick": { gender: "F", race: "Human", status: "Serf" },
-	"Rowan Embermere": { gender: "F", race: "Human", status: "Serf" },
-	"Greta Millstone": { gender: "F", race: "Human", status: "Serf" },
-	"Brenna Wudwhistle": { gender: "F", race: "Human", status: "Serf" },
-	"Ulric Fenwatch": { gender: "M", race: "Human", status: "Serf" },
-	"Isolde Fairbloom": { gender: "F", race: "Human", status: "Commoner" },
-	"Bertram de Mere": { gender: "M", race: "Human", status: "Merchant" },
-	"Thorne Æshgrave": { gender: "M", race: "Human", status: "Serf" },
-	"Lyra Goldmead": { gender: "F", race: "Human", status: "Merchant" },
-	"Edric Thornwell": { gender: "M", race: "Human", status: "Commoner" },
-	"Moira Blackfen": { gender: "F", race: "Human", status: "Serf" },
-	"Garrick Hallowmere": { gender: "M", race: "Human", status: "Merchant" },
-	"Halric Stonvein": { gender: "M", race: "Human", status: "Commoner" },
-	"Ansel Ravendock": { gender: "M", race: "Human", status: "Serf" },
-	"Wulfgar Ironswake": { gender: "M", race: "Human", status: "Nobility" },
-	"Thessia Dewmantle": { gender: "F", race: "Human", status: "Serf" },
-	"Magnus Coldmere": { gender: "M", race: "Human", status: "Serf" },
-	"Selwyn Ashthorne": { gender: "M", race: "Human", status: "Serf" },
-	"Idris Moorwatch": { gender: "M", race: "Human", status: "Commoner" },
-	"Rowena Brambleholt": { gender: "F", race: "Human", status: "Merchant" },
-	"Giselle Dawnmere": { gender: "F", race: "Human", status: "Nobility" },
-	"Torvald Ironbriar": { gender: "M", race: "Human", status: "Serf" },
-	"Crispin Hayward": { gender: "M", race: "Human", status: "Commoner" },
-	"Merek de Lowenford": { gender: "M", race: "Human", status: "Merchant" },
-	"Agnes Hearthwyfe": { gender: "F", race: "Human", status: "Serf" },
-	"Tilda Mossbraid": { gender: "F", race: "Human", status: "Commoner" },
-	"Oswyn Blackmere": { gender: "M", race: "Human", status: "Serf" },
-	"Hugh Caskwell": { gender: "M", race: "Human", status: "Commoner" },
-	"Sabine de Wintermere": { gender: "F", race: "Human", status: "Nobility" },
-	"Frida Thatchbrook": { gender: "F", race: "Human", status: "Serf" },
-	"Geoffrey Saltmarsh": { gender: "M", race: "Human", status: "Merchant" },
-	"Alinor Fairholt": { gender: "F", race: "Human", status: "Commoner" },
+/** @deprecated Use NPC_NAMES instead. */
+export const MEDIEVAL_NPC_NAMES = NPC_NAMES;
 
-	// Elves
-	"Faelanis Windglen": { gender: "F", race: "Elf", status: "Serf" },
-	"Thalion Brightshade": { gender: "M", race: "Elf", status: "Serf" },
-	"Elandriel Moonvale": { gender: "M", race: "Elf", status: "Serf" },
-	"Caerwyn Duskwhisper": { gender: "M", race: "Elf", status: "Commoner" },
-	"Aerendyl Silversong": { gender: "F", race: "Elf", status: "Royalty" },
-	"Thessaly Nywen": { gender: "F", race: "Elf", status: "Merchant" },
-	"Varethion Hollowmantle": { gender: "M", race: "Elf", status: "Nobility" },
-	"Seraphina Duskwillow": { gender: "F", race: "Elf", status: "Nobility" },
-	"Tamsin Silmare": { gender: "F", race: "Elf", status: "Royalty" },
-	"Yseldra Nightbloom": { gender: "F", race: "Elf", status: "Nobility" },
-	"Elira Frostbrook": { gender: "F", race: "Elf", status: "Commoner" },
-	"Fiora Thistlewynd": { gender: "F", race: "Elf", status: "Merchant" },
-	"Selara Moonpetal": { gender: "F", race: "Elf", status: "Commoner" },
-	"Fenriel Duskbranch": { gender: "M", race: "Elf", status: "Merchant" },
-	"Aeloria Silvercrest": { gender: "F", race: "Elf", status: "Nobility" },
-	"Lorien Blackvale": { gender: "F", race: "Elf", status: "Serf" },
-	"Maelis Stormgrove": { gender: "F", race: "Elf", status: "Royalty" },
-	"Ithariel Dawnsong": { gender: "M", race: "Elf", status: "Nobility" },
-	"Sylwen Starbrook": { gender: "F", race: "Elf", status: "Commoner" },
-	"Vaelion Greenmantle": { gender: "M", race: "Elf", status: "Merchant" },
-	"Orendis Whisperglen": { gender: "M", race: "Elf", status: "Serf" },
-	"Nythera Frostpetal": { gender: "F", race: "Elf", status: "Commoner" },
-	"Thalindra Emberglen": { gender: "F", race: "Elf", status: "Merchant" },
-	"Corenith Leafwhisper": { gender: "M", race: "Elf", status: "Serf" },
-	"Elvandar Duskpetal": { gender: "M", race: "Elf", status: "Nobility" },
+/**
+ * @deprecated Use NPC_REGISTRY instead.
+ * Thin adapter that maps the new NPCDef shape back to the old {gender, race, status} shape
+ * so existing consumers continue to work without changes.
+ */
+export const MEDIEVAL_NPCS: NPCModel = (() => {
+	const out: NPCModel = {};
+	for (const [name, def] of pairs(NPC_REGISTRY)) {
+		out[name as string] = { gender: def.gender, race: def.race, status: def.socialClass };
+	}
+	return out;
+})();
 
-	// Goblins
-	"Aldruk Ravensnarl": { gender: "M", race: "Goblin", status: "Nobility" },
-	"Baldric Stonhelm": { gender: "M", race: "Goblin", status: "Merchant" },
-	"Orrug Grimquill": { gender: "M", race: "Goblin", status: "Serf" },
-	"Tobruk Mudfoot": { gender: "M", race: "Goblin", status: "Serf" },
-	"Edda Barleyroot": { gender: "F", race: "Goblin", status: "Merchant" },
-	"Hamlin Wainwright": { gender: "M", race: "Goblin", status: "Serf" },
-	"Aldon Brightforge": { gender: "M", race: "Goblin", status: "Merchant" },
-	"Brandok Oakshield": { gender: "M", race: "Goblin", status: "Merchant" },
-	"Draven Mirefang": { gender: "M", race: "Goblin", status: "Serf" },
-	"Zara Mudtwig": { gender: "F", race: "Goblin", status: "Commoner" },
-	"Korrin Blackgrit": { gender: "M", race: "Goblin", status: "Merchant" },
-	"Vrixa Thornsnout": { gender: "F", race: "Goblin", status: "Serf" },
-	"Drogath Greenfang": { gender: "M", race: "Goblin", status: "Nobility" },
-	"Orvar Stoneclad": { gender: "M", race: "Goblin", status: "Serf" },
-	"Grishka Tallowhide": { gender: "F", race: "Goblin", status: "Serf" },
-	"Grubnik Sootfang": { gender: "M", race: "Goblin", status: "Serf" },
-	"Snaga Miregut": { gender: "F", race: "Goblin", status: "Serf" },
-	"Drekka Ironnose": { gender: "M", race: "Goblin", status: "Merchant" },
-	"Fizzle Toadsnout": { gender: "F", race: "Goblin", status: "Commoner" },
-	"Zogmar Brambletoe": { gender: "M", race: "Goblin", status: "Serf" },
-	"Krilla Tallowtongue": { gender: "F", race: "Goblin", status: "Merchant" },
-	"Mograt Splinterjaw": { gender: "M", race: "Goblin", status: "Serf" },
-	"Prixa Coalbriar": { gender: "F", race: "Goblin", status: "Commoner" },
-};
+export function useAssetId(id: string) {
+	return `rbxassetid://${id}`;
+}
 export const NPC_TYPE_VALUES = ["GUARD", "TARGET", "MERCHANT", "COMMONER"] as const;
 export type NPCType = (typeof NPC_TYPE_VALUES)[number];
 export function isNPCType(value: string): value is NPCType {

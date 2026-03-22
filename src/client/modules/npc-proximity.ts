@@ -4,6 +4,7 @@ import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-rem
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
 import { UI_THEME } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
+import { isNPCKillable } from "shared/config/npcs";
 import { RARITY_COLORS } from "shared/inventory";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
@@ -92,10 +93,7 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 	cardStroke.Parent = card;
 
 	// Single-line: "Symbol TitleName PlayerName" or just "PlayerName"
-	const displayText =
-		titleDef !== undefined
-			? titleDef.symbol + " " + titleDef.name + " " + playerName
-			: playerName;
+	const displayText = titleDef !== undefined ? titleDef.symbol + " " + titleDef.name + " " + playerName : playerName;
 	const textColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
 
 	const nameLabel = new Instance("TextLabel");
@@ -514,7 +512,8 @@ function updateNPCProximityUI() {
 
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
-		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC;
+		const npcIsKillable = isNPCKillable(npc.Name);
+		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC && npcIsKillable;
 		const shouldShowTalk = !isCurrentlyStealthing && npc === closestNPC && !isDialogOpen();
 
 		if (shouldShowAssassinate) {
@@ -690,7 +689,7 @@ function initializeNPCProximity() {
 			if (closestWantedPlayerInRange) {
 				log("[ASSASSINATION] Player attempting to assassinate wanted player via E key");
 				playerAssassinationRemote.FireServer(closestWantedPlayerInRange);
-			} else if (closestNPCInRange) {
+			} else if (closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) {
 				log(`[ASSASSINATION] Player attempting to assassinate ${closestNPCInRange.Name} via E key`);
 				assassinationRemote.FireServer(closestNPCInRange);
 			}

@@ -40,7 +40,7 @@ function sc(base: number): number {
 
 const PANEL_W = 340;
 const DIALOG_H = 300; // height in dialog mode
-const TRADE_H = 520; // height in trade mode (grid + tooltip + purchase)
+const TRADE_H = 420; // height in trade mode (compact, grid fills space)
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,12 @@ let dialogOpen = false;
 let tradeOpen = false;
 let currentPayload: DialogPayload | undefined;
 let currentChatIndex = 0;
-let selectedShopItem: ShopItemPayload | undefined;
+const selectedItemIds = new Set<string>();
+let playerGold = 0;
+let purchasing = false;
+let distanceCheckConn: RBXScriptConnection | undefined;
+
+const DIALOG_MAX_DISTANCE = 15;
 
 // ── UI refs — single panel ────────────────────────────────────────────────────
 
@@ -69,7 +74,6 @@ let tradeTTType: TextLabel | undefined;
 let tradeTTDesc: TextLabel | undefined;
 let tradeTTEffect: TextLabel | undefined;
 let tradeTTPriceLabel: TextLabel | undefined;
-let tradePurchaseBtn: TextButton | undefined;
 let tradeStatusLabel: TextLabel | undefined;
 let currentTooltipItemId: string | undefined;
 
@@ -244,19 +248,20 @@ function buildDialogPanel(screenGui: ScreenGui): void {
 function buildTradeSection(root: Frame): void {
 	const section = new Instance("Frame");
 	section.Name = "TradeSection";
-	section.Size = new UDim2(1, 0, 0, sc(380));
+	section.Size = new UDim2(1, 0, 1, -sc(142)); // fills panel between top row and options
 	section.Position = new UDim2(0, 0, 0, sc(92));
 	section.BackgroundTransparency = 1;
 	section.Visible = false;
 	section.ZIndex = 31;
+	section.ClipsDescendants = true;
 	section.Parent = root;
 	tradeSection = section;
 
-	// ── Shop grid ─────────────────────────────────────────────────────────
+	// ── Shop grid (flex area — fills trade section) ──────────────────────
 
 	const grid = new Instance("ScrollingFrame");
 	grid.Name = "ShopGrid";
-	grid.Size = new UDim2(1, 0, 0, sc(200));
+	grid.Size = new UDim2(1, 0, 1, 0); // fills entire trade section; tooltip overlays
 	grid.Position = new UDim2(0, 0, 0, 0);
 	grid.BackgroundColor3 = UI_THEME.bgInset;
 	grid.BackgroundTransparency = 0.5;
@@ -286,32 +291,22 @@ function buildTradeSection(root: Frame): void {
 	gridPad.PaddingBottom = new UDim(0, sc(4));
 	gridPad.Parent = grid;
 
-	// ── Divider between grid and tooltip ──────────────────────────────────
-
-	const div = new Instance("Frame");
-	div.Size = new UDim2(1, 0, 0, 1);
-	div.Position = new UDim2(0, 0, 0, sc(204));
-	div.BackgroundColor3 = UI_THEME.divider;
-	div.BorderSizePixel = 0;
-	div.ZIndex = 31;
-	div.Parent = section;
-
-	// ── Tooltip area ──────────────────────────────────────────────────────
+	// ── Tooltip overlay (anchored to bottom of trade section) ────────────
 
 	buildTradeTooltip(section);
 
-	// ── Status label ──────────────────────────────────────────────────────
+	// ── Status label (bottom of trade section, above tooltip) ────────────
 
 	const status = new Instance("TextLabel");
 	status.Name = "StatusLabel";
 	status.Size = new UDim2(1, 0, 0, sc(14));
-	status.Position = new UDim2(0, 0, 0, sc(342));
+	status.Position = new UDim2(0, 0, 1, -sc(14));
 	status.BackgroundTransparency = 1;
 	status.Text = "";
 	status.TextColor3 = UI_THEME.textMuted;
 	status.Font = UI_THEME.fontBody;
 	status.TextSize = sc(10);
-	status.ZIndex = 31;
+	status.ZIndex = 36;
 	status.Parent = section;
 	tradeStatusLabel = status;
 }
@@ -320,12 +315,12 @@ function buildTradeTooltip(parent: Frame): void {
 	const tt = new Instance("Frame");
 	tt.Name = "TradeTooltip";
 	tt.Size = new UDim2(1, 0, 0, sc(130));
-	tt.Position = new UDim2(0, 0, 0, sc(208));
+	tt.Position = new UDim2(0, 0, 1, -sc(130)); // overlay anchored at bottom
 	tt.BackgroundColor3 = UI_THEME.bgInset;
-	tt.BackgroundTransparency = 0.2;
+	tt.BackgroundTransparency = 0.05;
 	tt.BorderSizePixel = 0;
 	tt.Visible = false;
-	tt.ZIndex = 32;
+	tt.ZIndex = 35;
 	tt.Parent = parent;
 	tradeTooltip = tt;
 
@@ -355,7 +350,7 @@ function buildTradeTooltip(parent: Frame): void {
 	nLabel.Font = UI_THEME.fontDisplay;
 	nLabel.TextSize = sc(14);
 	nLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	nLabel.ZIndex = 33;
+	nLabel.ZIndex = 36;
 	nLabel.Parent = tt;
 	tradeTTName = nLabel;
 
@@ -369,7 +364,7 @@ function buildTradeTooltip(parent: Frame): void {
 	rLabel.Font = UI_THEME.fontBold;
 	rLabel.TextSize = sc(10);
 	rLabel.TextXAlignment = Enum.TextXAlignment.Right;
-	rLabel.ZIndex = 33;
+	rLabel.ZIndex = 36;
 	rLabel.Parent = tt;
 	tradeTTRarity = rLabel;
 
@@ -383,7 +378,7 @@ function buildTradeTooltip(parent: Frame): void {
 	tLabel.Font = UI_THEME.fontBody;
 	tLabel.TextSize = sc(10);
 	tLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	tLabel.ZIndex = 33;
+	tLabel.ZIndex = 36;
 	tLabel.Parent = tt;
 	tradeTTType = tLabel;
 
@@ -398,7 +393,7 @@ function buildTradeTooltip(parent: Frame): void {
 	dLabel.TextSize = sc(10);
 	dLabel.TextWrapped = true;
 	dLabel.TextYAlignment = Enum.TextYAlignment.Top;
-	dLabel.ZIndex = 33;
+	dLabel.ZIndex = 36;
 	dLabel.Parent = tt;
 	tradeTTDesc = dLabel;
 
@@ -412,82 +407,56 @@ function buildTradeTooltip(parent: Frame): void {
 	eLabel.Font = UI_THEME.fontBold;
 	eLabel.TextSize = sc(10);
 	eLabel.TextWrapped = true;
-	eLabel.ZIndex = 33;
+	eLabel.ZIndex = 36;
 	eLabel.Parent = tt;
 	tradeTTEffect = eLabel;
 
-	// Price + Purchase button row
+	// Price row
 	const priceRow = new Instance("Frame");
 	priceRow.Name = "PriceRow";
 	priceRow.Size = new UDim2(1, 0, 0, sc(24));
 	priceRow.Position = new UDim2(0, 0, 1, -sc(28));
 	priceRow.BackgroundTransparency = 1;
-	priceRow.ZIndex = 33;
+	priceRow.ZIndex = 36;
 	priceRow.Parent = tt;
 
 	const priceLabel = new Instance("TextLabel");
 	priceLabel.Name = "PriceLabel";
-	priceLabel.Size = new UDim2(0.5, 0, 1, 0);
+	priceLabel.Size = new UDim2(1, 0, 1, 0);
 	priceLabel.BackgroundTransparency = 1;
 	priceLabel.Text = "";
 	priceLabel.TextColor3 = UI_THEME.gold;
 	priceLabel.Font = UI_THEME.fontBold;
 	priceLabel.TextSize = sc(12);
 	priceLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	priceLabel.ZIndex = 34;
+	priceLabel.ZIndex = 37;
 	priceLabel.Parent = priceRow;
 	tradeTTPriceLabel = priceLabel;
-
-	const purchaseBtn = new Instance("TextButton");
-	purchaseBtn.Name = "PurchaseBtn";
-	purchaseBtn.Size = new UDim2(0.45, 0, 1, 0);
-	purchaseBtn.Position = new UDim2(0.55, 0, 0, 0);
-	purchaseBtn.BackgroundColor3 = Color3.fromRGB(30, 55, 25);
-	purchaseBtn.BackgroundTransparency = 0.2;
-	purchaseBtn.BorderSizePixel = 0;
-	purchaseBtn.Text = "PURCHASE";
-	purchaseBtn.TextColor3 = Color3.fromRGB(120, 180, 90);
-	purchaseBtn.Font = UI_THEME.fontBold;
-	purchaseBtn.TextSize = sc(11);
-	purchaseBtn.AutoButtonColor = false;
-	purchaseBtn.ZIndex = 34;
-	purchaseBtn.Parent = priceRow;
-	tradePurchaseBtn = purchaseBtn;
-
-	const btnCorner = new Instance("UICorner");
-	btnCorner.CornerRadius = new UDim(0, 4);
-	btnCorner.Parent = purchaseBtn;
-
-	const btnStroke = new Instance("UIStroke");
-	btnStroke.Color = Color3.fromRGB(80, 130, 60);
-	btnStroke.Thickness = 1;
-	btnStroke.Parent = purchaseBtn;
-
-	purchaseBtn.MouseEnter.Connect(() => {
-		purchaseBtn.BackgroundTransparency = 0;
-	});
-	purchaseBtn.MouseLeave.Connect(() => {
-		purchaseBtn.BackgroundTransparency = 0.2;
-	});
-	purchaseBtn.Activated.Connect(() => {
-		handlePurchaseClick();
-	});
 }
 
 // ── Dialog option button ──────────────────────────────────────────────────────
 
-function addDialogOption(parent: Frame, order: number, label: string, color: Color3, callback: () => void): TextButton {
+function addDialogOption(
+	parent: Frame,
+	order: number,
+	label: string,
+	color: Color3,
+	callback: () => void,
+	compact?: boolean,
+): TextButton {
+	const h = compact ? 22 : 28;
+	const fontSize = compact ? 11 : 13;
 	const btn = new Instance("TextButton");
 	btn.Name = "Opt_" + label;
 	btn.LayoutOrder = order;
-	btn.Size = new UDim2(1, 0, 0, sc(28));
+	btn.Size = new UDim2(1, 0, 0, sc(h));
 	btn.BackgroundColor3 = UI_THEME.bgInset;
 	btn.BackgroundTransparency = 0.3;
 	btn.BorderSizePixel = 0;
 	btn.Text = tostring(order) + ".  " + label;
 	btn.TextColor3 = color;
 	btn.Font = UI_THEME.fontBold;
-	btn.TextSize = sc(13);
+	btn.TextSize = sc(fontSize);
 	btn.TextXAlignment = Enum.TextXAlignment.Left;
 	btn.AutoButtonColor = false;
 	btn.ZIndex = 32;
@@ -632,26 +601,61 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 
 	tile.MouseEnter.Connect(() => {
 		tile.BackgroundTransparency = 0;
-		tileStroke.Transparency = 0;
+		if (!selectedItemIds.has(shopItem.itemId)) {
+			tileStroke.Transparency = 0;
+		}
 		showShopTooltip(shopItem);
 	});
 	tile.MouseLeave.Connect(() => {
 		tile.BackgroundTransparency = 0.15;
-		tileStroke.Transparency = 0.4;
+		if (!selectedItemIds.has(shopItem.itemId)) {
+			tileStroke.Transparency = 0.4;
+		}
 		if (currentTooltipItemId === shopItem.itemId) {
 			hideShopTooltip();
 		}
 	});
 	tile.Activated.Connect(() => {
-		showShopTooltip(shopItem);
+		toggleItemSelection(shopItem);
 	});
+}
+
+// ── Item selection ────────────────────────────────────────────────────────────
+
+function toggleItemSelection(shopItem: ShopItemPayload): void {
+	if (selectedItemIds.has(shopItem.itemId)) {
+		selectedItemIds.delete(shopItem.itemId);
+		updateTileSelection(shopItem.itemId, false);
+	} else {
+		selectedItemIds.add(shopItem.itemId);
+		updateTileSelection(shopItem.itemId, true);
+	}
+	showTradeOptions();
+}
+
+function updateTileSelection(itemId: string, selected: boolean): void {
+	if (!tradeGrid) return;
+	const tile = tradeGrid.FindFirstChild("Shop_" + itemId) as TextButton | undefined;
+	if (!tile) return;
+	const stroke = tile.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	if (!stroke) return;
+	if (selected) {
+		stroke.Color = UI_THEME.gold;
+		stroke.Thickness = 2;
+		stroke.Transparency = 0;
+	} else {
+		const shopItem = currentPayload?.shopItems.find((si) => si.itemId === itemId);
+		const rarityColor = shopItem ? (RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary) : UI_THEME.textPrimary;
+		stroke.Color = rarityColor;
+		stroke.Thickness = 1;
+		stroke.Transparency = 0.4;
+	}
 }
 
 // ── Shop tooltip ──────────────────────────────────────────────────────────────
 
 function showShopTooltip(shopItem: ShopItemPayload): void {
 	if (tradeTooltip === undefined) return;
-	selectedShopItem = shopItem;
 	currentTooltipItemId = shopItem.itemId;
 
 	const rarityColor = RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary;
@@ -680,75 +684,77 @@ function showShopTooltip(shopItem: ShopItemPayload): void {
 
 function hideShopTooltip(): void {
 	if (tradeTooltip) tradeTooltip.Visible = false;
-	selectedShopItem = undefined;
 	currentTooltipItemId = undefined;
 }
 
 // ── Purchase logic ────────────────────────────────────────────────────────────
 
-function handlePurchaseClick(): void {
-	if (selectedShopItem === undefined || currentPayload === undefined) return;
+function handleBatchPurchase(): void {
+	if (!currentPayload || selectedItemIds.size() === 0 || purchasing) return;
+	purchasing = true;
 
 	const npcName = currentPayload.npcName;
-	const itemId = selectedShopItem.itemId;
-
-	if (tradePurchaseBtn) {
-		tradePurchaseBtn.Active = false;
-		tradePurchaseBtn.Text = "...";
+	const items: string[] = [];
+	for (const id of selectedItemIds) {
+		items.push(id);
 	}
 
 	task.spawn(() => {
-		const result = purchaseRemote.InvokeServer(npcName, itemId) as
-			| { success: boolean; message: string; newOwned: number }
-			| undefined;
+		let successCount = 0;
+		let lastMessage = "";
 
-		if (result !== undefined) {
-			if (result.success) {
-				if (tradeStatusLabel) {
-					tradeStatusLabel.Text = result.message;
-					tradeStatusLabel.TextColor3 = Color3.fromRGB(100, 170, 80);
-				}
+		for (const itemId of items) {
+			const result = purchaseRemote.InvokeServer(npcName, itemId) as
+				| { success: boolean; message: string; newOwned: number }
+				| undefined;
+			if (result && result.success) {
+				successCount++;
 				for (const si of currentPayload!.shopItems) {
 					if (si.itemId === itemId) {
 						si.owned = result.newOwned;
 					}
 				}
-				refreshShopGrid();
-				refreshGoldDisplay();
-				if (selectedShopItem !== undefined && selectedShopItem.itemId === itemId) {
-					const updatedItem = currentPayload!.shopItems.find((si) => si.itemId === itemId);
-					if (updatedItem) showShopTooltip(updatedItem);
-				}
-			} else {
-				if (tradeStatusLabel) {
-					tradeStatusLabel.Text = result.message;
-					tradeStatusLabel.TextColor3 = UI_THEME.danger;
-				}
+			} else if (result) {
+				lastMessage = result.message;
 			}
 		}
 
-		if (tradePurchaseBtn) {
-			tradePurchaseBtn.Active = true;
-			tradePurchaseBtn.Text = "PURCHASE";
-		}
+		selectedItemIds.clear();
+		refreshShopGrid();
+		refreshGoldDisplay();
+		purchasing = false;
+		showTradeOptions();
 
-		task.delay(3, () => {
-			if (tradeStatusLabel) tradeStatusLabel.Text = "";
-		});
+		if (tradeStatusLabel) {
+			if (successCount === items.size()) {
+				tradeStatusLabel.Text = "Purchased " + successCount + " item(s)";
+				tradeStatusLabel.TextColor3 = Color3.fromRGB(100, 170, 80);
+			} else if (successCount > 0) {
+				tradeStatusLabel.Text = successCount + "/" + items.size() + " purchased. " + lastMessage;
+				tradeStatusLabel.TextColor3 = UI_THEME.gold;
+			} else {
+				tradeStatusLabel.Text = lastMessage;
+				tradeStatusLabel.TextColor3 = UI_THEME.danger;
+			}
+			task.delay(3, () => {
+				if (tradeStatusLabel) tradeStatusLabel.Text = "";
+			});
+		}
 	});
 }
 
 // ── Gold display ──────────────────────────────────────────────────────────────
 
 function refreshGoldDisplay(): void {
-	if (playerGoldLabel === undefined) return;
 	const repStorage = game.GetService("ReplicatedStorage") as ReplicatedStorage;
 	const psFolder = repStorage.FindFirstChild("PlayerState") as Folder | undefined;
 	const getCoinsRF = psFolder?.FindFirstChild("GetCoins") as RemoteFunction | undefined;
 	if (getCoinsRF) {
 		task.spawn(() => {
 			const coins = getCoinsRF.InvokeServer() as number;
+			playerGold = coins;
 			if (playerGoldLabel) playerGoldLabel.Text = coins + " Gold";
+			if (tradeOpen) showTradeOptions();
 		});
 	}
 }
@@ -829,7 +835,7 @@ function setupHeadshot(npcName: string): void {
 function switchToDialogMode(): void {
 	tradeOpen = false;
 	hideShopTooltip();
-	selectedShopItem = undefined;
+	selectedItemIds.clear();
 
 	if (tradeSection) tradeSection.Visible = false;
 	if (dialogTextLabel) dialogTextLabel.Visible = true;
@@ -851,15 +857,10 @@ function switchToDialogMode(): void {
 
 function switchToTradeMode(): void {
 	tradeOpen = true;
+	selectedItemIds.clear();
 
 	if (dialogTextLabel) dialogTextLabel.Visible = false;
 	if (playerGoldLabel) playerGoldLabel.Visible = true;
-
-	// Compact options for trade mode (only Back + Leave)
-	if (optionsFrame) {
-		optionsFrame.Size = new UDim2(1, 0, 0, sc(64));
-		optionsFrame.Position = new UDim2(0, 0, 1, -sc(70));
-	}
 
 	refreshGoldDisplay();
 	refreshShopGrid();
@@ -891,13 +892,52 @@ const STATUS_TO_RARITY: Record<string, string> = {
 	Royalty: "legendary",
 };
 
+// ── Distance check — auto-close dialog when player walks too far ──────────────
+
+function startDistanceCheck(npcName: string): void {
+	stopDistanceCheck();
+	const player = Players.LocalPlayer;
+	if (!player) return;
+
+	distanceCheckConn = RunService.Heartbeat.Connect(() => {
+		if (!dialogOpen) {
+			stopDistanceCheck();
+			return;
+		}
+		const character = player.Character;
+		if (!character) return;
+		const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (!hrp) return;
+
+		const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
+		if (!npcModel) {
+			closeDialog();
+			return;
+		}
+		const npcRoot = npcModel.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		const npcPos = npcRoot ? npcRoot.Position : npcModel.GetPivot().Position;
+
+		if (hrp.Position.sub(npcPos).Magnitude > DIALOG_MAX_DISTANCE) {
+			closeDialog();
+		}
+	});
+}
+
+function stopDistanceCheck(): void {
+	if (distanceCheckConn) {
+		distanceCheckConn.Disconnect();
+		distanceCheckConn = undefined;
+	}
+}
+
 function openDialog(payload: DialogPayload): void {
 	currentPayload = payload;
 	currentChatIndex = 0;
 	dialogOpen = true;
 	tradeOpen = false;
-	selectedShopItem = undefined;
+	selectedItemIds.clear();
 
+	startDistanceCheck(payload.npcName);
 	setupHeadshot(payload.npcName);
 
 	if (npcNameLabel) npcNameLabel.Text = payload.npcName;
@@ -978,16 +1018,46 @@ function handleOpenTrade(): void {
 	if (currentPayload === undefined) return;
 
 	switchToTradeMode();
+	showTradeOptions();
+}
 
+function showTradeOptions(): void {
 	clearOptions();
-	if (optionsFrame) {
-		addDialogOption(optionsFrame, 1, "Back", UI_THEME.textPrimary, () => {
-			handleCloseTrade();
-		});
-		addDialogOption(optionsFrame, 2, "Leave", UI_THEME.textMuted, () => {
-			handleLeave();
-		});
+	if (!optionsFrame || !currentPayload) return;
+
+	let optOrder = 1;
+	addDialogOption(optionsFrame, optOrder++, "Back", UI_THEME.textPrimary, () => handleCloseTrade(), true);
+
+	if (selectedItemIds.size() > 0) {
+		let totalCost = 0;
+		for (const itemId of selectedItemIds) {
+			const item = currentPayload.shopItems.find((si) => si.itemId === itemId);
+			if (item) totalCost += item.price;
+		}
+		const canAfford = playerGold >= totalCost;
+		const purchaseColor = canAfford ? Color3.fromRGB(120, 180, 90) : UI_THEME.danger;
+		const btn = addDialogOption(
+			optionsFrame,
+			optOrder++,
+			"Purchase (" + totalCost + "g)",
+			purchaseColor,
+			() => {
+				if (canAfford) handleBatchPurchase();
+			},
+			true,
+		);
+		if (!canAfford) {
+			btn.Active = false;
+		}
 	}
+
+	addDialogOption(optionsFrame, optOrder, "Leave", UI_THEME.textMuted, () => handleLeave(), true);
+
+	// Resize options frame based on button count
+	const buttonCount = selectedItemIds.size() > 0 ? 3 : 2;
+	const frameH = buttonCount === 3 ? 76 : 48;
+	optionsFrame.Size = new UDim2(1, 0, 0, sc(frameH));
+	optionsFrame.Position = new UDim2(0, 0, 1, -sc(frameH + 2));
 }
 
 function handleCloseTrade(): void {
@@ -1020,7 +1090,9 @@ function closeDialog(): void {
 	dialogOpen = false;
 	tradeOpen = false;
 	currentPayload = undefined;
-	selectedShopItem = undefined;
+	selectedItemIds.clear();
+	purchasing = false;
+	stopDistanceCheck();
 
 	closeDialogRemote.FireServer();
 
