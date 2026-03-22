@@ -10,6 +10,7 @@ import { initializeCampfireSystem } from "./modules/campfire-handler";
 import { initializeAchievementHandler } from "./modules/achievement-handler";
 import { initializeInventorySystem } from "./modules/inventory-handler";
 import { initializeTitleHandler } from "./modules/title-handler";
+import { initializeDialogHandler } from "./modules/dialog-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -26,6 +27,7 @@ export async function bootstrapServer() {
 	initializeAchievementHandler();
 	initializeInventorySystem();
 	initializeTitleHandler();
+	initializeDialogHandler();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }

@@ -7,6 +7,7 @@ import { MEDIEVAL_NPCS } from "shared/module";
 import { RARITY_COLORS } from "shared/inventory";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
+import { requestOpenDialog, isDialogOpen } from "./npc-dialog";
 import {
 	getPlayerAssassinationRemote,
 	getPlayerWantedRemote,
@@ -63,7 +64,8 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 	}
 
 	const titleDef = titleId !== undefined ? TITLES[titleId] : undefined;
-	const borderColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
+	const isWanted = wantedPlayerInfo.has(playerName);
+	const borderColor = isWanted ? UI_THEME.danger : Color3.fromRGB(0, 0, 0);
 
 	const billboard = new Instance("BillboardGui");
 	billboard.Name = "PlayerBillboard";
@@ -155,6 +157,7 @@ interface NPCProximityUI {
 	billboard: BillboardGui;
 	nameLabel: TextLabel;
 	assassinateButton?: TextButton;
+	talkButton?: TextButton;
 }
 
 const npcUIMap = new Map<Model, NPCProximityUI>();
@@ -174,7 +177,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	const card = new Instance("Frame");
 	card.Name = "NPCCard";
 	card.Size = new UDim2(1, 0, 0.7, 0);
-	card.Position = new UDim2(0, 0, 0.3, 0);
+	card.Position = new UDim2(0, 0, 0, 0);
 	card.BackgroundColor3 = UI_THEME.bg;
 	card.BackgroundTransparency = 0.15;
 	card.BorderSizePixel = 0;
@@ -189,16 +192,19 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	cardStroke.Thickness = 1.2;
 	cardStroke.Parent = card;
 
-	// NPC name
+	// NPC name — always white text, rarity colour is shown via the card border
+	const isMerchant = statusText === "Merchant";
+	const displayName = isMerchant ? "(G) " + npc.Name : npc.Name;
+
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
 	nameLabel.Size = new UDim2(1, -6, 1, 0);
 	nameLabel.Position = new UDim2(0, 3, 0, 0);
 	nameLabel.BackgroundTransparency = 1;
-	nameLabel.TextColor3 = statusColor;
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
 	nameLabel.Font = UI_THEME.fontDisplay;
 	nameLabel.TextSize = 13;
-	nameLabel.Text = npc.Name;
+	nameLabel.Text = displayName;
 	nameLabel.BorderSizePixel = 0;
 	nameLabel.Parent = card;
 
@@ -208,7 +214,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButton {
 	const button = new Instance("TextButton");
 	button.Size = new UDim2(1, 0, 0.42, 0);
-	button.Position = new UDim2(0, 0, 0, 0);
+	button.Position = new UDim2(0, 0, 0.72, 0);
 	button.BackgroundColor3 = UI_THEME.headerBg;
 	button.BackgroundTransparency = 0.1;
 	button.TextColor3 = UI_THEME.danger;
@@ -229,6 +235,35 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 
 	button.MouseButton1Click.Connect(() => {
 		assassinationRemote.FireServer(npc);
+	});
+
+	return button;
+}
+
+function createTalkButton(billboard: BillboardGui, npc: Model): TextButton {
+	const button = new Instance("TextButton");
+	button.Size = new UDim2(1, 0, 0.42, 0);
+	button.Position = new UDim2(0, 0, 0.72, 0);
+	button.BackgroundColor3 = UI_THEME.bgInset;
+	button.BackgroundTransparency = 0.1;
+	button.TextColor3 = UI_THEME.textPrimary;
+	button.Font = UI_THEME.fontBold;
+	button.TextSize = 11;
+	button.Text = "TALK  [F]";
+	button.BorderSizePixel = 0;
+	button.Parent = billboard;
+
+	const btnCorner = new Instance("UICorner");
+	btnCorner.CornerRadius = new UDim(0, 4);
+	btnCorner.Parent = button;
+
+	const btnStroke = new Instance("UIStroke");
+	btnStroke.Color = UI_THEME.border;
+	btnStroke.Thickness = 0.8;
+	btnStroke.Parent = button;
+
+	button.MouseButton1Click.Connect(() => {
+		requestOpenDialog(npc);
 	});
 
 	return button;
@@ -477,11 +512,12 @@ function updateNPCProximityUI() {
 	// Update global closest NPC for E key handling
 	closestNPCInRange = closestNPC;
 
-	// Second pass: update assassinate buttons (only on closest NPC)
+	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
-		const shouldShowButton = isCurrentlyStealthing && npc === closestNPC;
+		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC;
+		const shouldShowTalk = !isCurrentlyStealthing && npc === closestNPC && !isDialogOpen();
 
-		if (shouldShowButton) {
+		if (shouldShowAssassinate) {
 			if (!ui.assassinateButton) {
 				ui.assassinateButton = createAssassinateButton(ui.billboard, npc);
 			}
@@ -489,6 +525,17 @@ function updateNPCProximityUI() {
 			if (ui.assassinateButton) {
 				ui.assassinateButton.Destroy();
 				ui.assassinateButton = undefined;
+			}
+		}
+
+		if (shouldShowTalk) {
+			if (!ui.talkButton) {
+				ui.talkButton = createTalkButton(ui.billboard, npc);
+			}
+		} else {
+			if (ui.talkButton) {
+				ui.talkButton.Destroy();
+				ui.talkButton = undefined;
 			}
 		}
 	}
@@ -646,6 +693,14 @@ function initializeNPCProximity() {
 			} else if (closestNPCInRange) {
 				log(`[ASSASSINATION] Player attempting to assassinate ${closestNPCInRange.Name} via E key`);
 				assassinationRemote.FireServer(closestNPCInRange);
+			}
+		}
+
+		// F key — open dialog with nearest NPC (non-stealth)
+		if (input.KeyCode === Enum.KeyCode.F) {
+			if (isDialogOpen()) return;
+			if (closestNPCInRange) {
+				requestOpenDialog(closestNPCInRange);
 			}
 		}
 	});

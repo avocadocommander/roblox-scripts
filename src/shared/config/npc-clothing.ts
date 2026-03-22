@@ -148,8 +148,8 @@ const NOBILITY_CLOTHING: TierClothingDef = {
 		Color3.fromHex("#1A1A1A"), // black leather
 		Color3.fromHex("#3E2723"), // dark brown
 	],
-	accessories: [{ name: "rpc", hideShirt: true }],
-	accessoryChance: 1,
+	accessories: [],
+	accessoryChance: 0,
 };
 
 const ROYALTY_CLOTHING: TierClothingDef = {
@@ -167,8 +167,8 @@ const ROYALTY_CLOTHING: TierClothingDef = {
 		Color3.fromHex("#1A1A1A"), // polished black
 		Color3.fromHex("#C3A032"), // gold-trimmed
 	],
-	accessories: [{ name: "rpc", hideShirt: true }],
-	accessoryChance: 1,
+	accessories: [],
+	accessoryChance: 0,
 };
 
 // ── Lookup map ────────────────────────────────────────────────────────────────
@@ -191,8 +191,4 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
  * ROUTE_ACCESSORIES maps a route position name to accessories that should
  * always be added to NPCs on that route, regardless of status tier.
  */
-export const ROUTE_ACCESSORIES: Record<string, NPCAccessoryDef[]> = {
-	Guard: [
-		{ name: "guardShirt", hideShirt: true, weldTo: "Torso", weldCFrame: new CFrame(0, 0, 0) },
-	],
-};
+export const ROUTE_ACCESSORIES: Record<string, NPCAccessoryDef[]> = {};

@@ -1,21 +1,58 @@
-import { PathfindingService } from "@rbxts/services";
+import { PathfindingService, TweenService } from "@rbxts/services";
 import { Pace, RouteConfig } from "../npc-manager";
 import type { NPC, NPCStateKeys } from "./main";
+import { makeSeededRandom, getSeedFromName } from "./utils";
 
-// We'll pass setState as a parameter to avoid circular dependencies
+// ── Pace → base WalkSpeed ─────────────────────────────────────────────────────
+
 function getHumanoidPace(pace: Pace | undefined): number {
 	const paceSpeedMap: Record<Pace, number> = {
-		Stationary: 5,
+		Stationary: 0,
 		Slow: math.random(3, 4),
 		Medium: math.random(5, 6),
 		Fast: math.random(7, 8),
 	};
 
-	if (!pace) {
-		return paceSpeedMap["Medium"];
-	}
-	return pace ? paceSpeedMap[pace] : paceSpeedMap["Medium"];
+	if (!pace) return paceSpeedMap["Medium"];
+	return paceSpeedMap[pace];
 }
+
+// ── Natural speed helpers ─────────────────────────────────────────────────────
+
+/** Gently nudge WalkSpeed +-15% each segment for organic movement. */
+function varySpeed(humanoid: Humanoid, basePace: number): void {
+	const variation = basePace * 0.15;
+	const newSpeed = basePace + (math.random() * 2 - 1) * variation;
+	humanoid.WalkSpeed = math.max(1, newSpeed);
+}
+
+/** Smoothly rotate an NPC to face a world position instead of snapping. */
+function smoothTurn(npc: NPC, targetPosition: Vector3): void {
+	const root = npc.model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+	if (!root) return;
+
+	const lookCF = CFrame.lookAt(root.Position, new Vector3(targetPosition.X, root.Position.Y, targetPosition.Z));
+	const info = new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut);
+	TweenService.Create(root, info, { CFrame: lookCF }).Play();
+}
+
+/** Brief idle behaviour at a waypoint — small random head‑turn or pause. */
+function idleFidget(npc: NPC): void {
+	const root = npc.model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+	if (!root) return;
+
+	const roll = math.random();
+	if (roll < 0.35) {
+		// Slight random turn while idle
+		const angle = math.rad((math.random() * 40) - 20);
+		const turnCF = root.CFrame.mul(CFrame.Angles(0, angle, 0));
+		const info = new TweenInfo(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut);
+		TweenService.Create(root, info, { CFrame: turnCF }).Play();
+	}
+	// Otherwise: just stand still (natural variation in behaviour)
+}
+
+// ── Route loop ────────────────────────────────────────────────────────────────
 
 async function assignNpcToRoute(
 	npc: NPC,
@@ -24,22 +61,48 @@ async function assignNpcToRoute(
 	setState: (state: NPCStateKeys, npc: NPC) => void,
 ) {
 	let routeActiveIndex = 0;
+	const basePace = getHumanoidPace(routeConfig?.pace);
+	const isStationary = routeConfig?.pace === "Stationary";
 
 	while (npc && npc.model.Parent) {
 		const activeRoutePoint = routePoints[routeActiveIndex];
-		const lookAtDirrection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
-		const npcHumanoidRootPart: BasePart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
+		const lookAtDirection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
 
-		if (!npcHumanoidRootPart) break;
+		if (isStationary) {
+			// ── Stationary NPCs: occasional idle fidget ──────────────────
+			setState("IDLE", npc);
+			idleFidget(npc);
+
+			if (lookAtDirection) {
+				smoothTurn(npc, lookAtDirection.WorldPosition);
+			}
+
+			await Promise.delay(math.random(4, 12));
+			continue;
+		}
+
+		// ── Walking NPCs ─────────────────────────────────────────────────
+
+		// Slight speed variation per segment
+		varySpeed(npc.humanoid, basePace);
 
 		await navigate(activeRoutePoint.Position, npc, setState);
 
-		if (lookAtDirrection) {
-			const look = CFrame.lookAt(npcHumanoidRootPart.Position, lookAtDirrection.WorldPosition);
-			npcHumanoidRootPart.CFrame = look;
+		// Arrived — face the look target smoothly
+		if (lookAtDirection) {
+			smoothTurn(npc, lookAtDirection.WorldPosition);
 		}
 
-		await Promise.delay(routeConfig?.tempo ?? math.random(2, 10));
+		// Idle fidget while waiting
+		setState("IDLE", npc);
+		idleFidget(npc);
+
+		// Vary wait time at each stop instead of fixed tempo
+		const baseTempo = routeConfig?.tempo ?? math.random(3, 10);
+		const tempoVariation = baseTempo * 0.3;
+		const waitTime = math.max(1, baseTempo + (math.random() * 2 - 1) * tempoVariation);
+		await Promise.delay(waitTime);
+
 		if (routeActiveIndex >= routePoints.size() - 1) {
 			routeActiveIndex = 0;
 		} else {
@@ -47,6 +110,8 @@ async function assignNpcToRoute(
 		}
 	}
 }
+
+// ── Pathfinding ───────────────────────────────────────────────────────────────
 
 async function navigate(
 	moveToPosition: Vector3,
@@ -75,6 +140,7 @@ async function navigate(
 				return;
 			}
 			const wp = waypoints[current];
+
 			npc.humanoid.MoveTo(wp.Position);
 			setState("WALKING", npc);
 			await new Promise<void>((resolve) => {

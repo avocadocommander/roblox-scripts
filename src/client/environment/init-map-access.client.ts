@@ -118,6 +118,11 @@ function setupBarrier(accessModelInstance: Model) {
 
 			log(`[MAP ACCESS] Barrier created for ${accessModelInstance.Name} (level ${requiredLevel})`);
 		}
+	} else {
+		// Player already meets the level requirement — remove barrier immediately
+		if (smoke) {
+			poofBarrier(wall, smoke, accessModelInstance);
+		}
 	}
 }
 

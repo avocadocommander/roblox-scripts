@@ -1,8 +1,17 @@
+import { Players } from "@rbxts/services";
 import { setReadyPlayerStatus } from "./player-state";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import { respawnPlayerAtCampfire, loadPlayerCampfireFromStorage } from "./modules/campfire-handler";
 
 const lifecycle = getOrCreateLifecycleRemote();
+
+// Disable climbing for all player characters
+Players.PlayerAdded.Connect((player) => {
+	player.CharacterAdded.Connect((character) => {
+		const humanoid = character.WaitForChild("Humanoid") as Humanoid;
+		humanoid.SetStateEnabled(Enum.HumanoidStateType.Climbing, false);
+	});
+});
 
 lifecycle.OnServerEvent.Connect((player, message) => {
 	if (message === "ClientReady") {

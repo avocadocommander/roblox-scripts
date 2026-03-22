@@ -31,6 +31,7 @@ export function createNPCModelAndGenerateHumanoid(
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
+	humanoid.SetStateEnabled(Enum.HumanoidStateType.Climbing, false);
 	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeData);
 	humanoid.WalkSpeed = getHumanoidPace(routeData?.pace);
 

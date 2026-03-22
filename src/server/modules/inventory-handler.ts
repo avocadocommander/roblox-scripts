@@ -333,6 +333,23 @@ export function addBountyScrollFromKill(
 	return true;
 }
 
+/** Give a player `count` units of an item (used by shop purchases, rewards, etc.). */
+export function givePlayerItem(player: Player, itemId: string, count: number): boolean {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return false;
+	const current = inv.owned.get(itemId) ?? 0;
+	inv.owned.set(itemId, current + count);
+	pushSync(player);
+	return true;
+}
+
+/** Get how many of a specific item the player owns. */
+export function getPlayerOwnedCount(player: Player, itemId: string): number {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return 0;
+	return inv.owned.get(itemId) ?? 0;
+}
+
 /** Get the player's currently active poison ID (for assassination-handler to query). */
 export function getPlayerActivePoison(player: Player): string | undefined {
 	const inv = PLAYER_INVENTORIES.get(player);
