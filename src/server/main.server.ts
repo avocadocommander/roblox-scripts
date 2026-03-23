@@ -149,11 +149,6 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		}
 
 		const routeConfig = getConfigFromRoute(npcRoute);
-		const firstPositionInRoutePoints = routePoints[0];
-		const closestSpawnPointRelativeToRoute = getClosestSpawnPointRelativeToRoute(firstPositionInRoutePoints);
-		if (!closestSpawnPointRelativeToRoute) {
-			throw "Close spawnpoint not located";
-		}
 
 		const npcDef = NPC_REGISTRY[npcName];
 		if (!npcDef) throw `NPC ${npcName} not found in registry`;
@@ -163,14 +158,15 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeConfig);
 		if (!npc) throw `Not able to create NPC ${npcName}`;
 
-		const npcSpawnPoint: Vector3 = closestSpawnPointRelativeToRoute.WorldPosition;
-		npc.model.PivotTo(new CFrame(npcSpawnPoint));
+		// Fixed-route NPCs spawn directly at their first route point (no spawn-area walk)
+		const firstRoutePoint = routePoints[0];
+		npc.model.PivotTo(new CFrame(firstRoutePoint.Position));
 
 		assignNpcToRoute(npc, routePoints, routeConfig, setState);
 		setupWatcherGaze(npc, routeConfig);
 
 		assigned.set(npcRoute.Name, { npc, route: npcRoute });
-		log(`[FIXED] ${npc.name} assigned to ${npcRoute.Name} (killable=${npcDef.killable})`);
+		log(`[FIXED] ${npc.name} spawned at route ${npcRoute.Name} (killable=${npcDef.killable})`);
 	} catch (error) {
 		log(`[FIXED] Spawn failed for ${npcName} on ${npcRoute.Name}: ${error as string}`, "ERROR");
 	}

@@ -170,11 +170,9 @@ export function initializeDialogHandler(): void {
 		const dist = hrp.Position.sub(npcPart.Position).Magnitude;
 		if (dist > 15) return; // Too far away
 
-		// Merchants always get the full dialog panel (even without a shop they
-		// still have chat lines). Non-merchant NPCs without a shop get a quip.
+		// NPCs without a shop get a floating quip instead of the full dialog panel.
 		const npcData = MEDIEVAL_NPCS[npcName];
-		const isMerchant = npcData !== undefined && npcData.status === "Merchant";
-		if (!isMerchant && !npcHasShop(npcName)) {
+		if (!npcHasShop(npcName)) {
 			const now = tick();
 			const lastTime = lastQuipTime.get(player) ?? 0;
 			if (now - lastTime < QUIP_COOLDOWN) return; // rate-limit

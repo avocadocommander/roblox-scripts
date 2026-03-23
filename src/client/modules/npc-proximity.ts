@@ -41,6 +41,7 @@ function getNPCStatus(npcName: string): string {
 const assassinationRemote = getOrCreateAssassinationRemote();
 const stealthRemote = getOrCreateStealthRemote();
 const PROXIMITY_RANGE = 5; // Only show when very close to NPC
+const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further away
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
 let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
@@ -438,7 +439,7 @@ function updateNPCProximityUI() {
 	const camera = Workspace.CurrentCamera;
 	if (!camera) return;
 	let closestNPC: Model | undefined;
-	let closestDistance = PROXIMITY_RANGE + 1;
+	let closestDistance = MERCHANT_PROXIMITY_RANGE + 1;
 	let npcCount = 0;
 	let inRangeCount = 0;
 
@@ -479,7 +480,8 @@ function updateNPCProximityUI() {
 		}
 
 		// Track closest NPC in range (camera frame check optional for tracking)
-		if (distance <= PROXIMITY_RANGE) {
+		const npcMaxRange = getNPCStatus(npc.Name) === "Merchant" ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
+		if (distance <= npcMaxRange) {
 			inRangeCount = inRangeCount + 1;
 			const inCameraFrame = isNPCInCameraFrame(camera, npcPosition);
 			if (inCameraFrame && distance < closestDistance) {
@@ -513,8 +515,11 @@ function updateNPCProximityUI() {
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
 		const npcIsKillable = isNPCKillable(npc.Name);
+		const npcIsMerchant = getNPCStatus(npc.Name) === "Merchant";
+		const talkRange = npcIsMerchant ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
+		const inTalkRange = npc === closestNPC && closestDistance <= talkRange;
 		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC && npcIsKillable;
-		const shouldShowTalk = !isCurrentlyStealthing && npc === closestNPC && !isDialogOpen();
+		const shouldShowTalk = !isCurrentlyStealthing && inTalkRange && !isDialogOpen();
 
 		if (shouldShowAssassinate) {
 			if (!ui.assassinateButton) {
