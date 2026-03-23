@@ -85,6 +85,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Isolde Fairbloom": std("Isolde Fairbloom", "F", "Human", "Commoner"),
 	"Bertram de Mere": {
 		...std("Bertram de Mere", "M", "Human", "Merchant", "Merchant"),
+		fixedRouteId: "Merchant House Main",
 		shop: {
 			greetings: [
 				"Ah, a customer. Browse, but do not touch what you cannot afford.",
@@ -113,6 +114,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Thorne Æshgrave": std("Thorne Æshgrave", "M", "Human", "Serf"),
 	"Lyra Goldmead": {
 		...std("Lyra Goldmead", "F", "Human", "Merchant", "Merchant"),
+		fixedRouteId: "Merchant House 1",
 		shop: {
 			greetings: [
 				"Step closer, dear. I have just the thing.",
@@ -143,7 +145,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Moira Blackfen": std("Moira Blackfen", "F", "Human", "Serf"),
 	"Garrick Hallowmere": {
 		...std("Garrick Hallowmere", "M", "Human", "Merchant", "Merchant"),
-		fixedRouteId: "Merchant House 1",
+		fixedRouteId: "Tender",
 		shop: {
 			greetings: [
 				"Need something to keep you alive? You have come to the right place.",
