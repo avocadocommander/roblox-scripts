@@ -167,6 +167,18 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 
 		assigned.set(npcRoute.Name, { npc, route: npcRoute });
 		log(`[FIXED] ${npc.name} spawned at route ${npcRoute.Name} (killable=${npcDef.killable})`);
+
+		// Respawn fixed-route / merchant NPCs after 30 s when killed
+		npc.model.AncestryChanged.Connect((child, parent) => {
+			if (!parent) {
+				log(`[DEATH] ${child.Name} (fixed-route) was removed from ${npcRoute.Name} -- respawn in 30s`);
+				assigned.delete(npcRoute.Name);
+
+				task.delay(30, () => {
+					spawnFixedRouteNPC(npcName, npcRoute, assigned);
+				});
+			}
+		});
 	} catch (error) {
 		log(`[FIXED] Spawn failed for ${npcName} on ${npcRoute.Name}: ${error as string}`, "ERROR");
 	}

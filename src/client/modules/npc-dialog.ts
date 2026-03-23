@@ -76,17 +76,20 @@ let tradeTTEffect: TextLabel | undefined;
 let tradeTTPriceLabel: TextLabel | undefined;
 let tradeStatusLabel: TextLabel | undefined;
 let currentTooltipItemId: string | undefined;
+let hoveredTile: TextButton | undefined;
 
 // ── Headshot refs ─────────────────────────────────────────────────────────────
 
 let headshotCamera: Camera | undefined;
 let headshotModel: Model | undefined;
+let screenGuiRef: ScreenGui | undefined;
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  BUILD: UNIFIED DIALOG PANEL
 // ══════════════════════════════════════════════════════════════════════════════
 
 function buildDialogPanel(screenGui: ScreenGui): void {
+	screenGuiRef = screenGui;
 	const root = new Instance("Frame");
 	root.Name = "DialogPanel";
 	root.Size = new UDim2(0, sc(PANEL_W), 0, sc(DIALOG_H));
@@ -224,6 +227,7 @@ function buildDialogPanel(screenGui: ScreenGui): void {
 	// ── Trade section (visible in trade mode, same position as dialog text)
 
 	buildTradeSection(root);
+	buildTradeTooltip(screenGui);
 
 	// ── Options frame (always at bottom) ──────────────────────────────────
 
@@ -285,17 +289,13 @@ function buildTradeSection(root: Frame): void {
 	gridLayout.Parent = grid;
 
 	const gridPad = new Instance("UIPadding");
-	gridPad.PaddingTop = new UDim(0, sc(4));
-	gridPad.PaddingLeft = new UDim(0, sc(4));
-	gridPad.PaddingRight = new UDim(0, sc(4));
-	gridPad.PaddingBottom = new UDim(0, sc(4));
+	gridPad.PaddingTop = new UDim(0, sc(6));
+	gridPad.PaddingLeft = new UDim(0, sc(6));
+	gridPad.PaddingRight = new UDim(0, sc(6));
+	gridPad.PaddingBottom = new UDim(0, sc(6));
 	gridPad.Parent = grid;
 
-	// ── Tooltip overlay (anchored to bottom of trade section) ────────────
-
-	buildTradeTooltip(section);
-
-	// ── Status label (bottom of trade section, above tooltip) ────────────
+	// ── Status label (bottom of trade section) ───────────────────────────
 
 	const status = new Instance("TextLabel");
 	status.Name = "StatusLabel";
@@ -311,16 +311,17 @@ function buildTradeSection(root: Frame): void {
 	tradeStatusLabel = status;
 }
 
-function buildTradeTooltip(parent: Frame): void {
+function buildTradeTooltip(parent: Instance): void {
 	const tt = new Instance("Frame");
 	tt.Name = "TradeTooltip";
-	tt.Size = new UDim2(1, 0, 0, sc(130));
-	tt.Position = new UDim2(0, 0, 1, -sc(130)); // overlay anchored at bottom
-	tt.BackgroundColor3 = UI_THEME.bgInset;
-	tt.BackgroundTransparency = 0.05;
+	tt.Size = new UDim2(0, sc(210), 0, sc(140));
+	tt.Position = new UDim2(0, 0, 0, 0);
+	tt.AnchorPoint = new Vector2(0, 0);
+	tt.BackgroundColor3 = UI_THEME.bg;
+	tt.BackgroundTransparency = 0.04;
 	tt.BorderSizePixel = 0;
 	tt.Visible = false;
-	tt.ZIndex = 35;
+	tt.ZIndex = 50;
 	tt.Parent = parent;
 	tradeTooltip = tt;
 
@@ -331,7 +332,7 @@ function buildTradeTooltip(parent: Frame): void {
 	const ttStroke = new Instance("UIStroke");
 	ttStroke.Name = "TTStroke";
 	ttStroke.Color = UI_THEME.border;
-	ttStroke.Thickness = 1;
+	ttStroke.Thickness = 1.2;
 	ttStroke.Parent = tt;
 
 	const ttPad = new Instance("UIPadding");
@@ -350,7 +351,7 @@ function buildTradeTooltip(parent: Frame): void {
 	nLabel.Font = UI_THEME.fontDisplay;
 	nLabel.TextSize = sc(14);
 	nLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	nLabel.ZIndex = 36;
+	nLabel.ZIndex = 51;
 	nLabel.Parent = tt;
 	tradeTTName = nLabel;
 
@@ -364,7 +365,7 @@ function buildTradeTooltip(parent: Frame): void {
 	rLabel.Font = UI_THEME.fontBold;
 	rLabel.TextSize = sc(10);
 	rLabel.TextXAlignment = Enum.TextXAlignment.Right;
-	rLabel.ZIndex = 36;
+	rLabel.ZIndex = 51;
 	rLabel.Parent = tt;
 	tradeTTRarity = rLabel;
 
@@ -378,14 +379,22 @@ function buildTradeTooltip(parent: Frame): void {
 	tLabel.Font = UI_THEME.fontBody;
 	tLabel.TextSize = sc(10);
 	tLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	tLabel.ZIndex = 36;
+	tLabel.ZIndex = 51;
 	tLabel.Parent = tt;
 	tradeTTType = tLabel;
+
+	const ttDiv = new Instance("Frame");
+	ttDiv.Size = new UDim2(1, 0, 0, 1);
+	ttDiv.Position = new UDim2(0, 0, 0, sc(32));
+	ttDiv.BackgroundColor3 = UI_THEME.divider;
+	ttDiv.BorderSizePixel = 0;
+	ttDiv.ZIndex = 51;
+	ttDiv.Parent = tt;
 
 	const dLabel = new Instance("TextLabel");
 	dLabel.Name = "TT_Desc";
 	dLabel.Size = new UDim2(1, 0, 0, sc(24));
-	dLabel.Position = new UDim2(0, 0, 0, sc(32));
+	dLabel.Position = new UDim2(0, 0, 0, sc(36));
 	dLabel.BackgroundTransparency = 1;
 	dLabel.Text = "";
 	dLabel.TextColor3 = UI_THEME.textPrimary;
@@ -393,21 +402,21 @@ function buildTradeTooltip(parent: Frame): void {
 	dLabel.TextSize = sc(10);
 	dLabel.TextWrapped = true;
 	dLabel.TextYAlignment = Enum.TextYAlignment.Top;
-	dLabel.ZIndex = 36;
+	dLabel.ZIndex = 51;
 	dLabel.Parent = tt;
 	tradeTTDesc = dLabel;
 
 	const eLabel = new Instance("TextLabel");
 	eLabel.Name = "TT_Effect";
 	eLabel.Size = new UDim2(1, 0, 0, sc(14));
-	eLabel.Position = new UDim2(0, 0, 0, sc(58));
+	eLabel.Position = new UDim2(0, 0, 0, sc(64));
 	eLabel.BackgroundTransparency = 1;
 	eLabel.Text = "";
 	eLabel.TextColor3 = UI_THEME.gold;
 	eLabel.Font = UI_THEME.fontBold;
 	eLabel.TextSize = sc(10);
 	eLabel.TextWrapped = true;
-	eLabel.ZIndex = 36;
+	eLabel.ZIndex = 51;
 	eLabel.Parent = tt;
 	tradeTTEffect = eLabel;
 
@@ -417,7 +426,7 @@ function buildTradeTooltip(parent: Frame): void {
 	priceRow.Size = new UDim2(1, 0, 0, sc(24));
 	priceRow.Position = new UDim2(0, 0, 1, -sc(28));
 	priceRow.BackgroundTransparency = 1;
-	priceRow.ZIndex = 36;
+	priceRow.ZIndex = 51;
 	priceRow.Parent = tt;
 
 	const priceLabel = new Instance("TextLabel");
@@ -429,7 +438,7 @@ function buildTradeTooltip(parent: Frame): void {
 	priceLabel.Font = UI_THEME.fontBold;
 	priceLabel.TextSize = sc(12);
 	priceLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	priceLabel.ZIndex = 37;
+	priceLabel.ZIndex = 52;
 	priceLabel.Parent = priceRow;
 	tradeTTPriceLabel = priceLabel;
 }
@@ -532,9 +541,11 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	tileCorner.Parent = tile;
 
 	const tileStroke = new Instance("UIStroke");
-	tileStroke.Color = rarityColor;
-	tileStroke.Thickness = 1;
-	tileStroke.Transparency = 0.4;
+	tileStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+	const isSelected = selectedItemIds.has(shopItem.itemId);
+	tileStroke.Color = isSelected ? UI_THEME.gold : rarityColor;
+	tileStroke.Thickness = isSelected ? 2.5 : 1;
+	tileStroke.Transparency = isSelected ? 0 : 0.4;
 	tileStroke.Parent = tile;
 
 	const icon = new Instance("TextLabel");
@@ -604,7 +615,8 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 		if (!selectedItemIds.has(shopItem.itemId)) {
 			tileStroke.Transparency = 0;
 		}
-		showShopTooltip(shopItem);
+		hoveredTile = tile;
+		showShopTooltip(shopItem, tile);
 	});
 	tile.MouseLeave.Connect(() => {
 		tile.BackgroundTransparency = 0.15;
@@ -614,6 +626,7 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 		if (currentTooltipItemId === shopItem.itemId) {
 			hideShopTooltip();
 		}
+		if (hoveredTile === tile) hoveredTile = undefined;
 	});
 	tile.Activated.Connect(() => {
 		toggleItemSelection(shopItem);
@@ -641,22 +654,27 @@ function updateTileSelection(itemId: string, selected: boolean): void {
 	if (!stroke) return;
 	if (selected) {
 		stroke.Color = UI_THEME.gold;
-		stroke.Thickness = 2;
+		stroke.Thickness = 2.5;
 		stroke.Transparency = 0;
+		tile.BackgroundColor3 = Color3.fromRGB(45, 40, 25);
 	} else {
 		const shopItem = currentPayload?.shopItems.find((si) => si.itemId === itemId);
 		const rarityColor = shopItem ? (RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary) : UI_THEME.textPrimary;
 		stroke.Color = rarityColor;
 		stroke.Thickness = 1;
 		stroke.Transparency = 0.4;
+		tile.BackgroundColor3 = UI_THEME.bgInset;
 	}
 }
 
 // ── Shop tooltip ──────────────────────────────────────────────────────────────
 
-function showShopTooltip(shopItem: ShopItemPayload): void {
+function showShopTooltip(shopItem: ShopItemPayload, tile: TextButton): void {
 	if (tradeTooltip === undefined) return;
 	currentTooltipItemId = shopItem.itemId;
+
+	// Position tooltip next to the hovered tile (pop over to right, fallback left)
+	positionTradeTooltip(tile);
 
 	const rarityColor = RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary;
 	const rarityBg = RARITY_BG_COLORS[shopItem.rarity] ?? UI_THEME.bgInset;
@@ -682,9 +700,38 @@ function showShopTooltip(shopItem: ShopItemPayload): void {
 	tradeTooltip.Visible = true;
 }
 
+function positionTradeTooltip(anchor: GuiObject): void {
+	if (tradeTooltip === undefined) return;
+	const aPos = anchor.AbsolutePosition;
+	const aSize = anchor.AbsoluteSize;
+	const ttW = sc(210);
+	const ttH = sc(140);
+	const camera = Workspace.CurrentCamera;
+	const vpX = camera ? camera.ViewportSize.X : 1920;
+	const vpY = camera ? camera.ViewportSize.Y : 1080;
+
+	// Try right side first, then left
+	let posX = aPos.X + aSize.X + sc(6);
+	if (posX + ttW > vpX - 10) {
+		posX = aPos.X - ttW - sc(6);
+	}
+
+	// Vertically align with tile, clamp to viewport
+	let posY = aPos.Y;
+	if (posY + ttH > vpY - 10) {
+		posY = vpY - ttH - 10;
+	}
+
+	tradeTooltip.AnchorPoint = new Vector2(0, 0);
+	tradeTooltip.Position = new UDim2(0, posX, 0, posY);
+	tradeTooltip.Size = new UDim2(0, ttW, 0, ttH);
+	tradeTooltip.Visible = true;
+}
+
 function hideShopTooltip(): void {
 	if (tradeTooltip) tradeTooltip.Visible = false;
 	currentTooltipItemId = undefined;
+	hoveredTile = undefined;
 }
 
 // ── Purchase logic ────────────────────────────────────────────────────────────
@@ -1096,6 +1143,7 @@ function closeDialog(): void {
 
 	closeDialogRemote.FireServer();
 
+	hideShopTooltip();
 	if (tradeSection) tradeSection.Visible = false;
 	if (playerGoldLabel) playerGoldLabel.Visible = false;
 
