@@ -85,6 +85,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Isolde Fairbloom": std("Isolde Fairbloom", "F", "Human", "Commoner"),
 	"Bertram de Mere": {
 		...std("Bertram de Mere", "M", "Human", "Merchant", "Merchant"),
+		fixedRouteId: "Top Dog",
 		shop: {
 			greetings: [
 				"Ah, a customer. Browse, but do not touch what you cannot afford.",
