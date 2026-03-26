@@ -9,7 +9,7 @@ import { ItemDef, ITEMS } from "shared/inventory";
 import { NPC_REGISTRY, NPCShopDef } from "./npcs";
 
 // Re-export types so existing consumers keep working.
-export type { ShopItem, NPCShopDef } from "./npcs";
+export type { ShopItem, NPCShopDef, NPCDialogDef } from "./npcs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

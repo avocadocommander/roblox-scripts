@@ -2,10 +2,9 @@ import { Players, RunService, Workspace, CollectionService, UserInputService } f
 import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
-import { UI_THEME } from "shared/ui-theme";
+import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
-import { isNPCKillable } from "shared/config/npcs";
-import { RARITY_COLORS } from "shared/inventory";
+import { isNPCKillable, getNPCInteraction, hasNPCDialog } from "shared/config/npcs";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
 import { requestOpenDialog, isDialogOpen } from "./npc-dialog";
@@ -18,18 +17,11 @@ import {
 } from "shared/remotes/bounty-remote";
 
 // ── Status → rarity colour mapping ───────────────────────────────────────────
-const STATUS_COLORS: Record<string, Color3> = {
-	Serf: RARITY_COLORS["common"],
-	Commoner: RARITY_COLORS["uncommon"],
-	Merchant: RARITY_COLORS["rare"],
-	Nobility: RARITY_COLORS["epic"],
-	Royalty: RARITY_COLORS["legendary"],
-};
-
 function getNPCStatusColor(npcName: string): Color3 {
 	const data = MEDIEVAL_NPCS[npcName];
 	if (!data) return UI_THEME.textPrimary;
-	return STATUS_COLORS[data.status] ?? UI_THEME.textPrimary;
+	const rarity = STATUS_RARITY[data.status];
+	return rarity ? rarity.color : UI_THEME.textPrimary;
 }
 
 function getNPCStatus(npcName: string): string {
@@ -42,6 +34,7 @@ const assassinationRemote = getOrCreateAssassinationRemote();
 const stealthRemote = getOrCreateStealthRemote();
 const PROXIMITY_RANGE = 5; // Only show when very close to NPC
 const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further away
+const WANTED_PLAYER_RANGE = 15; // Range for PvP assassination (matches server MAX_ASSASSINATION_DISTANCE)
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
 let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
@@ -192,8 +185,8 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	cardStroke.Parent = card;
 
 	// NPC name — always white text, rarity colour is shown via the card border
-	const isMerchant = statusText === "Merchant";
-	const displayName = isMerchant ? "(G) " + npc.Name : npc.Name;
+	const hasShopInteraction = getNPCInteraction(npc.Name) === "Shop";
+	const displayName = hasShopInteraction ? "(G) " + npc.Name : npc.Name;
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
@@ -480,7 +473,7 @@ function updateNPCProximityUI() {
 		}
 
 		// Track closest NPC in range (camera frame check optional for tracking)
-		const npcMaxRange = getNPCStatus(npc.Name) === "Merchant" ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
+		const npcMaxRange = hasNPCDialog(npc.Name) ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
 		if (distance <= npcMaxRange) {
 			inRangeCount = inRangeCount + 1;
 			const inCameraFrame = isNPCInCameraFrame(camera, npcPosition);
@@ -495,6 +488,7 @@ function updateNPCProximityUI() {
 	closestWantedPlayerInRange = undefined;
 	ensureWantedBillboards();
 
+	let closestWantedDist = WANTED_PLAYER_RANGE + 1;
 	for (const [wantedName] of wantedPlayerInfo) {
 		if (wantedName === player.Name) continue;
 		const wantedPlayer = Players.FindFirstChild(wantedName) as Player | undefined;
@@ -502,11 +496,15 @@ function updateNPCProximityUI() {
 		const hrp = wantedPlayer.Character.FindFirstChild("HumanoidRootPart") as BasePart;
 		if (!hrp) continue;
 		const dist = playerPosition.sub(hrp.Position).Magnitude;
-		if (dist <= PROXIMITY_RANGE && dist < closestDistance) {
-			closestDistance = dist;
+		if (dist <= WANTED_PLAYER_RANGE && dist < closestWantedDist) {
+			closestWantedDist = dist;
 			closestWantedPlayerInRange = wantedPlayer.Character;
-			closestNPC = undefined; // wanted player takes priority
 		}
+	}
+
+	// Wanted player takes priority over NPC if both are in range
+	if (closestWantedPlayerInRange) {
+		closestNPC = undefined;
 	}
 
 	// Update global closest NPC for E key handling
@@ -515,8 +513,8 @@ function updateNPCProximityUI() {
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
 		const npcIsKillable = isNPCKillable(npc.Name);
-		const npcIsMerchant = getNPCStatus(npc.Name) === "Merchant";
-		const talkRange = npcIsMerchant ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
+		const npcHasDialog = hasNPCDialog(npc.Name);
+		const talkRange = npcHasDialog ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
 		const inTalkRange = npc === closestNPC && closestDistance <= talkRange;
 		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC && npcIsKillable;
 		const shouldShowTalk = !isCurrentlyStealthing && inTalkRange && !isDialogOpen();
@@ -619,17 +617,19 @@ function initializeNPCProximity() {
 		}
 	});
 
-	// Listen for title changes broadcast from the server
-	getTitleSyncRemote().OnClientEvent.Connect((pNameRaw: unknown, tIdRaw: unknown) => {
-		const pName = pNameRaw as string;
-		const tId = tIdRaw as string;
-		playerTitles.set(pName, tId);
-		if (!wantedPlayerInfo.has(pName)) {
-			const targetPlayer = Players.FindFirstChild(pName) as Player | undefined;
-			if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
-				createPlayerBillboard(targetPlayer.Character, pName, tId);
+	// Listen for title changes broadcast from the server (spawned so WaitForChild doesn't block init)
+	task.spawn(() => {
+		getTitleSyncRemote().OnClientEvent.Connect((pNameRaw: unknown, tIdRaw: unknown) => {
+			const pName = pNameRaw as string;
+			const tId = tIdRaw as string;
+			playerTitles.set(pName, tId);
+			if (!wantedPlayerInfo.has(pName)) {
+				const targetPlayer = Players.FindFirstChild(pName) as Player | undefined;
+				if (targetPlayer && targetPlayer.IsA("Player") && targetPlayer.Character) {
+					createPlayerBillboard(targetPlayer.Character, pName, tId);
+				}
 			}
-		}
+		});
 	});
 
 	// Find existing NPCs in workspace (exclude player characters)

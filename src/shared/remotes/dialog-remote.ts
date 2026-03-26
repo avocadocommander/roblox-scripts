@@ -12,6 +12,7 @@
  */
 
 import { getRemotesFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
+import { Interaction } from "shared/config/npcs";
 
 /** Client -> Server: player opened dialog with an NPC (sends NPC Model ref). */
 export function getOpenDialogRemote(): RemoteEvent {
@@ -43,18 +44,27 @@ export function getFloatingNPCTextRemote(): RemoteEvent {
 	return getRemoteEvent(getRemotesFolder(), "FloatingNPCText");
 }
 
+/** Client -> Server: player wants to turn in bounties at a guild leader NPC. */
+export function getTurnInBountiesDialogRemote(): RemoteFunction {
+	return getRemoteFunction(getRemotesFolder(), "TurnInBountiesDialog");
+}
+
 // ── Payload types (shared between client & server) ────────────────────────────
 
 export interface DialogPayload {
 	npcName: string;
 	greeting: string;
 	hasShop: boolean;
+	/** The NPC's interaction type so the client can show the right buttons. */
+	interaction: Interaction;
 	/** Chat lines for the "Talk" option. */
 	chatLines: string[];
 	/** Farewell line for when player leaves. */
 	farewell: string;
 	/** Shop items (only if hasShop). */
 	shopItems: ShopItemPayload[];
+	/** Number of bounty scrolls pending turn-in (only if interaction=TurnIn). */
+	pendingBounties: number;
 }
 
 export interface ShopItemPayload {

@@ -25,7 +25,7 @@ import {
 	clearPlayerWanted,
 	getWantedPlayerGold,
 } from "./bounty-manager";
-import { transferBountyScrolls, addPlayerBountyScroll } from "./inventory-handler";
+import { transferBountyScrolls, addPlayerBountyScroll, addBountyScrollFromKill } from "./inventory-handler";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
 import { isNPCKillable } from "shared/config/npcs";
 
@@ -163,13 +163,13 @@ function initializeAssassinationHandler() {
 
 		if (wasLegalKill) {
 			// Legal bounty kill — store as completed bounty (turned in later via kill book)
-			addCompletedBounty(
-				player,
-				model.Name,
-				BASE_COINS + personalBounty.gold,
-				BASE_XP + personalBounty.xp,
-				personalBounty.offence,
-			);
+			const npcData3 = MEDIEVAL_NPCS[model.Name];
+			const npcStat = (npcData3?.status ?? "Commoner") as string;
+			const scrollGold = BASE_COINS + personalBounty.gold;
+			const scrollXP = BASE_XP + personalBounty.xp;
+
+			addCompletedBounty(player, model.Name, scrollGold, scrollXP, personalBounty.offence);
+			addBountyScrollFromKill(player, model.Name, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
 			log("[ASSASSINATION] " + player.Name + " completed bounty on " + model.Name + " (stored for turn-in)");
 		} else {

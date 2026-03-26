@@ -109,12 +109,13 @@ export const ITEM_LIST: ItemDef[] = (() => {
 	return list;
 })();
 
-// ── Rarity colours (matches the assassin/pirate palette) ──────────────────────
+// ── Rarity colours — synced with STATUS_RARITY in ui-theme.ts ─────────────────
+// common=Serf, uncommon=Commoner, rare=Merchant, epic=Nobility, legendary=Royalty
 
 export const RARITY_COLORS: Record<string, Color3> = {
 	common: Color3.fromRGB(108, 100, 90),
-	uncommon: Color3.fromRGB(68, 138, 82),
-	rare: Color3.fromRGB(58, 108, 168),
+	uncommon: Color3.fromRGB(155, 148, 130),
+	rare: Color3.fromRGB(68, 138, 82),
 	epic: Color3.fromRGB(128, 68, 148),
 	legendary: Color3.fromRGB(195, 155, 50),
 	player: Color3.fromRGB(190, 40, 40),
@@ -133,8 +134,8 @@ export const RARITY_LABELS: Record<string, string> = {
 /** Faint background tint for tooltip cards, per rarity. */
 export const RARITY_BG_COLORS: Record<string, Color3> = {
 	common: Color3.fromRGB(22, 20, 18),
-	uncommon: Color3.fromRGB(16, 26, 18),
-	rare: Color3.fromRGB(14, 20, 30),
+	uncommon: Color3.fromRGB(30, 28, 24),
+	rare: Color3.fromRGB(18, 32, 22),
 	epic: Color3.fromRGB(24, 14, 30),
 	legendary: Color3.fromRGB(30, 26, 12),
 	player: Color3.fromRGB(32, 10, 10),

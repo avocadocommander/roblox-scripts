@@ -1,6 +1,14 @@
 import { Players, ReplicatedStorage } from "@rbxts/services";
 import { PlayerDataService } from "./common-data-service";
 import { KillLog, NPCKillMeta, NPCKillRecord } from "./kill-log";
+import {
+	FactionId,
+	FactionXP,
+	DEFAULT_FACTION_XP,
+	FACTION_IDS,
+	levelFromXP,
+	totalXPFromFactions,
+} from "./config/factions";
 
 /** A completed bounty waiting to be turned in (or already turned in). */
 export interface CompletedBountyEntry {
@@ -119,6 +127,29 @@ const RequestAddCoins = ((): RemoteFunction => {
 	return rf;
 })();
 
+const FactionXPUpdated = ((): RemoteEvent => {
+	const re = (playerStateFolder.FindFirstChild("FactionXPUpdated") as RemoteEvent) ?? new Instance("RemoteEvent");
+	re.Name = "FactionXPUpdated";
+	re.Parent = playerStateFolder;
+	return re;
+})();
+
+const RequestResetFactionXP = ((): RemoteFunction => {
+	const rf =
+		(playerStateFolder.FindFirstChild("RequestResetFactionXP") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "RequestResetFactionXP";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+
+const RequestAddFactionXP = ((): RemoteFunction => {
+	const rf =
+		(playerStateFolder.FindFirstChild("RequestAddFactionXP") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "RequestAddFactionXP";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+
 export interface PlayerState {
 	expierence: number;
 	level: number;
@@ -146,6 +177,8 @@ export interface PlayerState {
 	totalNPCKills: number;
 	/** IDs of all titles the player has collected. */
 	ownedTitles: string[];
+	/** Per-faction XP. Overall XP/level is derived from the sum. */
+	factionXP: FactionXP;
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -166,6 +199,7 @@ const DEFAULT_STATE: PlayerState = {
 	unlockedAchievements: [],
 	totalNPCKills: 0,
 	ownedTitles: ["sellsword"],
+	factionXP: { ...DEFAULT_FACTION_XP },
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -393,8 +427,12 @@ export function addCompletedBounty(player: Player, npcName: string, gold: number
 	});
 }
 
-/** Turn in all completed bounties — award gold/XP, move to history, return total. */
-export function turnInBounties(player: Player): { totalGold: number; totalXP: number; count: number } {
+/** Turn in all completed bounties — award gold/XP, move to history, return total.
+ *  If `factionId` is provided the XP is also credited to that faction. */
+export function turnInBounties(
+	player: Player,
+	factionId?: FactionId,
+): { totalGold: number; totalXP: number; count: number } {
 	const state = PLAYER_STATES.get(player);
 	if (!state || state.completedBounties.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
 
@@ -415,6 +453,11 @@ export function turnInBounties(player: Player): { totalGold: number; totalXP: nu
 	addCoins(player, totalGold);
 	addExperience(player, totalXP);
 	addScore(player, totalGold);
+
+	// Credit faction XP
+	if (factionId !== undefined) {
+		addFactionXP(player, factionId, totalXP);
+	}
 
 	return { totalGold, totalXP, count };
 }
@@ -521,5 +564,73 @@ RequestAddExpierence.OnServerInvoke = (player, ...args: unknown[]) => {
 		PLAYER_STATES.set(player, { ...playerState, level: playerLevelAccoringToCurrentXP });
 		pushLevelUpdate(player);
 	}
+	return true;
+};
+
+// ── Faction XP ───────────────────────────────────────────────────────────────
+
+function pushFactionXPUpdate(player: Player): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	FactionXPUpdated.FireClient(player, state.factionXP);
+}
+
+/** Add XP to a specific faction for `player`. */
+export function addFactionXP(player: Player, factionId: FactionId, amount: number): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	const updated: FactionXP = { ...state.factionXP };
+	updated[factionId] = (updated[factionId] ?? 0) + amount;
+
+	// Derive overall level from total faction XP
+	const newLevel = levelFromXP(totalXPFromFactions(updated));
+	const didLevelUp = newLevel !== state.level;
+
+	PLAYER_STATES.set(player, {
+		...state,
+		factionXP: updated,
+		level: newLevel,
+		expierence: totalXPFromFactions(updated),
+	});
+	pushFactionXPUpdate(player);
+	pushExpierenceUpdate(player);
+	if (didLevelUp) pushLevelUpdate(player);
+}
+
+/** Get faction XP record for `player`. */
+export function getFactionXP(player: Player): FactionXP {
+	return PLAYER_STATES.get(player)?.factionXP ?? { ...DEFAULT_FACTION_XP };
+}
+
+/** Reset all faction XP to 0, level to 1, overall XP to 0. */
+export function resetFactionData(player: Player): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, {
+		...state,
+		factionXP: { ...DEFAULT_FACTION_XP },
+		expierence: 0,
+		level: 1,
+	});
+	pushFactionXPUpdate(player);
+	pushExpierenceUpdate(player);
+	pushLevelUpdate(player);
+}
+
+// ── Faction debug remotes ─────────────────────────────────────────────────────
+
+RequestResetFactionXP.OnServerInvoke = (player: Player): boolean => {
+	resetFactionData(player);
+	warn("[PlayerState] DEBUG: Reset faction XP for " + player.Name);
+	return true;
+};
+
+RequestAddFactionXP.OnServerInvoke = (player: Player, ...args: unknown[]): boolean => {
+	const [amountArg] = args;
+	const amount = typeOf(amountArg) === "number" ? (amountArg as number) : 100;
+	for (const fid of FACTION_IDS) {
+		addFactionXP(player, fid, amount);
+	}
+	warn("[PlayerState] DEBUG: Added " + amount + " XP to all factions for " + player.Name);
 	return true;
 };

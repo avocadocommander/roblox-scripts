@@ -12,7 +12,9 @@ import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { ITEMS } from "shared/inventory";
 import { MEDIEVAL_NPCS } from "shared/module";
-import { getNPCShop, npcHasShop, pickRandom } from "shared/config/npc-shops";
+import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npcs";
+import { pickRandom } from "shared/config/npc-shops";
+import { factionForNPC } from "shared/config/factions";
 import {
 	getOpenDialogRemote,
 	getPurchaseItemRemote,
@@ -20,10 +22,11 @@ import {
 	getDialogPayloadRemote,
 	getPurchaseResultRemote,
 	getFloatingNPCTextRemote,
+	getTurnInBountiesDialogRemote,
 	DialogPayload,
 	ShopItemPayload,
 } from "shared/remotes/dialog-remote";
-import { addCoins, getPlayerStateSnapshot } from "shared/player-state";
+import { addCoins, getPlayerStateSnapshot, getCompletedBounties, turnInBounties } from "shared/player-state";
 import { givePlayerItem, getPlayerOwnedCount } from "./inventory-handler";
 import { getQuipForStatus } from "shared/config/npc-quips";
 
@@ -35,6 +38,7 @@ const closeDialogRemote = getCloseDialogRemote();
 const dialogPayloadRemote = getDialogPayloadRemote();
 const purchaseResultRemote = getPurchaseResultRemote();
 const floatingTextRemote = getFloatingNPCTextRemote();
+const turnInRemote = getTurnInBountiesDialogRemote();
 
 // ── Per-player state: which NPC is the player currently talking to? ───────────
 
@@ -47,37 +51,21 @@ const lastQuipTime = new Map<Player, number>();
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function buildDialogPayload(npcName: string, player: Player): DialogPayload | undefined {
-	const shop = getNPCShop(npcName);
+	const def = NPC_REGISTRY[npcName];
+	const shop = def?.shop;
+	const dlg = def?.dialog;
 	const hasShop = shop !== undefined;
 
-	// Build greeting — use shop greeting if available, else medieval phrase
+	// Dialog lines — use NPC-specific dialog if available, else generic fallback
 	let greeting: string;
 	let chatLines: string[];
 	let farewell: string;
-	const shopItems: ShopItemPayload[] = [];
 
-	if (shop) {
-		greeting = pickRandom(shop.greetings);
-		chatLines = [...shop.chatLines];
-		farewell = pickRandom(shop.farewells);
-
-		for (const si of shop.shopItems) {
-			const def = ITEMS[si.itemId];
-			if (!def) continue;
-			shopItems.push({
-				itemId: si.itemId,
-				name: def.name,
-				description: def.description,
-				effect: def.effect,
-				itemType: def.itemType,
-				icon: def.icon,
-				rarity: def.rarity,
-				price: si.price,
-				owned: getPlayerOwnedCount(player, si.itemId),
-			});
-		}
+	if (dlg) {
+		greeting = pickRandom(dlg.greetings);
+		chatLines = [...dlg.chatLines];
+		farewell = pickRandom(dlg.farewells);
 	} else {
-		// Non-vendor NPC — generic dialog
 		greeting = "Hail, traveler. What brings you here?";
 		chatLines = [
 			"The roads grow dangerous these days.",
@@ -88,13 +76,38 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 		farewell = "Safe travels.";
 	}
 
+	// Shop items — only populated if the NPC actually has a shop
+	const shopItems: ShopItemPayload[] = [];
+	if (shop) {
+		for (const si of shop.shopItems) {
+			const itemDef = ITEMS[si.itemId];
+			if (!itemDef) continue;
+			shopItems.push({
+				itemId: si.itemId,
+				name: itemDef.name,
+				description: itemDef.description,
+				effect: itemDef.effect,
+				itemType: itemDef.itemType,
+				icon: itemDef.icon,
+				rarity: itemDef.rarity,
+				price: si.price,
+				owned: getPlayerOwnedCount(player, si.itemId),
+			});
+		}
+	}
+
+	const interaction = def?.interaction ?? "Ambient";
+	const pendingBounties = getCompletedBounties(player).size();
+
 	return {
 		npcName,
 		greeting,
 		hasShop,
+		interaction,
 		chatLines,
 		farewell,
 		shopItems,
+		pendingBounties,
 	};
 }
 
@@ -106,7 +119,7 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	}
 
 	// Validate the NPC has a shop and the item is in it
-	const shop = getNPCShop(npcName);
+	const shop = NPC_REGISTRY[npcName]?.shop;
 	if (!shop) {
 		return [false, "This NPC has nothing to sell."];
 	}
@@ -170,9 +183,9 @@ export function initializeDialogHandler(): void {
 		const dist = hrp.Position.sub(npcPart.Position).Magnitude;
 		if (dist > 15) return; // Too far away
 
-		// NPCs without a shop get a floating quip instead of the full dialog panel.
+		// Ambient-only NPCs get a floating quip instead of the full dialog panel.
 		const npcData = MEDIEVAL_NPCS[npcName];
-		if (!npcHasShop(npcName)) {
+		if (!hasNPCDialog(npcName)) {
 			const now = tick();
 			const lastTime = lastQuipTime.get(player) ?? 0;
 			if (now - lastTime < QUIP_COOLDOWN) return; // rate-limit
@@ -206,6 +219,42 @@ export function initializeDialogHandler(): void {
 		purchaseResultRemote.FireClient(player, success, message);
 
 		return { success, message, newOwned: getPlayerOwnedCount(player, itemId) };
+	};
+
+	// Player wants to turn in bounties at a guild leader NPC
+	turnInRemote.OnServerInvoke = (player: Player): unknown => {
+		const currentNPC = activeDialog.get(player);
+		if (currentNPC === undefined) {
+			return { success: false, totalGold: 0, totalXP: 0, count: 0 };
+		}
+		// Verify the NPC is actually a TurnIn type
+		const npcInteraction = getNPCInteraction(currentNPC);
+		if (npcInteraction !== "TurnIn") {
+			log("[DIALOG] " + player.Name + " tried to turn in at non-TurnIn NPC " + currentNPC, "WARN");
+			return { success: false, totalGold: 0, totalXP: 0, count: 0 };
+		}
+
+		// Determine which faction this NPC belongs to
+		const faction = factionForNPC(currentNPC);
+
+		const result = turnInBounties(player, faction);
+		if (result.count > 0) {
+			const factionTag = faction !== undefined ? " (" + faction + ")" : "";
+			log(
+				"[DIALOG] " +
+					player.Name +
+					" turned in " +
+					result.count +
+					" bounties at " +
+					currentNPC +
+					factionTag +
+					" for " +
+					result.totalGold +
+					"g",
+			);
+		}
+
+		return { success: true, ...result };
 	};
 
 	// Player closes dialog

@@ -1,6 +1,7 @@
 import { getRemoteSubFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
 import { CompletedBountyEntry } from "shared/player-state";
 import { KillLog } from "shared/kill-log";
+import { FactionXP } from "shared/config/factions";
 
 // ─── Payload types ────────────────────────────────────────────────────────────
 
@@ -19,6 +20,8 @@ export interface KillBookData {
 	ownedTitles: string[];
 	/** Currently equipped title ID. */
 	equippedTitle: string;
+	/** Per-faction XP totals. */
+	factionXP: FactionXP;
 }
 
 /** Result of turning in bounties. */

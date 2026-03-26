@@ -9,6 +9,8 @@ const RequestAddLevel = playerState.WaitForChild("RequestAddLevel") as RemoteFun
 const RequestAddCoins = playerState.WaitForChild("RequestAddCoins") as RemoteFunction;
 const GetPlayerLevel = playerState.WaitForChild("GetLevel") as RemoteFunction;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
+const RequestResetFactionXP = playerState.WaitForChild("RequestResetFactionXP") as RemoteFunction;
+const RequestAddFactionXP = playerState.WaitForChild("RequestAddFactionXP") as RemoteFunction;
 const TAG = "LevelAccessRequired";
 
 const mockAchievementRemote = getMockAchievementRemote();
@@ -18,6 +20,14 @@ UserInputService.InputBegan.Connect((io, gp) => {
 	if (io.KeyCode === Enum.KeyCode.Z) RequestAddLevel.InvokeServer(1);
 	if (io.KeyCode === Enum.KeyCode.X) mockAchievementRemote.FireServer();
 	if (io.KeyCode === Enum.KeyCode.C) RequestAddCoins.InvokeServer(20);
+	if (io.KeyCode === Enum.KeyCode.F9) {
+		RequestResetFactionXP.InvokeServer();
+		log("[DEBUG] Reset faction XP + level");
+	}
+	if (io.KeyCode === Enum.KeyCode.F10) {
+		RequestAddFactionXP.InvokeServer(100);
+		log("[DEBUG] Added 100 XP to all factions");
+	}
 });
 
 onPlayerInitialized(() => {

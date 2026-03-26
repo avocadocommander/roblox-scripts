@@ -4,16 +4,28 @@
  * Every NPC in the game is defined here. To add a new NPC just add an entry
  * to `NPC_REGISTRY`. The rest of the codebase reads from this file.
  *
+ * Design rule: Occupation describes fantasy identity. Interaction describes
+ * player-facing function. A "Merchant" occupation is flavour; "Shop"
+ * interaction is system behaviour. They are related but NOT identical.
+ *
  * Key concepts:
  *  - `socialClass`   — the NPC's social tier (Serf/Commoner/Merchant/Nobility/Royalty).
  *                      Drives rarity colours, reward scaling, clothing, etc.
- *  - `occupation`    — the NPC's functional role ("Noble", "Merchant", "Mentor", etc.).
- *                      Metadata for now; will drive dialog/shop behaviour later.
+ *  - `occupation`    — the NPC's fantasy identity ("Noble", "Merchant", "Herbalist",
+ *                      "Guard", "Beggar", "Mentor", "Broker", etc.).
+ *  - `interaction`   — the player-facing system behaviour:
+ *                        "Ambient"        — floating quips only, no dialog panel.
+ *                        "Shop"           — opens dialog with trade grid.
+ *                        "Quest"          — opens dialog with quest options.
+ *                        "TurnIn"         — guild leader: accepts bounty scrolls for rewards.
+ *                        "Mixed"          — combination (dialog + shop, etc.).
  *  - `killable`      — whether the NPC can be assassinated. Unkillable NPCs still
  *                      converse / trade if applicable.
  *  - `fixedRouteId`  — if set, the NPC is always assigned to this specific route
  *                      instead of being randomly allocated on server start.
- *  - `shop`          — optional shop config. If present the NPC is a vendor.
+ *  - `dialog`        — optional conversation lines (greetings, chatLines, farewells).
+ *                      Any non-Ambient NPC should have these.
+ *  - `shop`          — optional shop items list. Only needed for "Shop" / "Mixed".
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -22,6 +34,12 @@ export type SocialClass = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royal
 export type Gender = "M" | "F";
 export type Race = "Human" | "Elf" | "Goblin";
 
+/**
+ * Player-facing system behaviour.
+ * Occupation is flavour ("Merchant", "Herbalist"). Interaction is function.
+ */
+export type Interaction = "Ambient" | "Shop" | "Quest" | "TurnIn" | "Mixed";
+
 /** A single item available for purchase at a shop. */
 export interface ShopItem {
 	itemId: string;
@@ -29,11 +47,15 @@ export interface ShopItem {
 	maxOwned?: number;
 }
 
-/** Full shop definition for one NPC vendor. */
-export interface NPCShopDef {
+/** Conversation lines for any non-Ambient NPC. */
+export interface NPCDialogDef {
 	greetings: string[];
 	chatLines: string[];
 	farewells: string[];
+}
+
+/** Shop inventory — items only. Dialog lines live in NPCDialogDef. */
+export interface NPCShopDef {
 	shopItems: ShopItem[];
 }
 
@@ -43,8 +65,10 @@ export interface NPCDef {
 	race: Race;
 	socialClass: SocialClass;
 	occupation: string;
+	interaction: Interaction;
 	killable: boolean;
 	fixedRouteId: string | undefined;
+	dialog: NPCDialogDef | undefined;
 	shop: NPCShopDef | undefined;
 }
 
@@ -52,15 +76,24 @@ export type NPCRegistry = Record<string, NPCDef>;
 
 // ── Helper to build a standard (killable, randomly-routed) NPC entry ──────────
 
-function std(name: string, gender: Gender, race: Race, socialClass: SocialClass, occupation?: string): NPCDef {
+function std(
+	name: string,
+	gender: Gender,
+	race: Race,
+	socialClass: SocialClass,
+	occupation?: string,
+	interaction?: Interaction,
+): NPCDef {
 	return {
 		name,
 		gender,
 		race,
 		socialClass,
 		occupation: occupation ?? socialClass,
+		interaction: interaction ?? "Ambient",
 		killable: true,
 		fixedRouteId: undefined,
+		dialog: undefined,
 		shop: undefined,
 	};
 }
@@ -84,9 +117,10 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Ulric Fenwatch": std("Ulric Fenwatch", "M", "Human", "Serf"),
 	"Isolde Fairbloom": std("Isolde Fairbloom", "F", "Human", "Commoner"),
 	"Bertram de Mere": {
-		...std("Bertram de Mere", "M", "Human", "Merchant", "Merchant"),
-		fixedRouteId: "Top Dog",
-		shop: {
+		...std("Bertram de Mere", "M", "Human", "Nobility", "Guildmaster"),
+		interaction: "TurnIn",
+		fixedRouteId: "Templar",
+		dialog: {
 			greetings: [
 				"Ah, a customer. Browse, but do not touch what you cannot afford.",
 				"Welcome to my humble stall. Everything here has a price.",
@@ -103,19 +137,52 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Safe travels. Try not to die before you spend more.",
 				"Until next time, friend.",
 			],
-			shopItems: [
-				{ itemId: "dagger", price: 500 },
-				{ itemId: "floating_death", price: 300 },
-				{ itemId: "slow_decay", price: 200 },
-				{ itemId: "swiftness_elixir", price: 250 },
-			],
 		},
 	},
-	"Thorne Æshgrave": std("Thorne Æshgrave", "M", "Human", "Serf"),
+	"Thorne Æshgrave": {
+		...std("Thorne Æshgrave", "M", "Human", "Serf", "Guildmaster"),
+		interaction: "TurnIn",
+		fixedRouteId: "Thorne",
+		killable: false,
+		dialog: {
+			greetings: ["Listen -- theres far more you will hear", "Do i know you?"],
+			chatLines: [
+				"You bring me bounties -- and I give you coin",
+				"Don't cary too many bounties at once -- the vultures are out",
+				"Who is my boss? ...Nobody",
+			],
+			farewells: ["Come back again - we are always open", "Until next time -- if there is a next time."],
+		},
+	},
+	// "Veyra Ashenmaw": {
+	// 	...std("Veyra Ashenmaw", "F", "Elf", "Nobility", "Guildmaster"),
+	// 	interaction: "TurnIn",
+	// 	fixedRouteId: "Veyra",
+	// 	killable: false,
+	// 	dialog: {
+	// 		greetings: [
+	// 			"Another errand runner. Show me what you have.",
+	// 			"You smell of blood. Good. That means you have something for me.",
+	// 			"Thorne sends his scraps my way. I prefer the whole meal.",
+	// 		],
+	// 		chatLines: [
+	// 			"Thorne is a relic. His guild crumbles while mine grows.",
+	// 			"Loyalty is purchased, not earned. Remember that.",
+	// 			"The more scrolls you bring me, the more I trust you.",
+	// 			"Every name on those scrolls is one less problem in my way.",
+	// 		],
+	// 		farewells: [
+	// 			"Do not waste my time with empty hands next visit.",
+	// 			"Run along. And bring more next time.",
+	// 			"We are not finished. We are never finished.",
+	// 		],
+	// 	},
+	// },
 	"Lyra Goldmead": {
 		...std("Lyra Goldmead", "F", "Human", "Merchant", "Merchant"),
+		interaction: "Shop",
 		fixedRouteId: "Merchant House 1",
-		shop: {
+		dialog: {
 			greetings: [
 				"Step closer, dear. I have just the thing.",
 				"Potions, poisons, and a smile. What more could you want?",
@@ -132,6 +199,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Do not mix those together. Seriously.",
 				"Return when you need more. You always do.",
 			],
+		},
+		shop: {
 			shopItems: [
 				{ itemId: "floating_death", price: 280 },
 				{ itemId: "slow_decay", price: 180 },
@@ -145,8 +214,9 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Moira Blackfen": std("Moira Blackfen", "F", "Human", "Serf"),
 	"Garrick Hallowmere": {
 		...std("Garrick Hallowmere", "M", "Human", "Merchant", "Merchant"),
+		interaction: "Shop",
 		fixedRouteId: "Tender",
-		shop: {
+		dialog: {
 			greetings: [
 				"Need something to keep you alive? You have come to the right place.",
 				"Elixirs, tonics, and the occasional miracle. Step right up.",
@@ -163,6 +233,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Good luck. You will need it.",
 				"Off you go. And remember -- drink responsibly.",
 			],
+		},
+		shop: {
 			shopItems: [
 				{ itemId: "swiftness_elixir", price: 200 },
 				{ itemId: "sky_step", price: 350 },
@@ -182,7 +254,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Idris Moorwatch": std("Idris Moorwatch", "M", "Human", "Commoner"),
 	"Rowena Brambleholt": {
 		...std("Rowena Brambleholt", "F", "Human", "Merchant", "Merchant"),
-		shop: {
+		interaction: "Shop",
+		dialog: {
 			greetings: [
 				"What do you need, stranger? Make it quick.",
 				"Weapons, tools of the trade. Browse at your leisure.",
@@ -199,6 +272,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Do not come back broken. Come back richer.",
 				"Mind the edge. I just honed it.",
 			],
+		},
+		shop: {
 			shopItems: [
 				{ itemId: "dagger", price: 450 },
 				{ itemId: "slow_decay", price: 220 },
@@ -228,7 +303,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Aerendyl Silversong": std("Aerendyl Silversong", "F", "Elf", "Royalty"),
 	"Thessaly Nywen": {
 		...std("Thessaly Nywen", "F", "Elf", "Merchant", "Merchant"),
-		shop: {
+		interaction: "Shop",
+		dialog: {
 			greetings: [
 				"An outsider. How... quaint. What do you seek?",
 				"Elven craft at human prices. You will not find a better deal.",
@@ -241,6 +317,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Do not mistake my patience for weakness.",
 			],
 			farewells: ["Walk softly, short-lived one.", "The forest watches. As do I.", "Until the next moon."],
+		},
+		shop: {
 			shopItems: [
 				{ itemId: "phantom_venom", price: 450 },
 				{ itemId: "dragons_breath", price: 550 },
@@ -310,10 +388,10 @@ function registryKeys(): string[] {
 /** Ordered list of all NPC names (mirrors the old MEDIEVAL_NPC_NAMES). */
 export const NPC_NAMES = registryKeys();
 
-/** All NPCs that can be randomly assigned to routes (killable, no fixed route, non-merchant). */
+/** All NPCs that can be randomly assigned to routes (killable, no fixed route, ambient-only). */
 export const ROUTABLE_NPC_NAMES = NPC_NAMES.filter((n) => {
 	const def = NPC_REGISTRY[n];
-	return def.killable && def.fixedRouteId === undefined && def.socialClass !== "Merchant";
+	return def.killable && def.fixedRouteId === undefined && def.interaction === "Ambient";
 });
 
 /** All NPCs with a fixed route assignment. */
@@ -323,4 +401,15 @@ export const FIXED_ROUTE_NPC_NAMES = NPC_NAMES.filter((n) => NPC_REGISTRY[n].fix
 export function isNPCKillable(npcName: string): boolean {
 	const def = NPC_REGISTRY[npcName];
 	return def !== undefined && def.killable;
+}
+
+/** Get the player-facing interaction type for an NPC. */
+export function getNPCInteraction(npcName: string): Interaction {
+	return NPC_REGISTRY[npcName]?.interaction ?? "Ambient";
+}
+
+/** Returns true if the NPC opens a dialog panel (anything other than Ambient). */
+export function hasNPCDialog(npcName: string): boolean {
+	const def = NPC_REGISTRY[npcName];
+	return def !== undefined && def.interaction !== "Ambient";
 }

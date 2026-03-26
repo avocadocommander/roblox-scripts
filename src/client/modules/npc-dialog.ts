@@ -13,11 +13,12 @@ import {
 	getDialogPayloadRemote,
 	getPurchaseResultRemote,
 	getFloatingNPCTextRemote,
+	getTurnInBountiesDialogRemote,
 	DialogPayload,
 	ShopItemPayload,
 } from "shared/remotes/dialog-remote";
 import { RARITY_COLORS, RARITY_LABELS, RARITY_BG_COLORS } from "shared/inventory";
-import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { spawnFloatingText } from "./npc-floating-text";
 
@@ -29,6 +30,7 @@ const closeDialogRemote = getCloseDialogRemote();
 const dialogPayloadRemote = getDialogPayloadRemote();
 const purchaseResultRemote = getPurchaseResultRemote();
 const floatingTextRemote = getFloatingNPCTextRemote();
+const turnInRemote = getTurnInBountiesDialogRemote();
 
 // ── Scaling ───────────────────────────────────────────────────────────────────
 
@@ -931,14 +933,6 @@ function switchToTradeMode(): void {
 //  DIALOG FLOW
 // ══════════════════════════════════════════════════════════════════════════════
 
-const STATUS_TO_RARITY: Record<string, string> = {
-	Serf: "common",
-	Commoner: "uncommon",
-	Merchant: "rare",
-	Nobility: "epic",
-	Royalty: "legendary",
-};
-
 // ── Distance check — auto-close dialog when player walks too far ──────────────
 
 function startDistanceCheck(npcName: string): void {
@@ -990,9 +984,8 @@ function openDialog(payload: DialogPayload): void {
 	if (npcNameLabel) npcNameLabel.Text = payload.npcName;
 
 	const npcData = MEDIEVAL_NPCS[payload.npcName];
-	const statusColor = npcData
-		? (RARITY_COLORS[STATUS_TO_RARITY[npcData.status] ?? "common"] ?? UI_THEME.textPrimary)
-		: UI_THEME.textPrimary;
+	const statusRarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
+	const statusColor = statusRarity ? statusRarity.color : UI_THEME.textPrimary;
 
 	if (npcNameLabel) npcNameLabel.TextColor3 = statusColor;
 
@@ -1027,17 +1020,28 @@ function showMainOptions(): void {
 	clearOptions();
 	if (optionsFrame === undefined || currentPayload === undefined) return;
 
-	addDialogOption(optionsFrame, 1, "Talk", UI_THEME.textPrimary, () => {
+	let nextOrder = 1;
+
+	addDialogOption(optionsFrame, nextOrder++, "Talk", UI_THEME.textPrimary, () => {
 		handleTalk();
 	});
 
 	if (currentPayload.hasShop) {
-		addDialogOption(optionsFrame, 2, "Trade", UI_THEME.gold, () => {
+		addDialogOption(optionsFrame, nextOrder++, "Trade", UI_THEME.gold, () => {
 			handleOpenTrade();
 		});
 	}
 
-	addDialogOption(optionsFrame, currentPayload.hasShop ? 3 : 2, "Leave", UI_THEME.textMuted, () => {
+	if (currentPayload.interaction === "TurnIn") {
+		const count = currentPayload.pendingBounties;
+		const label = count > 0 ? "Turn In Bounties (" + count + ")" : "Turn In Bounties";
+		const col = count > 0 ? UI_THEME.gold : UI_THEME.textMuted;
+		addDialogOption(optionsFrame, nextOrder++, label, col, () => {
+			handleTurnIn();
+		});
+	}
+
+	addDialogOption(optionsFrame, nextOrder++, "Leave", UI_THEME.textMuted, () => {
 		handleLeave();
 	});
 }
@@ -1066,6 +1070,38 @@ function handleOpenTrade(): void {
 
 	switchToTradeMode();
 	showTradeOptions();
+}
+
+function handleTurnIn(): void {
+	if (currentPayload === undefined || dialogTextLabel === undefined) return;
+
+	if (currentPayload.pendingBounties === 0) {
+		dialogTextLabel.Text = '"You have no bounties to turn in."';
+		return;
+	}
+
+	dialogTextLabel.Text = '"Turning in your bounties..."';
+
+	task.spawn(() => {
+		const result = turnInRemote.InvokeServer() as {
+			success: boolean;
+			totalGold: number;
+			totalXP: number;
+			count: number;
+		};
+
+		if (!dialogTextLabel || !currentPayload) return;
+
+		if (result && result.success && result.count > 0) {
+			dialogTextLabel.Text =
+				'"' + result.count + " bounties turned in. " + result.totalGold + "g and " + result.totalXP + ' XP."';
+			currentPayload.pendingBounties = 0;
+			// Refresh the options so the button updates
+			showMainOptions();
+		} else {
+			dialogTextLabel.Text = '"Nothing to turn in."';
+		}
+	});
 }
 
 function showTradeOptions(): void {

@@ -13,6 +13,7 @@ import { getEquipTitleRemote } from "shared/remotes/title-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
+import { FACTIONS, FACTION_IDS, FactionId, levelFromXP, totalXPFromFactions, overallLevelFromFactions } from "shared/config/factions";
 
 let bookGui: ScreenGui | undefined;
 let bookFrame: Frame | undefined;
@@ -698,6 +699,69 @@ function renderAchievementsTab(data: KillBookData): void {
 				});
 			}
 		}
+	}
+
+	makeDivider(contentFrame, order++);
+
+	// ── Guilds / Faction XP ─────────────────────────────────────────────────────
+	const fxp = data.factionXP;
+	const combinedLevel = overallLevelFromFactions(fxp);
+	makeSectionHeader(contentFrame, "GUILDS  (Level " + combinedLevel + ")", order++);
+
+	for (const fid of FACTION_IDS) {
+		const def = FACTIONS[fid];
+		const xp = fxp[fid] ?? 0;
+		const lvl = levelFromXP(xp);
+
+		const guildRow = new Instance("Frame");
+		guildRow.Size = new UDim2(1, 0, 0, 42);
+		guildRow.BackgroundColor3 = UI_THEME.bgInset;
+		guildRow.BackgroundTransparency = 0.3;
+		guildRow.BorderSizePixel = 0;
+		guildRow.LayoutOrder = order++;
+		guildRow.Parent = contentFrame;
+
+		const gCorner = new Instance("UICorner");
+		gCorner.CornerRadius = new UDim(0, 4);
+		gCorner.Parent = guildRow;
+
+		const gStroke = new Instance("UIStroke");
+		gStroke.Color = def.color;
+		gStroke.Thickness = 0.8;
+		gStroke.Parent = guildRow;
+
+		const nameLbl = new Instance("TextLabel");
+		nameLbl.Size = new UDim2(0.6, -8, 0, 18);
+		nameLbl.Position = new UDim2(0, 8, 0, 4);
+		nameLbl.BackgroundTransparency = 1;
+		nameLbl.TextColor3 = def.color;
+		nameLbl.Font = UI_THEME.fontBold;
+		nameLbl.TextSize = 13;
+		nameLbl.Text = def.name;
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.Parent = guildRow;
+
+		const lvlLbl = new Instance("TextLabel");
+		lvlLbl.Size = new UDim2(0.4, -8, 0, 18);
+		lvlLbl.Position = new UDim2(0.6, 0, 0, 4);
+		lvlLbl.BackgroundTransparency = 1;
+		lvlLbl.TextColor3 = UI_THEME.textHeader;
+		lvlLbl.Font = UI_THEME.fontDisplay;
+		lvlLbl.TextSize = 13;
+		lvlLbl.Text = "Lvl " + lvl;
+		lvlLbl.TextXAlignment = Enum.TextXAlignment.Right;
+		lvlLbl.Parent = guildRow;
+
+		const xpLbl = new Instance("TextLabel");
+		xpLbl.Size = new UDim2(1, -16, 0, 14);
+		xpLbl.Position = new UDim2(0, 8, 0, 24);
+		xpLbl.BackgroundTransparency = 1;
+		xpLbl.TextColor3 = UI_THEME.textMuted;
+		xpLbl.Font = UI_THEME.fontBody;
+		xpLbl.TextSize = 11;
+		xpLbl.Text = xp + " XP";
+		xpLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		xpLbl.Parent = guildRow;
 	}
 
 	makeDivider(contentFrame, order++);

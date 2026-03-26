@@ -34,6 +34,7 @@ export function initializeKillBookRemotes(): void {
 			score: state.score,
 			ownedTitles: state.ownedTitles,
 			equippedTitle: state.title,
+			factionXP: state.factionXP,
 		};
 	};
 

@@ -1,6 +1,7 @@
 import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
+import { isNPCKillable } from "shared/config/npcs";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
 	getBountyAssignedRemote,
@@ -64,7 +65,7 @@ function getRouteForNPC(npcName: string): string | undefined {
 }
 
 function buildNewNPCBounty(): NPCBountyPayload {
-	const names = [...MEDIEVAL_NPC_NAMES];
+	const names = MEDIEVAL_NPC_NAMES.filter((n) => isNPCKillable(n));
 	const npcName = names[math.random(0, names.size() - 1)];
 	const npcData = MEDIEVAL_NPCS[npcName];
 	const route = getRouteForNPC(npcName);

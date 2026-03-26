@@ -81,22 +81,8 @@ function pushSync(player: Player): void {
 function initPlayerInventory(player: Player): PlayerInventory {
 	const owned = new Map<string, number>();
 
-	// Default: just fists. For testing, add all items with max stacks.
+	// Default: just fists.
 	owned.set("fists", 1);
-	owned.set("dagger", 1);
-	// Poisons (5 each for testing)
-	owned.set("floating_death", 5);
-	owned.set("slow_decay", 5);
-	owned.set("paralysis_toxin", 5);
-	owned.set("dragons_breath", 5);
-	owned.set("phantom_venom", 5);
-	// Elixirs (5 each for testing)
-	owned.set("swiftness_elixir", 5);
-	owned.set("sky_step", 5);
-	owned.set("shadow_cloak", 5);
-	owned.set("eagle_eye", 5);
-	owned.set("vitality_draught", 5);
-	owned.set("ghost_oil", 5);
 
 	const inv: PlayerInventory = {
 		owned,
