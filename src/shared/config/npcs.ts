@@ -154,30 +154,30 @@ export const NPC_REGISTRY: NPCRegistry = {
 			farewells: ["Come back again - we are always open", "Until next time -- if there is a next time."],
 		},
 	},
-	// "Veyra Ashenmaw": {
-	// 	...std("Veyra Ashenmaw", "F", "Elf", "Nobility", "Guildmaster"),
-	// 	interaction: "TurnIn",
-	// 	fixedRouteId: "Veyra",
-	// 	killable: false,
-	// 	dialog: {
-	// 		greetings: [
-	// 			"Another errand runner. Show me what you have.",
-	// 			"You smell of blood. Good. That means you have something for me.",
-	// 			"Thorne sends his scraps my way. I prefer the whole meal.",
-	// 		],
-	// 		chatLines: [
-	// 			"Thorne is a relic. His guild crumbles while mine grows.",
-	// 			"Loyalty is purchased, not earned. Remember that.",
-	// 			"The more scrolls you bring me, the more I trust you.",
-	// 			"Every name on those scrolls is one less problem in my way.",
-	// 		],
-	// 		farewells: [
-	// 			"Do not waste my time with empty hands next visit.",
-	// 			"Run along. And bring more next time.",
-	// 			"We are not finished. We are never finished.",
-	// 		],
-	// 	},
-	// },
+	"Veyra Ashenmaw": {
+		...std("Veyra Ashenmaw", "F", "Elf", "Merchant", "Merchant"),
+		interaction: "Shop",
+		fixedRouteId: "Merchant House Main",
+		killable: true,
+		dialog: {
+			greetings: [
+				"Another errand runner. Show me what you have.",
+				"You smell of blood. Good. That means you have something for me.",
+				"Thorne sends his scraps my way. I prefer the whole meal.",
+			],
+			chatLines: [
+				"Thorne is a relic. His guild crumbles while mine grows.",
+				"Loyalty is purchased, not earned. Remember that.",
+				"The more scrolls you bring me, the more I trust you.",
+				"Every name on those scrolls is one less problem in my way.",
+			],
+			farewells: [
+				"Do not waste my time with empty hands next visit.",
+				"Run along. And bring more next time.",
+				"We are not finished. We are never finished.",
+			],
+		},
+	},
 	"Lyra Goldmead": {
 		...std("Lyra Goldmead", "F", "Human", "Merchant", "Merchant"),
 		interaction: "Shop",
