@@ -1,5 +1,6 @@
 import { Players, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
+import { registerKillBookToggle } from "../modules/ui-toggles";
 import {
 	getAchievementUnlockedRemote,
 	getKillBookDataRemote,
@@ -26,6 +27,10 @@ const TAB_NAMES = ["BOUNTIES", "BESTIARY", "PVP", "ACHIEVEMENTS"];
 let activeTab = 0;
 let tabButtons: TextButton[] = [];
 let titleDropdownOpen = false;
+
+/** Track expanded cards in bestiary / achievements (reset on tab switch). */
+let bestiaryExpanded = new Set<string>();
+let achievementExpanded = new Set<string>();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -438,7 +443,7 @@ function renderBountiesTab(data: KillBookData): void {
 	});
 }
 
-// ─── Tab: Bestiary (NPC Pokédex) ─────────────────────────────────────────────
+// ─── Tab: Bestiary (NPC Pokédex) — Card Layout ──────────────────────────────
 
 function renderBestiaryTab(data: KillBookData): void {
 	clearContent();
@@ -465,71 +470,153 @@ function renderBestiaryTab(data: KillBookData): void {
 			const kills = record?.count ?? 0;
 			const bountyKills = record?.bountyKills ?? 0;
 			const discovered = kills > 0;
-
 			const rarity = STATUS_RARITY[npcData.status];
+			const isExpanded = bestiaryExpanded.has(name);
 
-			const row = new Instance("Frame");
-			row.Size = new UDim2(1, 0, 0, 24);
-			row.BackgroundColor3 = discovered && rarity ? rarity.bgColor : UI_THEME.bg;
-			row.BackgroundTransparency = discovered ? 0.3 : 0.7;
-			row.BorderSizePixel = 0;
-			row.LayoutOrder = order++;
-			row.Parent = contentFrame;
+			const CARD_COLLAPSED = 56;
+			const CARD_EXPANDED = 110;
+			const cardHeight = isExpanded ? CARD_EXPANDED : CARD_COLLAPSED;
+
+			// ── Card container (tappable) ───────────────────────────────────
+			const card = new Instance("TextButton");
+			card.Name = "Card_" + name;
+			card.Size = new UDim2(1, 0, 0, cardHeight);
+			card.BackgroundColor3 = discovered && rarity ? rarity.bgColor : UI_THEME.bg;
+			card.BackgroundTransparency = discovered ? 0.15 : 0.6;
+			card.BorderSizePixel = 0;
+			card.Text = "";
+			card.AutoButtonColor = false;
+			card.LayoutOrder = order++;
+			card.ClipsDescendants = true;
+			card.Parent = contentFrame;
 
 			const rc = new Instance("UICorner");
-			rc.CornerRadius = new UDim(0, 3);
-			rc.Parent = row;
+			rc.CornerRadius = new UDim(0, 5);
+			rc.Parent = card;
 
-			// Rarity accent bar (left edge)
+			// Rarity stroke on discovered cards
 			if (discovered && rarity) {
-				const accent = new Instance("Frame");
-				accent.Size = new UDim2(0, 3, 1, -4);
-				accent.Position = new UDim2(0, 0, 0, 2);
-				accent.BackgroundColor3 = rarity.color;
-				accent.BorderSizePixel = 0;
-				accent.Parent = row;
+				const cardStroke = new Instance("UIStroke");
+				cardStroke.Color = rarity.color;
+				cardStroke.Thickness = 0.8;
+				cardStroke.Parent = card;
 			}
 
+			// Rarity accent bar (left edge)
+			if (rarity) {
+				const accent = new Instance("Frame");
+				accent.Size = new UDim2(0, 4, 1, 0);
+				accent.Position = new UDim2(0, 0, 0, 0);
+				accent.BackgroundColor3 = discovered ? rarity.color : UI_THEME.textMuted;
+				accent.BackgroundTransparency = discovered ? 0 : 0.6;
+				accent.BorderSizePixel = 0;
+				accent.Parent = card;
+
+				const accentCorner = new Instance("UICorner");
+				accentCorner.CornerRadius = new UDim(0, 5);
+				accentCorner.Parent = accent;
+			}
+
+			// ── Top row: Name + chevron ─────────────────────────────────────
 			const nameLbl = new Instance("TextLabel");
-			nameLbl.Size = new UDim2(0.45, 0, 1, 0);
-			nameLbl.Position = new UDim2(0, 8, 0, 0);
+			nameLbl.Size = new UDim2(1, -52, 0, 22);
+			nameLbl.Position = new UDim2(0, 14, 0, 6);
 			nameLbl.BackgroundTransparency = 1;
 			nameLbl.TextColor3 = discovered && rarity ? rarity.color : UI_THEME.textMuted;
-			nameLbl.Font = UI_THEME.fontBody;
-			nameLbl.TextSize = 11;
+			nameLbl.Font = UI_THEME.fontBold;
+			nameLbl.TextSize = 13;
 			nameLbl.Text = discovered ? name : "???";
 			nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
-			nameLbl.Parent = row;
+			nameLbl.Parent = card;
 
+			const chevron = new Instance("TextLabel");
+			chevron.Size = new UDim2(0, 20, 0, 22);
+			chevron.Position = new UDim2(1, -30, 0, 6);
+			chevron.BackgroundTransparency = 1;
+			chevron.TextColor3 = UI_THEME.textMuted;
+			chevron.Font = UI_THEME.fontBold;
+			chevron.TextSize = 12;
+			chevron.Text = isExpanded ? "v" : ">";
+			chevron.Parent = card;
+
+			// ── Sub-row: Status + kill stats ────────────────────────────────
 			const statusLbl = new Instance("TextLabel");
-			statusLbl.Size = new UDim2(0.25, 0, 1, 0);
-			statusLbl.Position = new UDim2(0.45, 0, 0, 0);
+			statusLbl.Size = new UDim2(0.45, 0, 0, 16);
+			statusLbl.Position = new UDim2(0, 14, 0, 30);
 			statusLbl.BackgroundTransparency = 1;
 			statusLbl.TextColor3 = rarity ? rarity.color : UI_THEME.textMuted;
 			statusLbl.Font = UI_THEME.fontBody;
-			statusLbl.TextSize = 10;
-			statusLbl.Text = discovered ? npcData.status : "--";
-			statusLbl.Parent = row;
+			statusLbl.TextSize = 11;
+			statusLbl.Text = discovered ? npcData.status + " (" + (rarity?.label ?? "") + ")" : "--";
+			statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			statusLbl.Parent = card;
 
-			const killLbl = new Instance("TextLabel");
-			killLbl.Size = new UDim2(0.15, 0, 1, 0);
-			killLbl.Position = new UDim2(0.7, 0, 0, 0);
-			killLbl.BackgroundTransparency = 1;
-			killLbl.TextColor3 = kills > 0 ? UI_THEME.danger : UI_THEME.textMuted;
-			killLbl.Font = UI_THEME.fontBold;
-			killLbl.TextSize = 11;
-			killLbl.Text = kills + "x";
-			killLbl.Parent = row;
+			const killBadge = new Instance("TextLabel");
+			killBadge.Size = new UDim2(0.5, -14, 0, 16);
+			killBadge.Position = new UDim2(0.5, 0, 0, 30);
+			killBadge.BackgroundTransparency = 1;
+			killBadge.TextColor3 = kills > 0 ? UI_THEME.danger : UI_THEME.textMuted;
+			killBadge.Font = UI_THEME.fontBold;
+			killBadge.TextSize = 11;
+			killBadge.Text = kills + " kills  |  " + bountyKills + " bounty";
+			killBadge.TextXAlignment = Enum.TextXAlignment.Right;
+			killBadge.Parent = card;
 
-			const bountyLbl = new Instance("TextLabel");
-			bountyLbl.Size = new UDim2(0.15, 0, 1, 0);
-			bountyLbl.Position = new UDim2(0.85, 0, 0, 0);
-			bountyLbl.BackgroundTransparency = 1;
-			bountyLbl.TextColor3 = bountyKills > 0 ? UI_THEME.gold : UI_THEME.textMuted;
-			bountyLbl.Font = UI_THEME.fontBold;
-			bountyLbl.TextSize = 11;
-			bountyLbl.Text = bountyKills + "B";
-			bountyLbl.Parent = row;
+			// ── Expanded detail section ─────────────────────────────────────
+			if (isExpanded && discovered) {
+				const detailDiv = new Instance("Frame");
+				detailDiv.Size = new UDim2(1, -28, 0, 1);
+				detailDiv.Position = new UDim2(0, 14, 0, 54);
+				detailDiv.BackgroundColor3 = UI_THEME.divider;
+				detailDiv.BorderSizePixel = 0;
+				detailDiv.Parent = card;
+
+				const raceLbl = new Instance("TextLabel");
+				raceLbl.Size = new UDim2(0.5, 0, 0, 18);
+				raceLbl.Position = new UDim2(0, 14, 0, 60);
+				raceLbl.BackgroundTransparency = 1;
+				raceLbl.TextColor3 = UI_THEME.textPrimary;
+				raceLbl.Font = UI_THEME.fontBody;
+				raceLbl.TextSize = 11;
+				raceLbl.Text = "Race: " + npcData.race;
+				raceLbl.TextXAlignment = Enum.TextXAlignment.Left;
+				raceLbl.Parent = card;
+
+				const genderLbl = new Instance("TextLabel");
+				genderLbl.Size = new UDim2(0.5, -14, 0, 18);
+				genderLbl.Position = new UDim2(0.5, 0, 0, 60);
+				genderLbl.BackgroundTransparency = 1;
+				genderLbl.TextColor3 = UI_THEME.textPrimary;
+				genderLbl.Font = UI_THEME.fontBody;
+				genderLbl.TextSize = 11;
+				genderLbl.Text = "Gender: " + npcData.gender;
+				genderLbl.TextXAlignment = Enum.TextXAlignment.Right;
+				genderLbl.Parent = card;
+
+				const bountyVal = rarity
+					? [100, 200, 350, 600, 1200][math.clamp(rarity.order, 0, 4)]
+					: 0;
+				const rewardLbl = new Instance("TextLabel");
+				rewardLbl.Size = new UDim2(1, -28, 0, 18);
+				rewardLbl.Position = new UDim2(0, 14, 0, 82);
+				rewardLbl.BackgroundTransparency = 1;
+				rewardLbl.TextColor3 = UI_THEME.gold;
+				rewardLbl.Font = UI_THEME.fontBold;
+				rewardLbl.TextSize = 11;
+				rewardLbl.Text = "Bounty value: " + bountyVal + "g";
+				rewardLbl.TextXAlignment = Enum.TextXAlignment.Left;
+				rewardLbl.Parent = card;
+			}
+
+			// ── Tap to expand/collapse ──────────────────────────────────────
+			card.MouseButton1Click.Connect(() => {
+				if (bestiaryExpanded.has(name)) {
+					bestiaryExpanded.delete(name);
+				} else {
+					bestiaryExpanded.add(name);
+				}
+				renderBestiaryTab(data);
+			});
 		}
 	}
 }
@@ -766,7 +853,7 @@ function renderAchievementsTab(data: KillBookData): void {
 
 	makeDivider(contentFrame, order++);
 
-	// ── Achievements list ─────────────────────────────────────────────────────
+	// ── Achievements list — Card Layout ─────────────────────────────────────
 	const unlocked = data.unlockedAchievements.size();
 	const total = ACHIEVEMENT_LIST.size();
 	makeSectionHeader(contentFrame, "ACHIEVEMENTS  " + unlocked + "/" + total, order++);
@@ -774,76 +861,163 @@ function renderAchievementsTab(data: KillBookData): void {
 
 	for (const achievement of ACHIEVEMENT_LIST) {
 		const isUnlocked = data.unlockedAchievements.includes(achievement.id);
+		const isExpanded = achievementExpanded.has(achievement.id);
+		const titleDef = achievement.titleId ? TITLES[achievement.titleId] : undefined;
 
-		const row = new Instance("Frame");
-		row.Size = new UDim2(1, 0, 0, 48);
-		row.BackgroundColor3 = isUnlocked ? UI_THEME.bgInset : UI_THEME.bg;
-		row.BackgroundTransparency = isUnlocked ? 0.3 : 0.7;
-		row.BorderSizePixel = 0;
-		row.LayoutOrder = order++;
-		row.Parent = contentFrame;
+		const CARD_COLLAPSED = 64;
+		const CARD_EXPANDED = 130;
+		const cardHeight = isExpanded ? CARD_EXPANDED : CARD_COLLAPSED;
+
+		// ── Card container (tappable) ───────────────────────────────────
+		const card = new Instance("TextButton");
+		card.Name = "AchCard_" + achievement.id;
+		card.Size = new UDim2(1, 0, 0, cardHeight);
+		card.BackgroundColor3 = isUnlocked ? UI_THEME.bgInset : UI_THEME.bg;
+		card.BackgroundTransparency = isUnlocked ? 0.15 : 0.6;
+		card.BorderSizePixel = 0;
+		card.Text = "";
+		card.AutoButtonColor = false;
+		card.LayoutOrder = order++;
+		card.ClipsDescendants = true;
+		card.Parent = contentFrame;
 
 		const rc = new Instance("UICorner");
-		rc.CornerRadius = new UDim(0, 4);
-		rc.Parent = row;
+		rc.CornerRadius = new UDim(0, 5);
+		rc.Parent = card;
 
 		if (isUnlocked) {
-			const rs = new Instance("UIStroke");
-			rs.Color = UI_THEME.gold;
-			rs.Thickness = 0.8;
-			rs.Parent = row;
+			const cardStroke = new Instance("UIStroke");
+			cardStroke.Color = UI_THEME.gold;
+			cardStroke.Thickness = 0.8;
+			cardStroke.Parent = card;
 		}
 
-		// Icon badge
+		// ── Left accent bar ─────────────────────────────────────────────
+		const accent = new Instance("Frame");
+		accent.Size = new UDim2(0, 4, 1, 0);
+		accent.Position = new UDim2(0, 0, 0, 0);
+		accent.BackgroundColor3 = isUnlocked ? UI_THEME.gold : UI_THEME.textMuted;
+		accent.BackgroundTransparency = isUnlocked ? 0 : 0.6;
+		accent.BorderSizePixel = 0;
+		accent.Parent = card;
+
+		const accentCorner = new Instance("UICorner");
+		accentCorner.CornerRadius = new UDim(0, 5);
+		accentCorner.Parent = accent;
+
+		// ── Icon badge ──────────────────────────────────────────────────
 		const badge = new Instance("TextLabel");
-		badge.Size = new UDim2(0, 36, 0, 36);
-		badge.Position = new UDim2(0, 6, 0.5, -18);
+		badge.Size = new UDim2(0, 40, 0, 40);
+		badge.Position = new UDim2(0, 12, 0, 10);
 		badge.BackgroundColor3 = isUnlocked ? UI_THEME.headerBg : UI_THEME.bg;
-		badge.BackgroundTransparency = 0.2;
+		badge.BackgroundTransparency = 0.1;
 		badge.TextColor3 = isUnlocked ? UI_THEME.gold : UI_THEME.textMuted;
 		badge.Font = UI_THEME.fontDisplay;
-		badge.TextSize = 18;
+		badge.TextSize = 20;
 		badge.Text = achievement.icon;
 		badge.BorderSizePixel = 0;
-		badge.Parent = row;
+		badge.Parent = card;
 
 		const badgeCorner = new Instance("UICorner");
-		badgeCorner.CornerRadius = new UDim(0, 4);
+		badgeCorner.CornerRadius = new UDim(0, 5);
 		badgeCorner.Parent = badge;
 
-		// Achievement name
+		if (isUnlocked) {
+			const badgeStroke = new Instance("UIStroke");
+			badgeStroke.Color = UI_THEME.gold;
+			badgeStroke.Thickness = 0.6;
+			badgeStroke.Parent = badge;
+		}
+
+		// ── Name + chevron ──────────────────────────────────────────────
 		const nameLbl = new Instance("TextLabel");
-		nameLbl.Size = new UDim2(1, -54, 0, 20);
-		nameLbl.Position = new UDim2(0, 50, 0, 4);
+		nameLbl.Size = new UDim2(1, -82, 0, 22);
+		nameLbl.Position = new UDim2(0, 60, 0, 8);
 		nameLbl.BackgroundTransparency = 1;
 		nameLbl.TextColor3 = isUnlocked ? UI_THEME.textHeader : UI_THEME.textMuted;
 		nameLbl.Font = UI_THEME.fontBold;
-		nameLbl.TextSize = 13;
+		nameLbl.TextSize = 14;
 		nameLbl.Text = isUnlocked ? achievement.name : "???";
 		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
-		nameLbl.Parent = row;
+		nameLbl.Parent = card;
 
-		// Description — show linked title reward if unlocked has a title
-		const rewardText =
-			isUnlocked && achievement.titleId
-				? achievement.description + "  +" + (TITLES[achievement.titleId]?.name ?? "")
-				: achievement.description;
+		const chevron = new Instance("TextLabel");
+		chevron.Size = new UDim2(0, 20, 0, 22);
+		chevron.Position = new UDim2(1, -30, 0, 8);
+		chevron.BackgroundTransparency = 1;
+		chevron.TextColor3 = UI_THEME.textMuted;
+		chevron.Font = UI_THEME.fontBold;
+		chevron.TextSize = 12;
+		chevron.Text = isExpanded ? "v" : ">";
+		chevron.Parent = card;
+
+		// ── Description preview ─────────────────────────────────────────
 		const descLbl = new Instance("TextLabel");
-		descLbl.Size = new UDim2(1, -54, 0, 16);
-		descLbl.Position = new UDim2(0, 50, 0, 26);
+		descLbl.Size = new UDim2(1, -72, 0, 16);
+		descLbl.Position = new UDim2(0, 60, 0, 32);
 		descLbl.BackgroundTransparency = 1;
-		descLbl.TextColor3 = isUnlocked && achievement.titleId ? UI_THEME.gold : UI_THEME.textMuted;
+		descLbl.TextColor3 = isUnlocked ? UI_THEME.textPrimary : UI_THEME.textMuted;
 		descLbl.Font = UI_THEME.fontBody;
 		descLbl.TextSize = 11;
-		descLbl.Text = isUnlocked ? rewardText : "Locked";
+		descLbl.Text = isUnlocked ? achievement.description : "Locked";
 		descLbl.TextXAlignment = Enum.TextXAlignment.Left;
-		descLbl.Parent = row;
+		descLbl.Parent = card;
+
+		// ── Expanded detail section ─────────────────────────────────────
+		if (isExpanded) {
+			const detailDiv = new Instance("Frame");
+			detailDiv.Size = new UDim2(1, -24, 0, 1);
+			detailDiv.Position = new UDim2(0, 12, 0, 62);
+			detailDiv.BackgroundColor3 = UI_THEME.divider;
+			detailDiv.BorderSizePixel = 0;
+			detailDiv.Parent = card;
+
+			if (isUnlocked && titleDef) {
+				const titleRewardLbl = new Instance("TextLabel");
+				titleRewardLbl.Size = new UDim2(1, -24, 0, 20);
+				titleRewardLbl.Position = new UDim2(0, 12, 0, 70);
+				titleRewardLbl.BackgroundTransparency = 1;
+				titleRewardLbl.TextColor3 = titleDef.color;
+				titleRewardLbl.Font = UI_THEME.fontDisplay;
+				titleRewardLbl.TextSize = 13;
+				titleRewardLbl.Text = "Title: " + titleDef.symbol + " " + titleDef.name;
+				titleRewardLbl.TextXAlignment = Enum.TextXAlignment.Left;
+				titleRewardLbl.Parent = card;
+			}
+
+			const statusLbl = new Instance("TextLabel");
+			statusLbl.Size = new UDim2(1, -24, 0, 20);
+			statusLbl.Position = new UDim2(0, 12, 0, titleDef && isUnlocked ? 94 : 70);
+			statusLbl.BackgroundTransparency = 1;
+			statusLbl.TextColor3 = isUnlocked ? UI_THEME.gold : UI_THEME.danger;
+			statusLbl.Font = UI_THEME.fontBold;
+			statusLbl.TextSize = 12;
+			statusLbl.Text = isUnlocked ? "UNLOCKED" : "LOCKED";
+			statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			statusLbl.Parent = card;
+		}
+
+		// ── Tap to expand/collapse ──────────────────────────────────────
+		card.MouseButton1Click.Connect(() => {
+			if (achievementExpanded.has(achievement.id)) {
+				achievementExpanded.delete(achievement.id);
+			} else {
+				achievementExpanded.add(achievement.id);
+			}
+			renderAchievementsTab(data);
+		});
 	}
 }
 
 // ─── Tab rendering dispatcher ─────────────────────────────────────────────────
 
 function fetchAndRender(tabIndex: number): void {
+	// Reset expanded state when switching to a different tab
+	if (tabIndex !== activeTab) {
+		bestiaryExpanded = new Set<string>();
+		achievementExpanded = new Set<string>();
+	}
+
 	activeTab = tabIndex;
 	updateTabHighlights();
 
@@ -1026,6 +1200,9 @@ onPlayerInitialized(() => {
 	buildKillBook(playerGui);
 	isReady = true;
 
+	// Register toggle so the mobile HUD can open/close the book
+	registerKillBookToggle(() => toggleBook());
+
 	// Listen for achievement unlocks
 	getAchievementUnlockedRemote().OnClientEvent.Connect((achievementId: unknown) => {
 		print("[ACHIEVEMENT] Unlocked: " + (achievementId as string));
@@ -1035,11 +1212,5 @@ onPlayerInitialized(() => {
 		}
 	});
 
-	// B key toggles the kill book
-	UserInputService.InputBegan.Connect((input, gameProcessed) => {
-		if (gameProcessed) return;
-		if (input.KeyCode === Enum.KeyCode.B) {
-			toggleBook();
-		}
-	});
+	// [DISABLED] B key toggle removed — use mobile HUD codex button instead
 });

@@ -26,68 +26,8 @@ function setupMovementInput() {
 		}
 	});
 
-	// Handle keyboard input for run/jump and stealth toggle
-	UserInputService.InputBegan.Connect((input, gameProcessed) => {
-		if (gameProcessed) return;
-
-		const currentCharacter = players?.Character;
-		if (!currentCharacter) return;
-
-		const currentHumanoid = currentCharacter.FindFirstChildOfClass("Humanoid");
-		if (!currentHumanoid || currentHumanoid.Health <= 0) return;
-
-		// Left Shift - Start Running
-		if (input.KeyCode === Enum.KeyCode.LeftShift) {
-			isRunning = true;
-			movementRemote.FireServer("StartRun");
-		}
-
-		// Q - Toggle Stealth Mode
-		if (input.KeyCode === Enum.KeyCode.Q) {
-			isStealthMode = !isStealthMode;
-			setStealthing(isStealthMode);
-			movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
-			// Broadcast stealth state as an attribute so other LocalScripts
-			// (e.g. user-ui-block) can react without needing a shared module.
-			Players.LocalPlayer.SetAttribute("IsStealthing", isStealthMode);
-		}
-
-		// Space - Double Jump
-		if (input.KeyCode === Enum.KeyCode.Space) {
-			// Prevent spam
-			if (tick() - lastJumpTime < 0.2) return;
-
-			// Check if player is in air and hasn't used air jump yet
-			if (
-				hasAirJump &&
-				(currentHumanoid.GetState() === Enum.HumanoidStateType.Freefall ||
-					currentHumanoid.GetState() === Enum.HumanoidStateType.Flying)
-			) {
-				hasAirJump = false;
-				lastJumpTime = tick();
-
-				movementRemote.FireServer("Jump");
-			}
-		}
-	});
-
-	// Handle key release for run only (stealth is now toggled with R)
-	UserInputService.InputEnded.Connect((input, gameProcessed) => {
-		if (gameProcessed) return;
-
-		const currentCharacter = players?.Character;
-		if (!currentCharacter) return;
-
-		const currentHumanoid = currentCharacter.FindFirstChildOfClass("Humanoid");
-		if (!currentHumanoid) return;
-
-		// Left Shift - Stop Running, go back to Walk or Stealth
-		if (input.KeyCode === Enum.KeyCode.LeftShift) {
-			isRunning = false;
-			// If stealth is active, go back to stealth speed. Otherwise walk.
-			movementRemote.FireServer(isStealthMode ? "Stealth" : "Walk");
-		}
-	});
+	// [DISABLED] Keyboard hotkeys disabled — all interaction via mobile HUD
+	// Shift (sprint), Q (stealth), Space (double jump), Shift release handled by mobile HUD
 }
 
 function initializeMovementSystem() {

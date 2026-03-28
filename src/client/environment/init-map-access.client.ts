@@ -15,20 +15,7 @@ const TAG = "LevelAccessRequired";
 
 const mockAchievementRemote = getMockAchievementRemote();
 
-UserInputService.InputBegan.Connect((io, gp) => {
-	if (gp) return;
-	if (io.KeyCode === Enum.KeyCode.Z) RequestAddLevel.InvokeServer(1);
-	if (io.KeyCode === Enum.KeyCode.X) mockAchievementRemote.FireServer();
-	if (io.KeyCode === Enum.KeyCode.C) RequestAddCoins.InvokeServer(20);
-	if (io.KeyCode === Enum.KeyCode.F9) {
-		RequestResetFactionXP.InvokeServer();
-		log("[DEBUG] Reset faction XP + level");
-	}
-	if (io.KeyCode === Enum.KeyCode.F10) {
-		RequestAddFactionXP.InvokeServer(100);
-		log("[DEBUG] Added 100 XP to all factions");
-	}
-});
+// [DISABLED] Debug keyboard hotkeys removed — use admin HUD panel instead
 
 onPlayerInitialized(() => {
 	initializeMapAccess();

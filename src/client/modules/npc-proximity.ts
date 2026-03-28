@@ -685,34 +685,41 @@ function initializeNPCProximity() {
 		updateNPCProximityUI();
 	});
 
-	// Listen for E key to assassinate closest target (wanted player or NPC)
-	UserInputService.InputBegan.Connect((input, gameProcessed) => {
-		if (gameProcessed) return;
-
-		if (input.KeyCode === Enum.KeyCode.E) {
-			if (!isCurrentlyStealthing) return;
-			if (closestWantedPlayerInRange) {
-				log("[ASSASSINATION] Player attempting to assassinate wanted player via E key");
-				playerAssassinationRemote.FireServer(closestWantedPlayerInRange);
-			} else if (closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) {
-				log(`[ASSASSINATION] Player attempting to assassinate ${closestNPCInRange.Name} via E key`);
-				assassinationRemote.FireServer(closestNPCInRange);
-			}
-		}
-
-		// F key — open dialog with nearest NPC (non-stealth)
-		if (input.KeyCode === Enum.KeyCode.F) {
-			if (isDialogOpen()) return;
-			if (closestNPCInRange) {
-				requestOpenDialog(closestNPCInRange);
-			}
-		}
-	});
+	// [DISABLED] Keyboard hotkeys disabled — E/F handled by mobile HUD primary action button
 }
 
 function setStealthing(stealthing: boolean) {
 	isCurrentlyStealthing = stealthing;
 	stealthRemote.FireServer(stealthing);
+}
+
+/**
+ * Returns the current action context for the mobile HUD primary button.
+ * Priority: assassinate (wanted player) > assassinate (NPC) > talk > none.
+ * "none" means no valid action — the button should be hidden.
+ */
+export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "jump" | "none";
+
+export function getActionContext(): ActionContext {
+	if (isCurrentlyStealthing && closestWantedPlayerInRange) return "assassinate_player";
+	if (isCurrentlyStealthing && closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) return "assassinate_npc";
+	if (closestNPCInRange && !isDialogOpen()) return "talk";
+	return "jump";
+}
+
+/** Fire the current action (called by mobile HUD primary button). */
+export function fireCurrentAction(): void {
+	const ctx = getActionContext();
+	if (ctx === "assassinate_player" && closestWantedPlayerInRange) {
+		playerAssassinationRemote.FireServer(closestWantedPlayerInRange);
+	} else if (ctx === "assassinate_npc" && closestNPCInRange) {
+		assassinationRemote.FireServer(closestNPCInRange);
+	} else if (ctx === "talk" && closestNPCInRange) {
+		requestOpenDialog(closestNPCInRange);
+	} else if (ctx === "jump") {
+		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
+		if (humanoid) humanoid.Jump = true;
+	}
 }
 
 export { initializeNPCProximity, setStealthing };

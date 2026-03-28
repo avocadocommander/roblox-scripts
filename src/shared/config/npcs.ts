@@ -254,6 +254,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Idris Moorwatch": std("Idris Moorwatch", "M", "Human", "Commoner"),
 	"Rowena Brambleholt": {
 		...std("Rowena Brambleholt", "F", "Human", "Merchant", "Merchant"),
+		fixedRouteId: "Back Camp Merchant",
 		interaction: "Shop",
 		dialog: {
 			greetings: [
@@ -304,6 +305,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Thessaly Nywen": {
 		...std("Thessaly Nywen", "F", "Elf", "Merchant", "Merchant"),
 		interaction: "Shop",
+		fixedRouteId: "Cart Merchant",
 		dialog: {
 			greetings: [
 				"An outsider. How... quaint. What do you seek?",

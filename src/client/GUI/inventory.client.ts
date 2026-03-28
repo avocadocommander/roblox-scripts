@@ -1,5 +1,6 @@
 import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
+import { registerInventoryToggle } from "../modules/ui-toggles";
 import {
 	getActivateItemRemote,
 	getInventorySyncRemote,
@@ -931,6 +932,9 @@ onPlayerInitialized(() => {
 	buildInventoryButton(screenGui);
 	buildTooltip(screenGui);
 
+	// Register toggle so the mobile HUD can open/close inventory
+	registerInventoryToggle(() => toggleInventory());
+
 	syncRemote.OnClientEvent.Connect((data: unknown) => {
 		applyInventorySync(data as InventoryPayload);
 	});
@@ -942,12 +946,5 @@ onPlayerInitialized(() => {
 		}
 	});
 
-	UserInputService.InputBegan.Connect((io, gameProcessed) => {
-		if (gameProcessed) return;
-		if (io.KeyCode === Enum.KeyCode.B) {
-			mockBountyKillRemote.FireServer();
-		} else if (io.KeyCode === Enum.KeyCode.N) {
-			turnInBountyRemote.FireServer();
-		}
-	});
+	// [DISABLED] B/N keyboard hotkeys removed — use admin HUD panel instead
 });

@@ -11,6 +11,7 @@ import { initializeAchievementHandler } from "./modules/achievement-handler";
 import { initializeInventorySystem } from "./modules/inventory-handler";
 import { initializeTitleHandler } from "./modules/title-handler";
 import { initializeDialogHandler } from "./modules/dialog-handler";
+import { initializeAdminHandler } from "./modules/admin-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -28,6 +29,7 @@ export async function bootstrapServer() {
 	initializeInventorySystem();
 	initializeTitleHandler();
 	initializeDialogHandler();
+	initializeAdminHandler();
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }
