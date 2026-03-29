@@ -50,7 +50,6 @@ let activeFilter: InventoryFilter = "all";
 
 // Refs for live updates
 let itemGrid: ScrollingFrame | undefined;
-let inventoryButton: TextButton | undefined;
 let tooltipFrame: Frame | undefined;
 let tooltipName: TextLabel | undefined;
 let tooltipType: TextLabel | undefined;
@@ -805,80 +804,11 @@ function hideTooltip(itemId: string): void {
 	currentTooltipItem = undefined;
 }
 
-// ── Inventory button (bottom-right) ───────────────────────────────────────────
-
-function buildInventoryButton(screenGui: ScreenGui): void {
-	const buttonSize = sc(50);
-	const buttonPadding = sc(12);
-	const offsetX = (buttonSize + buttonPadding) * 3;
-
-	const container = new Instance("Frame");
-	container.Name = "InventoryButtonContainer";
-	container.Size = new UDim2(0, buttonSize, 0, buttonSize);
-	container.Position = new UDim2(1, -offsetX, 1, -buttonSize - buttonPadding);
-	container.AnchorPoint = new Vector2(1, 1);
-	container.BackgroundTransparency = 1;
-	container.Parent = screenGui;
-
-	const btn = new Instance("TextButton");
-	btn.Name = "InventoryButton";
-	btn.Size = new UDim2(1, 0, 1, 0);
-	btn.BackgroundColor3 = UI_THEME.bgInset;
-	btn.BackgroundTransparency = 0.2;
-	btn.BorderSizePixel = 0;
-	btn.Text = "=";
-	btn.TextColor3 = UI_THEME.textMuted;
-	btn.Font = UI_THEME.fontDisplay;
-	btn.TextSize = sc(26);
-	btn.AutoButtonColor = false;
-	btn.Parent = container;
-	inventoryButton = btn;
-
-	const btnCorner = new Instance("UICorner");
-	btnCorner.CornerRadius = new UDim(0.5, 0);
-	btnCorner.Parent = btn;
-
-	const btnStroke = new Instance("UIStroke");
-	btnStroke.Color = UI_THEME.textMuted;
-	btnStroke.Thickness = sc(1.5);
-	btnStroke.Parent = btn;
-
-	btn.MouseEnter.Connect(() => {
-		btn.BackgroundTransparency = 0;
-		const s = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-		if (s) s.Color = UI_THEME.textPrimary;
-	});
-
-	btn.MouseLeave.Connect(() => {
-		const activeColor = inventoryOpen ? UI_THEME.gold : UI_THEME.textMuted;
-		btn.BackgroundTransparency = inventoryOpen ? 0.1 : 0.2;
-		const s = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-		if (s) s.Color = activeColor;
-	});
-
-	btn.Activated.Connect(() => {
-		toggleInventory();
-	});
-}
-
-function updateInventoryButtonState(): void {
-	if (inventoryButton === undefined) return;
-	const s = inventoryButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-	if (inventoryOpen) {
-		inventoryButton.BackgroundTransparency = 0.1;
-		if (s) s.Color = UI_THEME.gold;
-	} else {
-		inventoryButton.BackgroundTransparency = 0.2;
-		if (s) s.Color = UI_THEME.textMuted;
-	}
-}
-
 // ── Toggle visibility ─────────────────────────────────────────────────────────
 
 function toggleInventory(): void {
 	if (rootFrame === undefined) return;
 	inventoryOpen = !inventoryOpen;
-	updateInventoryButtonState();
 
 	if (inventoryOpen) {
 		refreshFilterButtons();
@@ -929,7 +859,6 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildInventoryUI(screenGui);
-	buildInventoryButton(screenGui);
 	buildTooltip(screenGui);
 
 	// Register toggle so the mobile HUD can open/close inventory

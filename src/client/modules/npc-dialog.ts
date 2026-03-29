@@ -613,25 +613,26 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	rarityBar.Parent = tile;
 
 	tile.MouseEnter.Connect(() => {
-		tile.BackgroundTransparency = 0;
-		if (!selectedItemIds.has(shopItem.itemId)) {
-			tileStroke.Transparency = 0;
-		}
 		hoveredTile = tile;
 		showShopTooltip(shopItem, tile);
 	});
 	tile.MouseLeave.Connect(() => {
-		tile.BackgroundTransparency = 0.15;
-		if (!selectedItemIds.has(shopItem.itemId)) {
-			tileStroke.Transparency = 0.4;
-		}
 		if (currentTooltipItemId === shopItem.itemId) {
 			hideShopTooltip();
 		}
 		if (hoveredTile === tile) hoveredTile = undefined;
 	});
-	tile.Activated.Connect(() => {
-		toggleItemSelection(shopItem);
+
+	// Only select on a quick tap — ignore long holds / drags.
+	let pressStart = 0;
+	tile.MouseButton1Down.Connect(() => {
+		pressStart = os.clock();
+	});
+	tile.MouseButton1Up.Connect(() => {
+		if (pressStart > 0 && os.clock() - pressStart < 0.3) {
+			toggleItemSelection(shopItem);
+		}
+		pressStart = 0;
 	});
 }
 

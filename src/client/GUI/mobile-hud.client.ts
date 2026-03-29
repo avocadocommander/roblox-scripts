@@ -171,8 +171,8 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		}
 	});
 
-	const pad = sc(18);
-	const primaryDiameter = sc(84);
+	const pad = sc(36);
+	const primaryDiameter = sc(126);
 	const secondaryDiameter = sc(52);
 	const gap = sc(14);
 
@@ -235,15 +235,23 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 	});
 
 	// =========================================================================
-	// SECONDARY BUTTONS — right-side vertical stack above primary position
-	// Bottom-to-top: Assassin Toggle, Codex, Inventory, Campfire
+	// SECONDARY BUTTONS — NW quadrant arc around the primary button
+	// North = Assassin Toggle, then Codex, Campfire, West = Inventory
 	// =========================================================================
-	const secCenterX = primaryCenterX;
-	const secBottomY = primaryCenterY - primaryDiameter / 2 - gap - secondaryDiameter / 2;
+	const arcRadius = primaryDiameter / 2 + gap + secondaryDiameter / 2;
+	const SEC_COUNT = 4;
 
-	// -- Assassin Mode toggle (closest to primary) ----------------------------
-	const assassinPos = new UDim2(1, secCenterX, 1, secBottomY);
-	const assParts = makeButton(screenGui, "AssassinToggle", secondaryDiameter, assassinPos);
+	// Returns a position on the NW arc. index 0 = north, index 3 = west.
+	// Angle sweeps from 0 (straight up) to 105 degrees (7*PI/12).
+	function arcPosition(idx: number): UDim2 {
+		const angle = (idx / (SEC_COUNT - 1)) * ((7 * math.pi) / 12);
+		const dx = -arcRadius * math.sin(angle);
+		const dy = -arcRadius * math.cos(angle);
+		return new UDim2(1, primaryCenterX + dx, 1, primaryCenterY + dy);
+	}
+
+	// -- 0: Assassin Mode toggle (north) --------------------------------------
+	const assParts = makeButton(screenGui, "AssassinToggle", secondaryDiameter, arcPosition(0));
 	assassinBtn = assParts.button;
 	assassinIcon = assParts.icon;
 	assassinStroke = assParts.stroke;
@@ -255,9 +263,18 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		toggleAssassinMode();
 	});
 
-	// -- Codex (Kill Book) ----------------------------------------------------
-	const codexPos = new UDim2(1, secCenterX, 1, secBottomY - (secondaryDiameter + gap));
-	const codexParts = makeButton(screenGui, "CodexButton", secondaryDiameter, codexPos);
+	// -- 1: Campfire ----------------------------------------------------------
+	const campParts = makeButton(screenGui, "CampfireButton", secondaryDiameter, arcPosition(1));
+	campParts.icon.Text = "*";
+	campParts.icon.TextColor3 = UI_THEME.gold;
+	campParts.icon.TextSize = math.floor(secondaryDiameter * 0.48);
+
+	campParts.button.Activated.Connect(() => {
+		placeCampfire(campParts.button, campParts.stroke);
+	});
+
+	// -- 2: Codex (Kill Book) -------------------------------------------------
+	const codexParts = makeButton(screenGui, "CodexButton", secondaryDiameter, arcPosition(2));
 	codexParts.icon.Text = "=";
 	codexParts.icon.TextColor3 = UI_THEME.textMuted;
 	codexParts.icon.TextSize = math.floor(secondaryDiameter * 0.44);
@@ -267,9 +284,8 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		pulseButton(codexParts.button);
 	});
 
-	// -- Inventory ------------------------------------------------------------
-	const invPos = new UDim2(1, secCenterX, 1, secBottomY - (secondaryDiameter + gap) * 2);
-	const invParts = makeButton(screenGui, "InventoryButton", secondaryDiameter, invPos);
+	// -- 3: Inventory (west) --------------------------------------------------
+	const invParts = makeButton(screenGui, "InventoryButton", secondaryDiameter, arcPosition(3));
 	invParts.icon.Text = "#";
 	invParts.icon.TextColor3 = UI_THEME.textMuted;
 	invParts.icon.TextSize = math.floor(secondaryDiameter * 0.44);
@@ -277,17 +293,6 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 	invParts.button.Activated.Connect(() => {
 		toggleInventory();
 		pulseButton(invParts.button);
-	});
-
-	// -- Campfire -------------------------------------------------------------
-	const campPos = new UDim2(1, secCenterX, 1, secBottomY - (secondaryDiameter + gap) * 3);
-	const campParts = makeButton(screenGui, "CampfireButton", secondaryDiameter, campPos);
-	campParts.icon.Text = "*";
-	campParts.icon.TextColor3 = UI_THEME.gold;
-	campParts.icon.TextSize = math.floor(secondaryDiameter * 0.48);
-
-	campParts.button.Activated.Connect(() => {
-		placeCampfire(campParts.button, campParts.stroke);
 	});
 
 	// =========================================================================

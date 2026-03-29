@@ -36,6 +36,11 @@ const PROXIMITY_RANGE = 5; // Only show when very close to NPC
 const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further away
 const WANTED_PLAYER_RANGE = 15; // Range for PvP assassination (matches server MAX_ASSASSINATION_DISTANCE)
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
+
+// Assassinate button colors — green when safe, red when spotted
+const BTN_SAFE = Color3.fromRGB(68, 138, 82);
+const BTN_SPOTTED = UI_THEME.danger;
+
 let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
 
@@ -204,15 +209,18 @@ function createNPCBillboard(npc: Model): BillboardGui {
 }
 
 function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButton {
+	const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
+	const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
+
 	const button = new Instance("TextButton");
 	button.Size = new UDim2(1, 0, 0.42, 0);
 	button.Position = new UDim2(0, 0, 0.72, 0);
 	button.BackgroundColor3 = UI_THEME.headerBg;
 	button.BackgroundTransparency = 0.1;
-	button.TextColor3 = UI_THEME.danger;
+	button.TextColor3 = btnColor;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
-	button.Text = "[⚔] ASSASSINATE  [E]";
+	button.Text = "ASSASSINATE  [E]";
 	button.BorderSizePixel = 0;
 	button.Parent = billboard;
 
@@ -221,7 +229,7 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 	btnCorner.Parent = button;
 
 	const btnStroke = new Instance("UIStroke");
-	btnStroke.Color = UI_THEME.danger;
+	btnStroke.Color = btnColor;
 	btnStroke.Thickness = 0.8;
 	btnStroke.Parent = button;
 
@@ -557,13 +565,16 @@ function updateNPCProximityUI() {
 		const existingBtn = billboard.FindFirstChild("AssassinateBtn") as TextButton | undefined;
 
 		if (shouldShow && !existingBtn) {
+			const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
+			const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
+
 			const btn = new Instance("TextButton");
 			btn.Name = "AssassinateBtn";
 			btn.Size = new UDim2(1, 0, 0.22, 0);
 			btn.Position = new UDim2(0, 0, 0, 0);
 			btn.BackgroundColor3 = UI_THEME.headerBg;
 			btn.BackgroundTransparency = 0.1;
-			btn.TextColor3 = UI_THEME.danger;
+			btn.TextColor3 = btnColor;
 			btn.Font = UI_THEME.fontBold;
 			btn.TextSize = 11;
 			btn.Text = "[E] ASSASSINATE";
@@ -575,7 +586,7 @@ function updateNPCProximityUI() {
 			btnCorner.Parent = btn;
 
 			const btnStroke = new Instance("UIStroke");
-			btnStroke.Color = UI_THEME.danger;
+			btnStroke.Color = btnColor;
 			btnStroke.Thickness = 0.8;
 			btnStroke.Parent = btn;
 
@@ -586,6 +597,29 @@ function updateNPCProximityUI() {
 			});
 		} else if (!shouldShow && existingBtn) {
 			existingBtn.Destroy();
+		}
+	}
+
+	// ── Fourth pass: recolor all visible assassinate buttons by spotted state ──
+	const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
+	const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
+
+	for (const [, ui] of npcUIMap) {
+		if (ui.assassinateButton) {
+			ui.assassinateButton.TextColor3 = btnColor;
+			const stroke = ui.assassinateButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) stroke.Color = btnColor;
+		}
+	}
+
+	for (const [wantedName] of wantedPlayerInfo) {
+		const bb = wantedBillboards.get(wantedName);
+		if (!bb) continue;
+		const btn = bb.FindFirstChild("AssassinateBtn") as TextButton | undefined;
+		if (btn) {
+			btn.TextColor3 = btnColor;
+			const stroke = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+			if (stroke) stroke.Color = btnColor;
 		}
 	}
 }
@@ -718,7 +752,10 @@ export function fireCurrentAction(): void {
 		requestOpenDialog(closestNPCInRange);
 	} else if (ctx === "jump") {
 		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
-		if (humanoid) humanoid.Jump = true;
+		if (humanoid) {
+			humanoid.Jump = true;
+			humanoid.ChangeState(Enum.HumanoidStateType.Jumping);
+		}
 	}
 }
 

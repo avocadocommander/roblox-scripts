@@ -282,12 +282,7 @@ function initializeAssassinationHandler() {
 		// Clear wanted status
 		clearPlayerWanted(targetPlayer);
 
-		// Respawn the killed player after a delay
-		task.delay(5, () => {
-			if (targetPlayer.Parent !== undefined) {
-				targetPlayer.LoadCharacter();
-			}
-		});
+		// Respawn is handled by the global Humanoid.Died listener in network-lifecycles.ts
 
 		task.spawn(() => savePlayerData(killer));
 	});

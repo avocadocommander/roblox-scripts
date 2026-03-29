@@ -22,149 +22,260 @@ const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 const npcStateFolder = ReplicatedStorage.WaitForChild("NPCState") as Folder;
 const ViewsUpdated = npcStateFolder.WaitForChild("ViewsUpdated") as RemoteEvent;
 
-// -- Screen ratio scaling helpers -----------------------------------------------
+// -- Scaling --------------------------------------------------------------------
 
-function scaleSize(baseSize: number): number {
+function sc(baseSize: number): number {
 	return baseSize * getUIScale();
 }
 
-// -------------------------------------------------------------------------------
+// -- Live refs ------------------------------------------------------------------
 
-// -- Live label refs -- set once in buildPlayerPanel, updated by events
 let nameLabel: TextLabel | undefined;
 let titleLabel: TextLabel | undefined;
 let levelLabel: TextLabel | undefined;
 let coinsLabel: TextLabel | undefined;
 let xpBar: Frame | undefined;
 let xpFill: Frame | undefined;
+let xpPctLabel: TextLabel | undefined;
 let wantedRow: Frame | undefined;
 let wantedGoldLabel: TextLabel | undefined;
-let eyeWidget: Frame | undefined;
-let eyeCountLabel: TextLabel | undefined;
-let lastViewerCount = 0;
+
+let expandedSection: Frame | undefined;
+let isExpanded = false;
+let isWantedActive = false;
+let isStealthing = false;
+let isSpotted = false;
 
 const XP_PER_LEVEL = 1000;
+const TWEEN_XP = new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+// Muted green for "safe" stealth name highlight
+const SAFE_GREEN = Color3.fromRGB(58, 120, 58);
 
 // -- Builder --------------------------------------------------------------------
 
 function buildPlayerPanel(screenGui: ScreenGui): void {
-	// Outer panel -- bottom-left
-	const panel = new Instance("Frame");
-	panel.Name = "PlayerHUD";
-	const baseWidth = 260;
-	const scaledWidth = scaleSize(baseWidth);
-	panel.Size = new UDim2(0, scaledWidth, 0, 0);
-	panel.Position = new UDim2(0, 12, 1, -12);
-	panel.AnchorPoint = new Vector2(0, 1);
-	panel.AutomaticSize = Enum.AutomaticSize.Y;
-	panel.BackgroundColor3 = UI_THEME.bg;
-	panel.BackgroundTransparency = UI_THEME.bgTransparency;
-	panel.BorderSizePixel = 0;
-	panel.Parent = screenGui;
+	const W = sc(240);
 
-	const corner = new Instance("UICorner");
-	corner.CornerRadius = UI_THEME.cornerRadius;
-	corner.Parent = panel;
+	// ── Outer wrapper ───────────────────────────────────────────────────────
+	const wrapper = new Instance("Frame");
+	wrapper.Name = "PlayerHUD";
+	wrapper.Size = new UDim2(0, W, 0, 0);
+	wrapper.Position = new UDim2(0, sc(10), 1, sc(-10));
+	wrapper.AnchorPoint = new Vector2(0, 1);
+	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
+	wrapper.BackgroundTransparency = 1;
+	wrapper.Parent = screenGui;
 
-	const stroke = new Instance("UIStroke");
-	stroke.Color = UI_THEME.border;
-	stroke.Thickness = UI_THEME.strokeThickness;
-	stroke.Parent = panel;
+	const wrapLayout = new Instance("UIListLayout");
+	wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	wrapLayout.Padding = new UDim(0, 0);
+	wrapLayout.Parent = wrapper;
 
-	const outerPad = new Instance("UIPadding");
-	outerPad.PaddingTop = new UDim(0, scaleSize(10));
-	outerPad.PaddingBottom = new UDim(0, scaleSize(10));
-	outerPad.PaddingLeft = new UDim(0, scaleSize(12));
-	outerPad.PaddingRight = new UDim(0, scaleSize(12));
-	outerPad.Parent = panel;
+	// ═════════════════════════════════════════════════════════════════════════
+	//  COMPACT CARD  (always visible — single row: Name + Title)
+	// ═════════════════════════════════════════════════════════════════════════
+	const card = new Instance("TextButton");
+	card.Name = "CompactCard";
+	card.LayoutOrder = 0;
+	card.Size = new UDim2(1, 0, 0, 0);
+	card.AutomaticSize = Enum.AutomaticSize.Y;
+	card.BackgroundColor3 = UI_THEME.bg;
+	card.BackgroundTransparency = UI_THEME.bgTransparency;
+	card.BorderSizePixel = 0;
+	card.Text = "";
+	card.AutoButtonColor = false;
+	card.Parent = wrapper;
 
-	const layout = new Instance("UIListLayout");
-	layout.SortOrder = Enum.SortOrder.LayoutOrder;
-	layout.Padding = new UDim(0, scaleSize(5));
-	layout.Parent = panel;
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = UI_THEME.cornerRadius;
+	cardCorner.Parent = card;
 
-	// -- Name + title row -------------------------------------------------------
-	const nameRow = new Instance("Frame");
-	nameRow.LayoutOrder = 0;
-	nameRow.Size = new UDim2(1, 0, 0, scaleSize(44));
-	nameRow.BackgroundTransparency = 1;
-	nameRow.Parent = panel;
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = UI_THEME.border;
+	cardStroke.Thickness = UI_THEME.strokeThickness;
+	cardStroke.Parent = card;
+
+	const cardPad = new Instance("UIPadding");
+	cardPad.PaddingTop = new UDim(0, sc(8));
+	cardPad.PaddingBottom = new UDim(0, sc(8));
+	cardPad.PaddingLeft = new UDim(0, sc(10));
+	cardPad.PaddingRight = new UDim(0, sc(10));
+	cardPad.Parent = card;
+
+	// ── Row 1: Name  ·  Title ─────────────────────────────────────────────
+	const row1 = new Instance("Frame");
+	row1.Name = "Row1";
+	row1.Size = new UDim2(1, 0, 0, sc(22));
+	row1.BackgroundTransparency = 1;
+	row1.Parent = card;
 
 	nameLabel = new Instance("TextLabel");
-	nameLabel.Name = "PlayerName";
-	nameLabel.Size = new UDim2(0.68, 0, 0, scaleSize(26));
-	nameLabel.Position = new UDim2(0, 0, 0, 0);
+	nameLabel.Name = "Name";
+	nameLabel.Size = new UDim2(0.6, 0, 1, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.Text = "---";
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = scaleSize(22);
+	nameLabel.TextSize = sc(18);
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	nameLabel.Parent = nameRow;
-
-	// -- Eye / visibility indicator (right side of name, stealth-only) ----------
-	const eyeFrame = new Instance("Frame");
-	eyeFrame.Name = "EyeIndicator";
-	eyeFrame.Size = new UDim2(0.32, scaleSize(-4), 0, scaleSize(20));
-	eyeFrame.Position = new UDim2(0.68, scaleSize(4), 0, scaleSize(1));
-	eyeFrame.BackgroundColor3 = UI_THEME.bgInset;
-	eyeFrame.BackgroundTransparency = 0.1;
-	eyeFrame.BorderSizePixel = 0;
-	eyeFrame.Visible = false; // hidden until stealth active
-	eyeFrame.Parent = nameRow;
-	eyeWidget = eyeFrame;
-
-	const eyeCorner = new Instance("UICorner");
-	eyeCorner.CornerRadius = new UDim(0, scaleSize(3));
-	eyeCorner.Parent = eyeFrame;
-
-	const eyeStroke = new Instance("UIStroke");
-	eyeStroke.Color = UI_THEME.textMuted;
-	eyeStroke.Thickness = scaleSize(0.8);
-	eyeStroke.Parent = eyeFrame;
-
-	const eyeLabel = new Instance("TextLabel");
-	eyeLabel.Name = "EyeCount";
-	eyeLabel.Size = new UDim2(1, 0, 1, 0);
-	eyeLabel.BackgroundTransparency = 1;
-	eyeLabel.Text = "Eye: 0";
-	eyeLabel.TextColor3 = UI_THEME.textMuted;
-	eyeLabel.Font = UI_THEME.fontBold;
-	eyeLabel.TextSize = scaleSize(13);
-	eyeLabel.Parent = eyeFrame;
-	eyeCountLabel = eyeLabel;
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	nameLabel.Parent = row1;
 
 	titleLabel = new Instance("TextLabel");
-	titleLabel.Name = "PlayerTitle";
-	titleLabel.Size = new UDim2(1, 0, 0, scaleSize(16));
-	titleLabel.Position = new UDim2(0, 0, 0, scaleSize(27));
+	titleLabel.Name = "Title";
+	titleLabel.Size = new UDim2(0.4, 0, 1, 0);
+	titleLabel.Position = new UDim2(0.6, 0, 0, 0);
 	titleLabel.BackgroundTransparency = 1;
 	titleLabel.Text = "";
 	titleLabel.TextColor3 = UI_THEME.textSection;
 	titleLabel.Font = UI_THEME.fontBold;
-	titleLabel.TextSize = scaleSize(13);
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	titleLabel.Parent = nameRow;
+	titleLabel.TextSize = sc(11);
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	titleLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	titleLabel.Parent = row1;
 
-	// -- Wanted badge (hidden until player breaks the law) ----------------------
+	// ── Tap to expand / collapse ────────────────────────────────────────
+	card.MouseButton1Click.Connect(() => {
+		toggleExpand();
+	});
+
+	// ═════════════════════════════════════════════════════════════════════════
+	//  EXPANDED SECTION  (hidden — level, gold, XP, wanted)
+	// ═════════════════════════════════════════════════════════════════════════
+	const expand = new Instance("Frame");
+	expand.Name = "ExpandedSection";
+	expand.LayoutOrder = 1;
+	expand.Size = new UDim2(1, 0, 0, 0);
+	expand.AutomaticSize = Enum.AutomaticSize.Y;
+	expand.BackgroundColor3 = UI_THEME.bg;
+	expand.BackgroundTransparency = UI_THEME.bgTransparency;
+	expand.BorderSizePixel = 0;
+	expand.ClipsDescendants = true;
+	expand.Visible = false;
+	expand.Parent = wrapper;
+	expandedSection = expand;
+
+	const expCorner = new Instance("UICorner");
+	expCorner.CornerRadius = UI_THEME.cornerRadius;
+	expCorner.Parent = expand;
+
+	const expStroke = new Instance("UIStroke");
+	expStroke.Color = UI_THEME.border;
+	expStroke.Thickness = UI_THEME.strokeThickness;
+	expStroke.Parent = expand;
+
+	const expPad = new Instance("UIPadding");
+	expPad.PaddingTop = new UDim(0, sc(6));
+	expPad.PaddingBottom = new UDim(0, sc(6));
+	expPad.PaddingLeft = new UDim(0, sc(10));
+	expPad.PaddingRight = new UDim(0, sc(10));
+	expPad.Parent = expand;
+
+	const expLayout = new Instance("UIListLayout");
+	expLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	expLayout.Padding = new UDim(0, sc(4));
+	expLayout.Parent = expand;
+
+	// ── Level + Gold row ────────────────────────────────────────────────
+	const statsRow = new Instance("Frame");
+	statsRow.Name = "StatsRow";
+	statsRow.LayoutOrder = 0;
+	statsRow.Size = new UDim2(1, 0, 0, sc(20));
+	statsRow.BackgroundTransparency = 1;
+	statsRow.Parent = expand;
+
+	levelLabel = new Instance("TextLabel");
+	levelLabel.Name = "Level";
+	levelLabel.Size = new UDim2(0.4, 0, 1, 0);
+	levelLabel.BackgroundTransparency = 1;
+	levelLabel.Text = "Lv 1";
+	levelLabel.TextColor3 = UI_THEME.gold;
+	levelLabel.Font = UI_THEME.fontDisplay;
+	levelLabel.TextSize = sc(16);
+	levelLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	levelLabel.Parent = statsRow;
+
+	coinsLabel = new Instance("TextLabel");
+	coinsLabel.Name = "Gold";
+	coinsLabel.Size = new UDim2(0.6, 0, 1, 0);
+	coinsLabel.Position = new UDim2(0.4, 0, 0, 0);
+	coinsLabel.BackgroundTransparency = 1;
+	coinsLabel.Text = "0g";
+	coinsLabel.TextColor3 = UI_THEME.gold;
+	coinsLabel.Font = UI_THEME.fontBold;
+	coinsLabel.TextSize = sc(14);
+	coinsLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	coinsLabel.Parent = statsRow;
+
+	// ── XP bar ──────────────────────────────────────────────────────────
+	const xpRow = new Instance("Frame");
+	xpRow.Name = "XPRow";
+	xpRow.LayoutOrder = 1;
+	xpRow.Size = new UDim2(1, 0, 0, sc(14));
+	xpRow.BackgroundTransparency = 1;
+	xpRow.Parent = expand;
+
+	xpBar = new Instance("Frame");
+	xpBar.Name = "XPBar";
+	xpBar.Size = new UDim2(1, 0, 0, sc(10));
+	xpBar.Position = new UDim2(0, 0, 0.5, sc(-5));
+	xpBar.BackgroundColor3 = UI_THEME.bgInset;
+	xpBar.BackgroundTransparency = 0;
+	xpBar.BorderSizePixel = 0;
+	xpBar.Parent = xpRow;
+
+	const xpBarCorner = new Instance("UICorner");
+	xpBarCorner.CornerRadius = new UDim(1, 0);
+	xpBarCorner.Parent = xpBar;
+
+	const xpBarStroke = new Instance("UIStroke");
+	xpBarStroke.Color = UI_THEME.divider;
+	xpBarStroke.Thickness = sc(0.6);
+	xpBarStroke.Parent = xpBar;
+
+	xpFill = new Instance("Frame");
+	xpFill.Name = "Fill";
+	xpFill.Size = new UDim2(0, 0, 1, 0);
+	xpFill.BackgroundColor3 = UI_THEME.border;
+	xpFill.BackgroundTransparency = 0;
+	xpFill.BorderSizePixel = 0;
+	xpFill.Parent = xpBar;
+
+	const fillCorner = new Instance("UICorner");
+	fillCorner.CornerRadius = new UDim(1, 0);
+	fillCorner.Parent = xpFill;
+
+	xpPctLabel = new Instance("TextLabel");
+	xpPctLabel.Name = "XPPct";
+	xpPctLabel.Size = new UDim2(1, 0, 1, 0);
+	xpPctLabel.BackgroundTransparency = 1;
+	xpPctLabel.Text = "0%";
+	xpPctLabel.TextColor3 = UI_THEME.textPrimary;
+	xpPctLabel.Font = UI_THEME.fontBold;
+	xpPctLabel.TextSize = sc(9);
+	xpPctLabel.ZIndex = 2;
+	xpPctLabel.Parent = xpBar;
+
+	// ── Wanted badge ────────────────────────────────────────────────────
 	const wantedRowFrame = new Instance("Frame");
 	wantedRowFrame.Name = "WantedBadge";
-	wantedRowFrame.LayoutOrder = 1;
-	wantedRowFrame.Size = new UDim2(1, 0, 0, scaleSize(22));
+	wantedRowFrame.LayoutOrder = 2;
+	wantedRowFrame.Size = new UDim2(1, 0, 0, sc(20));
 	wantedRowFrame.BackgroundColor3 = UI_THEME.danger;
 	wantedRowFrame.BackgroundTransparency = 0.4;
 	wantedRowFrame.BorderSizePixel = 0;
 	wantedRowFrame.Visible = false;
-	wantedRowFrame.Parent = panel;
+	wantedRowFrame.Parent = expand;
 	wantedRow = wantedRowFrame;
 
 	const wantedCorner = new Instance("UICorner");
-	wantedCorner.CornerRadius = new UDim(0, scaleSize(3));
+	wantedCorner.CornerRadius = new UDim(0, sc(3));
 	wantedCorner.Parent = wantedRowFrame;
 
 	const wantedBadgePad = new Instance("UIPadding");
-	wantedBadgePad.PaddingLeft = new UDim(0, scaleSize(6));
-	wantedBadgePad.PaddingRight = new UDim(0, scaleSize(6));
+	wantedBadgePad.PaddingLeft = new UDim(0, sc(6));
+	wantedBadgePad.PaddingRight = new UDim(0, sc(6));
 	wantedBadgePad.Parent = wantedRowFrame;
 
 	const wantedTitleLabel = new Instance("TextLabel");
@@ -173,7 +284,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedTitleLabel.Text = "WANTED";
 	wantedTitleLabel.TextColor3 = UI_THEME.textPrimary;
 	wantedTitleLabel.Font = UI_THEME.fontBold;
-	wantedTitleLabel.TextSize = scaleSize(13);
+	wantedTitleLabel.TextSize = sc(12);
 	wantedTitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	wantedTitleLabel.Parent = wantedRowFrame;
 
@@ -185,167 +296,77 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wantedGoldLabel.Text = "";
 	wantedGoldLabel.TextColor3 = UI_THEME.gold;
 	wantedGoldLabel.Font = UI_THEME.fontBold;
-	wantedGoldLabel.TextSize = scaleSize(13);
+	wantedGoldLabel.TextSize = sc(12);
 	wantedGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	wantedGoldLabel.Parent = wantedRowFrame;
+}
 
-	// -- Divider ----------------------------------------------------------------
-	const divider = new Instance("Frame");
-	divider.LayoutOrder = 2;
-	divider.Size = new UDim2(1, 0, 0, scaleSize(1));
-	divider.BackgroundColor3 = UI_THEME.divider;
-	divider.BackgroundTransparency = 0;
-	divider.BorderSizePixel = 0;
-	divider.Parent = panel;
+// -- Expand / Collapse ----------------------------------------------------------
 
-	// -- Stats row (level | coins) ----------------------------------------------
-	const statsRow = new Instance("Frame");
-	statsRow.LayoutOrder = 3;
-	statsRow.Size = new UDim2(1, 0, 0, scaleSize(22));
-	statsRow.BackgroundTransparency = 1;
-	statsRow.Parent = panel;
-
-	// Level -- left side
-	const lvlCap = new Instance("TextLabel");
-	lvlCap.Size = new UDim2(0.18, 0, 1, 0);
-	lvlCap.BackgroundTransparency = 1;
-	lvlCap.Text = "LVL";
-	lvlCap.TextColor3 = UI_THEME.textSection;
-	lvlCap.Font = UI_THEME.fontBold;
-	lvlCap.TextSize = scaleSize(12);
-	lvlCap.TextXAlignment = Enum.TextXAlignment.Left;
-	lvlCap.TextYAlignment = Enum.TextYAlignment.Center;
-	lvlCap.Parent = statsRow;
-
-	levelLabel = new Instance("TextLabel");
-	levelLabel.Name = "LevelValue";
-	levelLabel.Size = new UDim2(0.22, 0, 1, 0);
-	levelLabel.Position = new UDim2(0.18, 0, 0, 0);
-	levelLabel.BackgroundTransparency = 1;
-	levelLabel.Text = "1";
-	levelLabel.TextColor3 = UI_THEME.textPrimary;
-	levelLabel.Font = UI_THEME.fontDisplay;
-	levelLabel.TextSize = scaleSize(18);
-	levelLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	levelLabel.Parent = statsRow;
-
-	// Coins -- right side
-	const coinCap = new Instance("TextLabel");
-	coinCap.Size = new UDim2(0.12, 0, 1, 0);
-	coinCap.Position = new UDim2(0.44, 0, 0, 0);
-	coinCap.BackgroundTransparency = 1;
-	coinCap.Text = "G";
-	coinCap.TextColor3 = UI_THEME.gold;
-	coinCap.Font = UI_THEME.fontBold;
-	coinCap.TextSize = scaleSize(14);
-	coinCap.TextXAlignment = Enum.TextXAlignment.Left;
-	coinCap.TextYAlignment = Enum.TextYAlignment.Center;
-	coinCap.Parent = statsRow;
-
-	coinsLabel = new Instance("TextLabel");
-	coinsLabel.Name = "CoinsValue";
-	coinsLabel.Size = new UDim2(0.44, 0, 1, 0);
-	coinsLabel.Position = new UDim2(0.56, 0, 0, 0);
-	coinsLabel.BackgroundTransparency = 1;
-	coinsLabel.Text = "0";
-	coinsLabel.TextColor3 = UI_THEME.gold;
-	coinsLabel.Font = UI_THEME.fontDisplay;
-	coinsLabel.TextSize = scaleSize(17);
-	coinsLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	coinsLabel.Parent = statsRow;
-
-	// -- XP bar -----------------------------------------------------------------
-	const xpRow = new Instance("Frame");
-	xpRow.LayoutOrder = 4;
-	xpRow.Size = new UDim2(1, 0, 0, scaleSize(18));
-	xpRow.BackgroundTransparency = 1;
-	xpRow.Parent = panel;
-
-	const xpCap = new Instance("TextLabel");
-	xpCap.Size = new UDim2(0.18, 0, 1, 0);
-	xpCap.BackgroundTransparency = 1;
-	xpCap.Text = "XP";
-	xpCap.TextColor3 = UI_THEME.textSection;
-	xpCap.Font = UI_THEME.fontBold;
-	xpCap.TextSize = scaleSize(12);
-	xpCap.TextXAlignment = Enum.TextXAlignment.Left;
-	xpCap.TextYAlignment = Enum.TextYAlignment.Center;
-	xpCap.Parent = xpRow;
-
-	xpBar = new Instance("Frame");
-	xpBar.Size = new UDim2(0.82, 0, 0, scaleSize(8));
-	xpBar.Position = new UDim2(0.18, 0, 0.5, scaleSize(-4));
-	xpBar.BackgroundColor3 = UI_THEME.bgInset;
-	xpBar.BackgroundTransparency = 0;
-	xpBar.BorderSizePixel = 0;
-	xpBar.Parent = xpRow;
-
-	const xpBarCorner = new Instance("UICorner");
-	xpBarCorner.CornerRadius = new UDim(1, 0);
-	xpBarCorner.Parent = xpBar;
-
-	xpFill = new Instance("Frame");
-	xpFill.Name = "Fill";
-	xpFill.Size = new UDim2(0, 0, 1, 0);
-	xpFill.BackgroundColor3 = UI_THEME.border; // tarnished brass fill
-	xpFill.BackgroundTransparency = 0;
-	xpFill.BorderSizePixel = 0;
-	xpFill.Parent = xpBar;
-
-	const fillCorner = new Instance("UICorner");
-	fillCorner.CornerRadius = new UDim(1, 0);
-	fillCorner.Parent = xpFill;
+function toggleExpand(): void {
+	if (!expandedSection) return;
+	isExpanded = !isExpanded;
+	expandedSection.Visible = isExpanded;
 }
 
 // -- Update helpers -------------------------------------------------------------
 
+/** Recalculate the name label colour based on wanted + spotted + stealth state. */
+function refreshNameColor(): void {
+	if (!nameLabel || !titleLabel) return;
+	if (isWantedActive) {
+		// Wanted always overrides — red
+		nameLabel.TextColor3 = UI_THEME.danger;
+		titleLabel.TextColor3 = UI_THEME.danger;
+	} else if (isStealthing && isSpotted) {
+		// Stealthing + being seen — danger red
+		nameLabel.TextColor3 = UI_THEME.danger;
+		titleLabel.TextColor3 = UI_THEME.danger;
+	} else if (isStealthing) {
+		// Stealthing + safe — green
+		nameLabel.TextColor3 = SAFE_GREEN;
+		titleLabel.TextColor3 = SAFE_GREEN;
+	} else {
+		// Normal
+		nameLabel.TextColor3 = UI_THEME.textPrimary;
+		titleLabel.TextColor3 = UI_THEME.textSection;
+	}
+}
+
 function setXP(xp: number) {
 	if (!xpFill || !xpBar) return;
 	const progress = math.clamp((xp % XP_PER_LEVEL) / XP_PER_LEVEL, 0, 1);
-	TweenService.Create(xpFill, new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	TweenService.Create(xpFill, TWEEN_XP, {
 		Size: new UDim2(progress, 0, 1, 0),
 	}).Play();
+	if (xpPctLabel) {
+		xpPctLabel.Text = math.floor(progress * 100) + "%";
+	}
 }
 
-/** Show the WANTED badge and tint the player's name red. */
 function setWanted(gold: number): void {
 	if (!wantedRow || !wantedGoldLabel) return;
 	wantedGoldLabel.Text = gold + "g";
 	wantedRow.Visible = true;
-	if (nameLabel) nameLabel.TextColor3 = UI_THEME.danger;
-	if (titleLabel) titleLabel.TextColor3 = UI_THEME.danger;
+	isWantedActive = true;
+	refreshNameColor();
 }
 
-/** Hide the WANTED badge and restore the player's name colour. */
 function clearWanted(): void {
 	if (wantedRow) wantedRow.Visible = false;
-	if (nameLabel) nameLabel.TextColor3 = UI_THEME.textPrimary;
-	if (titleLabel) titleLabel.TextColor3 = UI_THEME.textSection;
+	isWantedActive = false;
+	refreshNameColor();
 }
 
-/** Update the eye indicator count. Always runs -- widget may be hidden. */
 function setEyeCount(viewers: string[]): void {
-	// Guard: viewers can arrive as nil from the remote if no one has been added yet
 	if (viewers === undefined || viewers.size() === 0) {
-		lastViewerCount = 0;
+		isSpotted = false;
 	} else {
-		lastViewerCount = viewers.size();
+		isSpotted = viewers.size() > 0;
 	}
-
-	if (!eyeCountLabel || !eyeWidget) return;
-	// Always keep label text up-to-date even if widget is hidden -- when stealth
-	// is toggled on the correct count will already be in the label.
-	const isSpotted = lastViewerCount > 0;
-	eyeCountLabel.Text = "Eye: " + lastViewerCount;
-	eyeCountLabel.TextColor3 = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
-	const stroke = eyeWidget.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-	if (stroke !== undefined) stroke.Color = isSpotted ? UI_THEME.danger : UI_THEME.textMuted;
-}
-
-/** Show or hide the eye indicator based on stealth state. */
-function setEyeStealth(stealthing: boolean): void {
-	if (!eyeWidget) return;
-	eyeWidget.Visible = stealthing;
+	// Store as attribute so npc-proximity can read it for button coloring
+	Players.LocalPlayer.SetAttribute("IsSpotted", isSpotted);
+	refreshNameColor();
 }
 
 // -- Init -----------------------------------------------------------------------
@@ -365,8 +386,8 @@ onPlayerInitialized(() => {
 
 	if (nameLabel) nameLabel.Text = initName;
 	if (titleLabel) titleLabel.Text = initTitle.upper();
-	if (levelLabel) levelLabel.Text = `${initLevel}`;
-	if (coinsLabel) coinsLabel.Text = `${initCoins}`;
+	if (levelLabel) levelLabel.Text = "Lv " + initLevel;
+	if (coinsLabel) coinsLabel.Text = initCoins + "g";
 	setXP(initXP);
 
 	// Live updates
@@ -375,14 +396,14 @@ onPlayerInitialized(() => {
 	});
 
 	LevelUpdated.OnClientEvent.Connect((level: number) => {
-		if (levelLabel) levelLabel.Text = `${level}`;
+		if (levelLabel) levelLabel.Text = "Lv " + level;
 	});
 
 	CoinsUpdated.OnClientEvent.Connect((coins: number) => {
-		if (coinsLabel) coinsLabel.Text = `${coins}`;
+		if (coinsLabel) coinsLabel.Text = coins + "g";
 	});
 
-	// Wanted status -- fires to ALL clients so we check if it's us
+	// Wanted status
 	getPlayerWantedRemote().OnClientEvent.Connect((data: unknown) => {
 		const payload = data as PlayerWantedPayload;
 		if (payload.playerName === Players.LocalPlayer.Name) {
@@ -396,7 +417,6 @@ onPlayerInitialized(() => {
 		}
 	});
 
-	// Initial full-state sync (handles rejoining while already wanted)
 	getBountyListSyncRemote().OnClientEvent.Connect((_npcBounty: unknown, wanted: unknown) => {
 		for (const entry of wanted as PlayerWantedPayload[]) {
 			if (entry.playerName === Players.LocalPlayer.Name) {
@@ -406,15 +426,15 @@ onPlayerInitialized(() => {
 		}
 	});
 
-	// Eye indicator -- NPC visibility updates from server
+	// Eye / vision updates from server — drive name color + IsSpotted attribute
 	ViewsUpdated.OnClientEvent.Connect((viewers: unknown) => {
 		setEyeCount((viewers ?? []) as string[]);
 	});
 
-	// Eye indicator -- show/hide when stealth is toggled (mobile HUD or other systems set this attribute)
+	// Track stealth state for name color
 	Players.LocalPlayer.GetAttributeChangedSignal("IsStealthing").Connect(() => {
-		const stealthing = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
-		const stealthState = stealthing === true;
-		setEyeStealth(stealthState);
+		const val = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
+		isStealthing = val === true;
+		refreshNameColor();
 	});
 });
