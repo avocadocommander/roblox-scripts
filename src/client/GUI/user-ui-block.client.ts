@@ -7,6 +7,9 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { getEffectSyncRemote, EffectSyncPayload } from "shared/remotes/effect-remote";
+import { POISONS } from "shared/config/poisons";
+import { ELIXIRS } from "shared/config/elixirs";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const GetPlayerExpierence = playerState.WaitForChild("GetExpierence") as RemoteFunction;
@@ -46,6 +49,15 @@ let isWantedActive = false;
 let isStealthing = false;
 let isSpotted = false;
 
+// Effect row refs
+let effectRow: Frame | undefined;
+let poisonLabel: TextLabel | undefined;
+let elixirLabel: TextLabel | undefined;
+let effectTooltip: TextLabel | undefined;
+
+// Cached effect state for tooltip
+let cachedEffectPayload: EffectSyncPayload | undefined;
+
 const XP_PER_LEVEL = 1000;
 const TWEEN_XP = new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
@@ -71,6 +83,119 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder;
 	wrapLayout.Padding = new UDim(0, 0);
 	wrapLayout.Parent = wrapper;
+
+	// ═════════════════════════════════════════════════════════════════════════
+	//  EFFECT ROW  (above compact card — icon + name, hover/tap for timer)
+	// ═════════════════════════════════════════════════════════════════════════
+	const effRow = new Instance("Frame");
+	effRow.Name = "EffectRow";
+	effRow.LayoutOrder = -1;
+	effRow.Size = new UDim2(1, 0, 0, sc(16));
+	effRow.BackgroundTransparency = 1;
+	effRow.Visible = false;
+	effRow.Parent = wrapper;
+	effectRow = effRow;
+
+	// Poison: icon + name as a single TextLabel (left-aligned)
+	poisonLabel = new Instance("TextLabel");
+	poisonLabel.Name = "PoisonLabel";
+	poisonLabel.Size = new UDim2(0.5, 0, 1, 0);
+	poisonLabel.Position = new UDim2(0, 0, 0, 0);
+	poisonLabel.BackgroundTransparency = 1;
+	poisonLabel.Text = "";
+	poisonLabel.TextColor3 = Color3.fromRGB(178, 102, 255);
+	poisonLabel.Font = UI_THEME.fontBold;
+	poisonLabel.TextSize = sc(10);
+	poisonLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	poisonLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	poisonLabel.Visible = false;
+	poisonLabel.Parent = effRow;
+
+	// Elixir: icon + name as a single TextLabel (right-aligned)
+	elixirLabel = new Instance("TextLabel");
+	elixirLabel.Name = "ElixirLabel";
+	elixirLabel.Size = new UDim2(0.5, 0, 1, 0);
+	elixirLabel.Position = new UDim2(0.5, 0, 0, 0);
+	elixirLabel.BackgroundTransparency = 1;
+	elixirLabel.Text = "";
+	elixirLabel.TextColor3 = Color3.fromRGB(100, 210, 120);
+	elixirLabel.Font = UI_THEME.fontBold;
+	elixirLabel.TextSize = sc(10);
+	elixirLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	elixirLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	elixirLabel.Visible = false;
+	elixirLabel.Parent = effRow;
+
+	// Invisible hover/tap button covering the entire row
+	const effHoverBtn = new Instance("TextButton");
+	effHoverBtn.Name = "EffectHover";
+	effHoverBtn.Size = new UDim2(1, 0, 1, 0);
+	effHoverBtn.BackgroundTransparency = 1;
+	effHoverBtn.Text = "";
+	effHoverBtn.ZIndex = 5;
+	effHoverBtn.Parent = effRow;
+
+	// Tooltip (positioned above the effect row, hidden by default)
+	const tooltip = new Instance("TextLabel");
+	tooltip.Name = "EffectTooltip";
+	tooltip.Size = new UDim2(0, sc(220), 0, 0);
+	tooltip.AutomaticSize = Enum.AutomaticSize.Y;
+	tooltip.Position = new UDim2(0, 0, 0, sc(-4));
+	tooltip.AnchorPoint = new Vector2(0, 1);
+	tooltip.BackgroundColor3 = UI_THEME.bg;
+	tooltip.BackgroundTransparency = 0.1;
+	tooltip.BorderSizePixel = 0;
+	tooltip.Text = "";
+	tooltip.TextColor3 = UI_THEME.textPrimary;
+	tooltip.Font = UI_THEME.fontBold;
+	tooltip.TextSize = sc(10);
+	tooltip.TextXAlignment = Enum.TextXAlignment.Left;
+	tooltip.TextWrapped = true;
+	tooltip.TextYAlignment = Enum.TextYAlignment.Top;
+	tooltip.Visible = false;
+	tooltip.ZIndex = 51;
+	tooltip.Parent = effRow;
+	effectTooltip = tooltip;
+
+	const ttCorner = new Instance("UICorner");
+	ttCorner.CornerRadius = new UDim(0, sc(4));
+	ttCorner.Parent = tooltip;
+
+	const ttStroke = new Instance("UIStroke");
+	ttStroke.Color = UI_THEME.border;
+	ttStroke.Thickness = sc(0.6);
+	ttStroke.Parent = tooltip;
+
+	const ttPad = new Instance("UIPadding");
+	ttPad.PaddingTop = new UDim(0, sc(5));
+	ttPad.PaddingBottom = new UDim(0, sc(5));
+	ttPad.PaddingLeft = new UDim(0, sc(6));
+	ttPad.PaddingRight = new UDim(0, sc(6));
+	ttPad.Parent = tooltip;
+
+	// Hover: show tooltip on mouse enter, hide on mouse leave
+	effHoverBtn.MouseEnter.Connect(() => {
+		if (!effectTooltip) return;
+		refreshTooltipText();
+		effectTooltip.Visible = true;
+	});
+	effHoverBtn.MouseLeave.Connect(() => {
+		if (effectTooltip) effectTooltip.Visible = false;
+	});
+
+	// Tap: toggle tooltip (for mobile)
+	effHoverBtn.MouseButton1Click.Connect(() => {
+		if (!effectTooltip) return;
+		if (effectTooltip.Visible) {
+			effectTooltip.Visible = false;
+			return;
+		}
+		refreshTooltipText();
+		effectTooltip.Visible = true;
+		task.delay(4, () => {
+			if (effectTooltip) effectTooltip.Visible = false;
+		});
+	});
 
 	// ═════════════════════════════════════════════════════════════════════════
 	//  COMPACT CARD  (always visible — single row: Name + Title)
@@ -369,6 +494,73 @@ function setEyeCount(viewers: string[]): void {
 	refreshNameColor();
 }
 
+/** Format seconds into "Xm Ys" display. */
+function formatTime(secs: number): string {
+	if (secs <= 0) return "0s";
+	const m = math.floor(secs / 60);
+	const s = secs % 60;
+	if (m > 0) return m + "m " + s + "s";
+	return s + "s";
+}
+
+/** Build the tooltip text from cached effect state. */
+function refreshTooltipText(): void {
+	if (!effectTooltip || !cachedEffectPayload) return;
+	const lines: string[] = [];
+	if (cachedEffectPayload.activePoisonId && cachedEffectPayload.poisonRemainingSecs > 0) {
+		const def = POISONS[cachedEffectPayload.activePoisonId];
+		const name = def ? def.name : "Poison";
+		lines.push("~ " + name + "  --  " + formatTime(cachedEffectPayload.poisonRemainingSecs));
+	}
+	if (cachedEffectPayload.activeElixirId && cachedEffectPayload.elixirRemainingSecs > 0) {
+		const def = ELIXIRS[cachedEffectPayload.activeElixirId];
+		const name = def ? def.name : "Elixir";
+		lines.push("+ " + name + "  --  " + formatTime(cachedEffectPayload.elixirRemainingSecs));
+	}
+	effectTooltip.Text = lines.size() > 0 ? lines.join("\n") : "";
+}
+
+function updateEffects(payload: EffectSyncPayload): void {
+	if (!effectRow) return;
+	cachedEffectPayload = payload;
+
+	const hasPoisonActive = payload.activePoisonId !== undefined && payload.poisonRemainingSecs > 0;
+	const hasElixirActive = payload.activeElixirId !== undefined && payload.elixirRemainingSecs > 0;
+	const bothActive = hasPoisonActive && hasElixirActive;
+
+	// Poison label: "~ Name"
+	if (poisonLabel) {
+		poisonLabel.Visible = hasPoisonActive;
+		if (hasPoisonActive) {
+			const def = POISONS[payload.activePoisonId!];
+			poisonLabel.Text = "~ " + (def ? def.name : "Poison");
+			// If only poison, take full width; if both, take half
+			poisonLabel.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
+			poisonLabel.Position = new UDim2(0, 0, 0, 0);
+		}
+	}
+
+	// Elixir label: "+ Name"
+	if (elixirLabel) {
+		elixirLabel.Visible = hasElixirActive;
+		if (hasElixirActive) {
+			const def = ELIXIRS[payload.activeElixirId!];
+			elixirLabel.Text = "+ " + (def ? def.name : "Elixir");
+			// If only elixir, take full width from left; if both, right half
+			elixirLabel.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
+			elixirLabel.Position = bothActive ? new UDim2(0.5, 0, 0, 0) : new UDim2(0, 0, 0, 0);
+		}
+	}
+
+	// Show/hide the effect row
+	effectRow.Visible = hasPoisonActive || hasElixirActive;
+
+	// Auto-refresh tooltip if visible
+	if (effectTooltip && effectTooltip.Visible) {
+		refreshTooltipText();
+	}
+}
+
 // -- Init -----------------------------------------------------------------------
 
 onPlayerInitialized(() => {
@@ -436,5 +628,10 @@ onPlayerInitialized(() => {
 		const val = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
 		isStealthing = val === true;
 		refreshNameColor();
+	});
+
+	// Effect sync — active poison / elixir timers
+	getEffectSyncRemote().OnClientEvent.Connect((data: unknown) => {
+		updateEffects(data as EffectSyncPayload);
 	});
 });

@@ -5,6 +5,8 @@ import { getAchievementUnlockedRemote } from "shared/remotes/kill-book-remote";
 import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
+import { getActivePoison } from "./effect-handler";
+import { POISONS } from "shared/config/poisons";
 import {
 	addCoins,
 	addCompletedBounty,
@@ -132,8 +134,17 @@ function initializeAssassinationHandler() {
 		// Perform the assassination
 		log(`[ASSASSINATION] ${player.Name} assassinated ${model.Name}!`);
 
-		// Kill the NPC with a random death style
-		const selectedStyle = DEATH_STYLES[math.random(0, DEATH_STYLES.size() - 1)];
+		// Kill the NPC — use levitation if player has an active poison, otherwise random
+		const activePoisonId = getActivePoison(player);
+		const poisonDef = activePoisonId ? POISONS[activePoisonId] : undefined;
+		let selectedStyle: keyof typeof DEATH_EFFECTS;
+
+		if (poisonDef && poisonDef.poisonEffect === "floating_death") {
+			selectedStyle = "LEVITATION";
+			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
+		} else {
+			selectedStyle = DEATH_STYLES[math.random(0, DEATH_STYLES.size() - 1)];
+		}
 		const deathFunction = DEATH_EFFECTS[selectedStyle];
 
 		if (deathFunction) {

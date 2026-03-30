@@ -16,6 +16,7 @@ import {
 	getTurnInBountyRemote,
 } from "shared/remotes/inventory-remote";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, Status } from "shared/module";
+import { activatePoison as effectActivatePoison, activateElixir as effectActivateElixir } from "./effect-handler";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -121,16 +122,14 @@ function handleActivateItem(player: Player, itemId: string): void {
 		inv.activePoison = itemId;
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
+		effectActivatePoison(player, itemId);
 		log(`[INVENTORY] ${player.Name} activated poison: ${itemDef.name}`);
 	} else if (itemDef.category === "elixir") {
-		// Activate elixir (add to active list if not already active, consumes 1)
-		if (inv.activeElixirs.includes(itemId)) {
-			log(`[INVENTORY] ${player.Name} already has ${itemDef.name} active`);
-			return; // Don't consume if already active
-		}
-		inv.activeElixirs.push(itemId);
+		// Activate elixir (replaces current active elixir — max 1 at a time, consumes 1)
+		inv.activeElixirs = [itemId];
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
+		effectActivateElixir(player, itemId);
 		log(`[INVENTORY] ${player.Name} activated elixir: ${itemDef.name}`);
 	}
 

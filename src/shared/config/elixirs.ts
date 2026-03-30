@@ -6,24 +6,13 @@
  *   - Long-term elixirs last for `effectDurationSecs` (like poisons on weapons).
  */
 
-/** Default long-term elixir duration (1 hour). */
-export const DEFAULT_ELIXIR_DURATION_SECS = 3600;
+/** Default long-term elixir duration (30 gameplay minutes). */
+export const DEFAULT_ELIXIR_DURATION_SECS = 1800;
 
-export type ElixirEffect =
-	| "speed_boost" // +move speed
-	| "jump_boost" // +jump height
-	| "detection_shrink" // reduced detection radius
-	| "target_outline" // see your bounty target outlined
-	| "health_regen" // passive HP regen
-	| "stealth_boost"; // harder to detect while sneaking
+export type ElixirEffect = "speed_boost";
 
 export const ELIXIR_EFFECT_LABELS: Record<ElixirEffect, string> = {
 	speed_boost: "Swiftness",
-	jump_boost: "Leap",
-	detection_shrink: "Shadow",
-	target_outline: "Eagle Eye",
-	health_regen: "Vitality",
-	stealth_boost: "Ghost",
 };
 
 export interface ElixirDef {
@@ -48,75 +37,15 @@ export interface ElixirDef {
 
 /** Master elixir catalogue — keyed by elixir ID. */
 export const ELIXIRS: Record<string, ElixirDef> = {
-	swiftness_elixir: {
-		id: "swiftness_elixir",
-		name: "Elixir of Swiftness",
-		description: "Quicksilver and ginger root. Your legs tingle, then blur.",
-		effect: "+30% move speed for 1 hour.",
+	fleetfoot_elixir: {
+		id: "fleetfoot_elixir",
+		name: "Fleetfoot Elixir",
+		description: "Quicksilver and wind-dancer root brewed under a crescent moon. Your legs tingle, then blur.",
+		effect: "+20% move speed for 30 gameplay min.",
 		elixirType: "Elixir",
 		icon: "+",
 		rarity: "uncommon",
 		elixirEffect: "speed_boost",
-		immediate: false,
-		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
-	},
-	sky_step: {
-		id: "sky_step",
-		name: "Sky Step Tonic",
-		description: "Infused with powdered cloud crystal. Gravity loosens its grip on you.",
-		effect: "+50% jump height for 1 hour.",
-		elixirType: "Elixir",
-		icon: "+",
-		rarity: "rare",
-		elixirEffect: "jump_boost",
-		immediate: false,
-		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
-	},
-	shadow_cloak: {
-		id: "shadow_cloak",
-		name: "Shadow Cloak Draught",
-		description: "Brewed from midnight moss. Your presence shrinks from the world's notice.",
-		effect: "Detection radius reduced 40% for 1 hour.",
-		elixirType: "Elixir",
-		icon: "+",
-		rarity: "rare",
-		elixirEffect: "detection_shrink",
-		immediate: false,
-		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
-	},
-	eagle_eye: {
-		id: "eagle_eye",
-		name: "Eagle Eye Serum",
-		description: "Distilled raptor essence. Your vision sharpens beyond mortal limits.",
-		effect: "See your bounty target outlined for 1 hour.",
-		elixirType: "Elixir",
-		icon: "+",
-		rarity: "epic",
-		elixirEffect: "target_outline",
-		immediate: false,
-		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
-	},
-	vitality_draught: {
-		id: "vitality_draught",
-		name: "Vitality Draught",
-		description: "A warm tincture of troll blood and willow bark. Wounds close on their own.",
-		effect: "Passive HP regeneration for 1 hour.",
-		elixirType: "Elixir",
-		icon: "+",
-		rarity: "uncommon",
-		elixirEffect: "health_regen",
-		immediate: false,
-		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
-	},
-	ghost_oil: {
-		id: "ghost_oil",
-		name: "Ghost Oil",
-		description: "Rendered from spectral fat. Your footsteps vanish, your breath silences.",
-		effect: "Harder to detect while sneaking for 1 hour.",
-		elixirType: "Elixir",
-		icon: "+",
-		rarity: "epic",
-		elixirEffect: "stealth_boost",
 		immediate: false,
 		effectDurationSecs: DEFAULT_ELIXIR_DURATION_SECS,
 	},

@@ -179,6 +179,14 @@ export interface PlayerState {
 	ownedTitles: string[];
 	/** Per-faction XP. Overall XP/level is derived from the sum. */
 	factionXP: FactionXP;
+	/** Currently active poison ID (or undefined if none). */
+	activePoisonId: string | undefined;
+	/** Remaining gameplay seconds for the active poison. */
+	activePoisonRemainingSecs: number;
+	/** Currently active elixir ID (or undefined if none). */
+	activeElixirId: string | undefined;
+	/** Remaining gameplay seconds for the active elixir. */
+	activeElixirRemainingSecs: number;
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -200,6 +208,10 @@ const DEFAULT_STATE: PlayerState = {
 	totalNPCKills: 0,
 	ownedTitles: ["sellsword"],
 	factionXP: { ...DEFAULT_FACTION_XP },
+	activePoisonId: undefined,
+	activePoisonRemainingSecs: 0,
+	activeElixirId: undefined,
+	activeElixirRemainingSecs: 0,
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -470,6 +482,27 @@ export function getCompletedBounties(player: Player): CompletedBountyEntry[] {
 /** Read the full player state snapshot (for kill book data sync). */
 export function getPlayerStateSnapshot(player: Player): PlayerState | undefined {
 	return PLAYER_STATES.get(player);
+}
+
+// ── Consumable effects ───────────────────────────────────────────────────────
+
+/** Update the active effect fields on the player's state (called by effect-handler). */
+export function setPlayerEffectFields(
+	player: Player,
+	poisonId: string | undefined,
+	poisonSecs: number,
+	elixirId: string | undefined,
+	elixirSecs: number,
+): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, {
+		...state,
+		activePoisonId: poisonId,
+		activePoisonRemainingSecs: poisonSecs,
+		activeElixirId: elixirId,
+		activeElixirRemainingSecs: elixirSecs,
+	});
 }
 
 // ── Achievements ─────────────────────────────────────────────────────────────

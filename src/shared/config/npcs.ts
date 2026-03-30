@@ -201,13 +201,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 			],
 		},
 		shop: {
-			shopItems: [
-				{ itemId: "floating_death", price: 280 },
-				{ itemId: "slow_decay", price: 180 },
-				{ itemId: "paralysis_toxin", price: 350 },
-				{ itemId: "dragons_breath", price: 600 },
-				{ itemId: "phantom_venom", price: 500 },
-			],
+			shopItems: [{ itemId: "levitation_poison", price: 300 }],
 		},
 	},
 	"Edric Thornwell": std("Edric Thornwell", "M", "Human", "Commoner"),
@@ -235,14 +229,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 			],
 		},
 		shop: {
-			shopItems: [
-				{ itemId: "swiftness_elixir", price: 200 },
-				{ itemId: "sky_step", price: 350 },
-				{ itemId: "shadow_cloak", price: 500 },
-				{ itemId: "eagle_eye", price: 400 },
-				{ itemId: "vitality_draught", price: 300 },
-				{ itemId: "ghost_oil", price: 700 },
-			],
+			shopItems: [{ itemId: "fleetfoot_elixir", price: 250 }],
 		},
 	},
 	"Halric Stonvein": std("Halric Stonvein", "M", "Human", "Commoner"),
@@ -277,9 +264,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 		shop: {
 			shopItems: [
 				{ itemId: "dagger", price: 450 },
-				{ itemId: "slow_decay", price: 220 },
-				{ itemId: "swiftness_elixir", price: 280 },
-				{ itemId: "sky_step", price: 380 },
+				{ itemId: "levitation_poison", price: 280 },
+				{ itemId: "fleetfoot_elixir", price: 260 },
 			],
 		},
 	},
@@ -322,11 +308,8 @@ export const NPC_REGISTRY: NPCRegistry = {
 		},
 		shop: {
 			shopItems: [
-				{ itemId: "phantom_venom", price: 450 },
-				{ itemId: "dragons_breath", price: 550 },
-				{ itemId: "shadow_cloak", price: 480 },
-				{ itemId: "eagle_eye", price: 380 },
-				{ itemId: "ghost_oil", price: 650 },
+				{ itemId: "levitation_poison", price: 350 },
+				{ itemId: "fleetfoot_elixir", price: 300 },
 			],
 		},
 	},

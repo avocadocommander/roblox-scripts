@@ -117,6 +117,86 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 
 		model.Destroy();
 	},
+
+	/**
+	 * LEVITATION: Freeze the NPC, tint white/ghostly, float the whole body
+	 * upward ~20 studs over 5 seconds, then fade out and destroy.
+	 */
+	LEVITATION: (model: Model) => {
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			// Keep alive so joints stay intact — just immobilise
+			humanoid.PlatformStand = true;
+			humanoid.WalkSpeed = 0;
+			humanoid.JumpPower = 0;
+		}
+
+		// Disable collisions so the body floats through geometry
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).CanCollide = false;
+			}
+		});
+
+		// Ghostly white tint + semi-transparent
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				const part = descendant as BasePart;
+				part.Color = Color3.fromRGB(240, 240, 255);
+				part.Transparency = math.max(part.Transparency, 0.4);
+			}
+		});
+
+		// Float upward using BodyVelocity on the root part
+		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (rootPart) {
+			// Also keep the root part unanchored so BodyVelocity works
+			rootPart.Anchored = false;
+
+			const bv = new Instance("BodyVelocity");
+			bv.Velocity = new Vector3(0, 4, 0);
+			bv.MaxForce = new Vector3(0, math.huge, 0);
+			bv.P = 1250;
+			bv.Parent = rootPart;
+
+			// Particle trail — bright white sparkles
+			const emitter = new Instance("ParticleEmitter");
+			emitter.Parent = rootPart;
+			emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+			emitter.Speed = new NumberRange(1, 3);
+			emitter.Lifetime = new NumberRange(1, 2);
+			emitter.Size = new NumberSequence(0.4, 0.1);
+			emitter.Color = new ColorSequence(Color3.fromRGB(220, 220, 255));
+			emitter.Rate = 40;
+			emitter.Transparency = new NumberSequence([
+				new NumberSequenceKeypoint(0, 0.3),
+				new NumberSequenceKeypoint(1, 1),
+			]);
+		}
+
+		// Float for 5 seconds, then fade out and destroy
+		task.wait(5);
+
+		// Kill humanoid now so it stops any internal updates
+		if (humanoid) {
+			humanoid.Health = 0;
+		}
+
+		// Fade out over 1 second
+		for (let i = 0; i <= 10; i++) {
+			model.GetDescendants().forEach((descendant) => {
+				if (descendant.IsA("BasePart")) {
+					(descendant as BasePart).Transparency = math.min(1, i / 10);
+				}
+			});
+			task.wait(0.1);
+		}
+
+		model.Destroy();
+	},
 };
 
 /**

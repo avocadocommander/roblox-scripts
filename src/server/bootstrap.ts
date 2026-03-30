@@ -13,6 +13,7 @@ import { initializeTitleHandler } from "./modules/title-handler";
 import { initializeDialogHandler } from "./modules/dialog-handler";
 import { initializeAdminHandler } from "./modules/admin-handler";
 import { initializeInspectHandler } from "./modules/inspect-handler";
+import { initializeEffectHandler } from "./modules/effect-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -28,6 +29,7 @@ export async function bootstrapServer() {
 	initializeCampfireSystem();
 	initializeAchievementHandler();
 	initializeInventorySystem();
+	initializeEffectHandler();
 	initializeTitleHandler();
 	initializeDialogHandler();
 	initializeAdminHandler();
