@@ -1,4 +1,4 @@
-import { Players, UserInputService } from "@rbxts/services";
+import { Players, UserInputService, Workspace } from "@rbxts/services";
 import { getOrCreateMovementRemote } from "shared/remotes/movement-remote";
 import { log } from "shared/helpers";
 import { setStealthing } from "./npc-proximity";
@@ -16,8 +16,20 @@ const isStealthMode = false;
 
 // Speed boost state
 const BASE_WALK_SPEED = 16;
-const SPEED_BOOST_MULTIPLIER = 1.2; // +20%
+const DEFAULT_SPEED_MULTIPLIER = 1.2;
 let speedBoostActive = false;
+
+// Slow-fall state
+let slowFallActive = false;
+let slowFallForce: BodyForce | undefined;
+const DEFAULT_GRAVITY_REDUCTION = 0.65;
+
+// Invisibility state
+let invisibilityActive = false;
+let invisibilityBurstRunning = false;
+
+// Current active elixir def — used to read tier-specific params
+let activeElixirDef: import("shared/config/elixirs").ElixirDef | undefined;
 
 function setupMovementInput() {
 	const character = players?.Character;
@@ -53,21 +65,28 @@ function initializeMovementSystem() {
 		hasAirJump = true;
 		isRunning = false;
 		setupMovementInput();
-		// Re-apply speed boost if active after respawn
+		// Re-apply persistent effects after respawn
 		if (speedBoostActive) {
 			applySpeedBoost(true);
 		}
+		if (slowFallActive) {
+			applySlowFall(true);
+		}
 	});
 
-	// Listen for effect sync to apply/remove speed boost
+	// Listen for effect sync to apply/remove elixir effects
 	const effectSyncRemote = getEffectSyncRemote();
 	effectSyncRemote.OnClientEvent.Connect((data: unknown) => {
 		const payload = data as EffectSyncPayload;
-		const hasSpeed =
-			payload.activeElixirId !== undefined &&
-			payload.elixirRemainingSecs > 0 &&
-			ELIXIRS[payload.activeElixirId]?.elixirEffect === "speed_boost";
+		const elixirId = payload.activeElixirId;
+		const elixirDef = elixirId !== undefined ? ELIXIRS[elixirId] : undefined;
+		const elixirAlive = elixirDef !== undefined && payload.elixirRemainingSecs > 0;
 
+		// Store the active def so effect functions can read tier-specific params
+		activeElixirDef = elixirAlive ? elixirDef : undefined;
+
+		// ── Speed Boost ──────────────────────────────────────────────
+		const hasSpeed = elixirAlive && elixirDef!.elixirEffect === "speed_boost";
 		if (hasSpeed && !speedBoostActive) {
 			speedBoostActive = true;
 			applySpeedBoost(true);
@@ -77,6 +96,29 @@ function initializeMovementSystem() {
 			applySpeedBoost(false);
 			log("[MOVEMENT] Speed boost expired");
 		}
+
+		// ── Slow Fall ────────────────────────────────────────────────
+		const hasSlowFall = elixirAlive && elixirDef!.elixirEffect === "slow_fall";
+		if (hasSlowFall && !slowFallActive) {
+			slowFallActive = true;
+			applySlowFall(true);
+			log("[MOVEMENT] Slow fall activated");
+		} else if (!hasSlowFall && slowFallActive) {
+			slowFallActive = false;
+			applySlowFall(false);
+			log("[MOVEMENT] Slow fall expired");
+		}
+
+		// ── Invisibility (one-shot 5s burst on first sync) ───────────
+		const hasInvis = elixirAlive && elixirDef!.elixirEffect === "invisibility";
+		if (hasInvis && !invisibilityActive) {
+			invisibilityActive = true;
+			task.spawn(() => triggerInvisibilityBurst());
+			log("[MOVEMENT] Invisibility burst triggered");
+		} else if (!hasInvis && invisibilityActive) {
+			invisibilityActive = false;
+			log("[MOVEMENT] Invisibility elixir expired");
+		}
 	});
 }
 
@@ -85,7 +127,87 @@ function applySpeedBoost(active: boolean): void {
 	if (!character) return;
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
-	humanoid.WalkSpeed = active ? BASE_WALK_SPEED * SPEED_BOOST_MULTIPLIER : BASE_WALK_SPEED;
+	const mult = activeElixirDef?.speedMultiplier ?? DEFAULT_SPEED_MULTIPLIER;
+	humanoid.WalkSpeed = active ? BASE_WALK_SPEED * mult : BASE_WALK_SPEED;
+}
+
+/**
+ * Slow-fall: attach a BodyForce to HumanoidRootPart that counteracts most
+ * of gravity, giving the player a floaty, feather-like descent.
+ */
+function applySlowFall(active: boolean): void {
+	const character = Players.LocalPlayer?.Character;
+	if (!character) return;
+	const rootPart = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+	if (!rootPart) return;
+
+	if (active) {
+		// Remove any stale force first
+		if (slowFallForce && slowFallForce.Parent) slowFallForce.Destroy();
+		const bf = new Instance("BodyForce");
+		bf.Name = "SlowFallForce";
+		// Workspace.Gravity defaults to 196.2; counteract a tier-specific fraction
+		const mass = rootPart.AssemblyMass;
+		const reduction = activeElixirDef?.gravityReduction ?? DEFAULT_GRAVITY_REDUCTION;
+		bf.Force = new Vector3(0, mass * Workspace.Gravity * reduction, 0);
+		bf.Parent = rootPart;
+		slowFallForce = bf;
+	} else {
+		if (slowFallForce && slowFallForce.Parent) {
+			slowFallForce.Destroy();
+		}
+		slowFallForce = undefined;
+	}
+}
+
+/**
+ * Invisibility: 5-second burst of full transparency on character, then
+ * restore. Only triggers once per activation (won't re-fire on every
+ * EffectSync tick).
+ */
+function triggerInvisibilityBurst(): void {
+	if (invisibilityBurstRunning) return;
+	invisibilityBurstRunning = true;
+
+	const character = Players.LocalPlayer?.Character;
+	if (!character) {
+		invisibilityBurstRunning = false;
+		return;
+	}
+
+	// Store original transparency values
+	const originals = new Map<BasePart, number>();
+	character.GetDescendants().forEach((d) => {
+		if (d.IsA("BasePart")) {
+			const part = d as BasePart;
+			originals.set(part, part.Transparency);
+			part.Transparency = 1;
+		}
+	});
+
+	// Also hide any face decals / surface guis
+	character.GetDescendants().forEach((d) => {
+		if (d.IsA("Decal") || d.IsA("Texture")) {
+			(d as Decal).Transparency = 1;
+		}
+	});
+
+	const burstSecs = activeElixirDef?.burstDurationSecs ?? 5;
+	task.wait(burstSecs);
+
+	// Restore original transparency
+	if (Players.LocalPlayer?.Character === character) {
+		originals.forEach((orig, part) => {
+			if (part.Parent) part.Transparency = orig;
+		});
+		character.GetDescendants().forEach((d) => {
+			if (d.IsA("Decal") || d.IsA("Texture")) {
+				(d as Decal).Transparency = 0;
+			}
+		});
+	}
+
+	invisibilityBurstRunning = false;
 }
 
 export { initializeMovementSystem };

@@ -197,6 +197,154 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 
 		model.Destroy();
 	},
+
+	/**
+	 * SHRINK: Gradually shrink the NPC over 5 seconds, then a small
+	 * particle implosion and destroy. Eerie and unsettling.
+	 */
+	SHRINK: (model: Model) => {
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.PlatformStand = true;
+			humanoid.WalkSpeed = 0;
+			humanoid.JumpPower = 0;
+		}
+
+		// Disable collisions so parts don't fight the ground
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).CanCollide = false;
+			}
+		});
+
+		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+
+		// Anchor root so model doesn't fall through the floor while shrinking
+		if (rootPart) {
+			rootPart.Anchored = true;
+		}
+
+		// Tint sickly green-yellow to show the curse taking hold
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).Color = Color3.fromRGB(120, 140, 60);
+			}
+		});
+
+		// Gradually shrink over 5 seconds (50 steps)
+		for (let i = 0; i < 50; i++) {
+			const scale = 1 - i / 50;
+			model.GetDescendants().forEach((descendant) => {
+				if (descendant.IsA("BasePart")) {
+					const part = descendant as BasePart;
+					part.Size = part.Size.mul(scale > 0.02 ? 0.98 : 0);
+					part.Transparency = math.min(1, part.Transparency + 0.008);
+				}
+			});
+			task.wait(0.1);
+		}
+
+		// Implosion particle burst
+		if (rootPart) {
+			const emitter = new Instance("ParticleEmitter");
+			emitter.Parent = rootPart;
+			emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+			emitter.Speed = new NumberRange(8, 14);
+			emitter.Lifetime = new NumberRange(0.3, 0.6);
+			emitter.Size = new NumberSequence(0.6, 0);
+			emitter.Color = new ColorSequence(Color3.fromRGB(100, 120, 50));
+			emitter.Rate = 200;
+			emitter.SpreadAngle = new Vector2(180, 180);
+			emitter.Transparency = new NumberSequence([
+				new NumberSequenceKeypoint(0, 0),
+				new NumberSequenceKeypoint(1, 1),
+			]);
+			task.wait(0.4);
+			emitter.Rate = 0;
+		}
+
+		task.wait(0.5);
+		model.Destroy();
+	},
+
+	/**
+	 * DISMEMBER: Progressively break Motor6D joints so limbs detach one by
+	 * one and tumble away under physics. After all joints are severed the
+	 * remains fade and are destroyed.
+	 */
+	DISMEMBER: (model: Model) => {
+		if (!isNPCActive(model)) return;
+		markNPCDying(model);
+
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.PlatformStand = true;
+			humanoid.WalkSpeed = 0;
+			humanoid.JumpPower = 0;
+		}
+
+		// Tint dark crimson to signal the blight spreading
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).Color = Color3.fromRGB(80, 20, 20);
+			}
+		});
+
+		// Collect all Motor6D joints for sequential destruction
+		const joints: Motor6D[] = [];
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("Motor6D")) {
+				joints.push(descendant as Motor6D);
+			}
+		});
+
+		// Detach joints one at a time with a delay between each
+		const delayPerJoint = joints.size() > 0 ? 5 / joints.size() : 1;
+		for (const joint of joints) {
+			if (!joint.Parent) continue;
+
+			// Unanchor the limb so it falls with physics
+			const part1 = joint.Part1;
+			if (part1) {
+				(part1 as BasePart).CanCollide = true;
+
+				// Small outward impulse so the limb tumbles away
+				const impulse = new Instance("BodyVelocity");
+				impulse.Velocity = new Vector3(math.random(-4, 4), math.random(2, 6), math.random(-4, 4));
+				impulse.MaxForce = new Vector3(math.huge, math.huge, math.huge);
+				impulse.P = 1000;
+				impulse.Parent = part1;
+
+				// Remove impulse after a short burst
+				task.delay(0.3, () => {
+					if (impulse.Parent) impulse.Destroy();
+				});
+			}
+
+			joint.Destroy();
+			task.wait(delayPerJoint);
+		}
+
+		// Kill humanoid after all joints severed
+		if (humanoid) {
+			humanoid.Health = 0;
+		}
+
+		// Fade remains and destroy
+		for (let i = 0; i <= 10; i++) {
+			model.GetDescendants().forEach((descendant) => {
+				if (descendant.IsA("BasePart")) {
+					(descendant as BasePart).Transparency = math.min(1, i / 10);
+				}
+			});
+			task.wait(0.15);
+		}
+
+		model.Destroy();
+	},
 };
 
 /**

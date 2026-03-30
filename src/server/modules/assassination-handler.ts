@@ -142,6 +142,12 @@ function initializeAssassinationHandler() {
 		if (poisonDef && poisonDef.poisonEffect === "floating_death") {
 			selectedStyle = "LEVITATION";
 			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
+		} else if (poisonDef && poisonDef.poisonEffect === "shrinking_death") {
+			selectedStyle = "SHRINK";
+			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
+		} else if (poisonDef && poisonDef.poisonEffect === "dismember_death") {
+			selectedStyle = "DISMEMBER";
+			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
 		} else {
 			selectedStyle = DEATH_STYLES[math.random(0, DEATH_STYLES.size() - 1)];
 		}

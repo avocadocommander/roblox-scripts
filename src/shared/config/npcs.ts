@@ -177,6 +177,13 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"We are not finished. We are never finished.",
 			],
 		},
+		shop: {
+			shopItems: [
+				{ itemId: "fleetfoot_elixir", price: 280 },
+				{ itemId: "featherfall_draught", price: 400 },
+				{ itemId: "veil_of_silence", price: 580 },
+			],
+		},
 	},
 	"Lyra Goldmead": {
 		...std("Lyra Goldmead", "F", "Human", "Merchant", "Merchant"),
@@ -201,7 +208,11 @@ export const NPC_REGISTRY: NPCRegistry = {
 			],
 		},
 		shop: {
-			shopItems: [{ itemId: "levitation_poison", price: 300 }],
+			shopItems: [
+				{ itemId: "levitation_poison", price: 300 },
+				{ itemId: "shrinking_curse", price: 450 },
+				{ itemId: "dismembering_blight", price: 700 },
+			],
 		},
 	},
 	"Edric Thornwell": std("Edric Thornwell", "M", "Human", "Commoner"),
@@ -229,7 +240,11 @@ export const NPC_REGISTRY: NPCRegistry = {
 			],
 		},
 		shop: {
-			shopItems: [{ itemId: "fleetfoot_elixir", price: 250 }],
+			shopItems: [
+				{ itemId: "fleetfoot_elixir", price: 250 },
+				{ itemId: "featherfall_draught", price: 380 },
+				{ itemId: "veil_of_silence", price: 550 },
+			],
 		},
 	},
 	"Halric Stonvein": std("Halric Stonvein", "M", "Human", "Commoner"),
@@ -309,7 +324,11 @@ export const NPC_REGISTRY: NPCRegistry = {
 		shop: {
 			shopItems: [
 				{ itemId: "levitation_poison", price: 350 },
+				{ itemId: "shrinking_curse", price: 500 },
+				{ itemId: "dismembering_blight", price: 750 },
 				{ itemId: "fleetfoot_elixir", price: 300 },
+				{ itemId: "featherfall_draught", price: 400 },
+				{ itemId: "veil_of_silence", price: 600 },
 			],
 		},
 	},
