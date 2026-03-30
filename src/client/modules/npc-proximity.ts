@@ -5,9 +5,10 @@ import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
 import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { isNPCKillable, getNPCInteraction, hasNPCDialog } from "shared/config/npcs";
+import { getInspectDef } from "shared/config/inspectables";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
-import { requestOpenDialog, isDialogOpen } from "./npc-dialog";
+import { requestOpenDialog, requestOpenInspect, isDialogOpen } from "./npc-dialog";
 import {
 	getPlayerAssassinationRemote,
 	getPlayerWantedRemote,
@@ -36,6 +37,7 @@ const PROXIMITY_RANGE = 5; // Only show when very close to NPC
 const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further away
 const WANTED_PLAYER_RANGE = 15; // Range for PvP assassination (matches server MAX_ASSASSINATION_DISTANCE)
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
+const INSPECT_RANGE = 8; // Distance at which inspectable objects show prompt
 
 // Assassinate button colors — green when safe, red when spotted
 const BTN_SAFE = Color3.fromRGB(68, 138, 82);
@@ -43,6 +45,7 @@ const BTN_SPOTTED = UI_THEME.danger;
 
 let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
+let closestInspectableInRange: Model | undefined = undefined;
 
 // ── Wanted Player Tracking ──────────────────────────────────────────────────────
 const wantedPlayerInfo = new Map<string, { gold: number; displayName: string }>();
@@ -283,6 +286,104 @@ function setupNPCProximity(npc: Model) {
 	npcUIMap.set(npc, ui);
 }
 
+// ── Inspectable Object Billboards ───────────────────────────────────────────────
+
+interface InspectableUI {
+	billboard: BillboardGui;
+	nameLabel: TextLabel;
+	inspectPrompt: TextButton | undefined;
+}
+
+const inspectableUIMap = new Map<Model, InspectableUI>();
+
+function createInspectBillboard(model: Model): BillboardGui {
+	const inspectId = model.GetAttribute("inspectId") as string;
+	const def = getInspectDef(inspectId);
+	const displayName = def ? def.displayName : model.Name;
+
+	const billboard = new Instance("BillboardGui");
+	billboard.Size = new UDim2(5, 0, 1.4, 0);
+	billboard.MaxDistance = math.huge;
+	billboard.StudsOffset = new Vector3(0, 4, 0);
+	billboard.AlwaysOnTop = false;
+	billboard.Parent = model;
+
+	const card = new Instance("Frame");
+	card.Name = "InspectCard";
+	card.Size = new UDim2(1, 0, 0.65, 0);
+	card.Position = new UDim2(0, 0, 0, 0);
+	card.BackgroundColor3 = UI_THEME.bg;
+	card.BackgroundTransparency = 0.15;
+	card.BorderSizePixel = 0;
+	card.Visible = false;
+	card.Parent = billboard;
+
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = new UDim(0, 5);
+	cardCorner.Parent = card;
+
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = UI_THEME.textHeader;
+	cardStroke.Thickness = 1.2;
+	cardStroke.Parent = card;
+
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Name = "TextLabel";
+	nameLabel.Size = new UDim2(1, -6, 1, 0);
+	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = UI_THEME.textHeader;
+	nameLabel.Font = UI_THEME.fontDisplay;
+	nameLabel.TextSize = 13;
+	nameLabel.Text = displayName;
+	nameLabel.BorderSizePixel = 0;
+	nameLabel.Parent = card;
+
+	return billboard;
+}
+
+function createInspectPrompt(billboard: BillboardGui, model: Model): TextButton {
+	const button = new Instance("TextButton");
+	button.Size = new UDim2(1, 0, 0.42, 0);
+	button.Position = new UDim2(0, 0, 0.68, 0);
+	button.BackgroundColor3 = UI_THEME.bgInset;
+	button.BackgroundTransparency = 0.1;
+	button.TextColor3 = UI_THEME.textHeader;
+	button.Font = UI_THEME.fontBold;
+	button.TextSize = 11;
+	button.Text = "INSPECT";
+	button.BorderSizePixel = 0;
+	button.Parent = billboard;
+
+	const btnCorner = new Instance("UICorner");
+	btnCorner.CornerRadius = new UDim(0, 4);
+	btnCorner.Parent = button;
+
+	const btnStroke = new Instance("UIStroke");
+	btnStroke.Color = UI_THEME.textHeader;
+	btnStroke.Thickness = 0.8;
+	btnStroke.Parent = button;
+
+	button.MouseButton1Click.Connect(() => {
+		requestOpenInspect(model);
+	});
+
+	return button;
+}
+
+function setupInspectableProximity(model: Model): void {
+	if (inspectableUIMap.has(model)) return;
+
+	const billboard = createInspectBillboard(model);
+	const nameLabel = billboard.FindFirstChild("TextLabel") as TextLabel;
+
+	inspectableUIMap.set(model, {
+		billboard,
+		nameLabel,
+		inspectPrompt: undefined,
+	});
+}
+
 function isNPCInCameraFrame(camera: Instance, npcPosition: Vector3): boolean {
 	// Simplified: just check if NPC is close enough (proximity-based button show)
 	// Camera frame checks were causing issues, so we rely on proximity range instead
@@ -492,6 +593,41 @@ function updateNPCProximityUI() {
 		}
 	}
 
+	// ── Inspectable object proximity ────────────────────────────────────────────────
+	closestInspectableInRange = undefined;
+	{
+		const inspectables = Workspace.GetDescendants().filter(
+			(inst): inst is Model => inst.IsA("Model") && inst.GetAttribute("inspectId") !== undefined,
+		);
+		let closestInspDist = INSPECT_RANGE + 1;
+		for (const model of inspectables) {
+			setupInspectableProximity(model);
+			const part = model.PrimaryPart ?? (model.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
+			if (!part) continue;
+			const dist = playerPosition.sub(part.Position).Magnitude;
+
+			// Show/hide the name card based on a wider visible range
+			const ui = inspectableUIMap.get(model);
+			if (ui) {
+				const card = ui.billboard.FindFirstChild("InspectCard") as Frame | undefined;
+				if (card) card.Visible = dist <= INSPECT_RANGE;
+			}
+
+			if (dist < closestInspDist) {
+				closestInspDist = dist;
+				closestInspectableInRange = model;
+			}
+		}
+
+		// Clean up billboards for inspectables that no longer exist
+		for (const [model, ui] of inspectableUIMap) {
+			if (!model.Parent) {
+				ui.billboard.Destroy();
+				inspectableUIMap.delete(model);
+			}
+		}
+	}
+
 	// ── Wanted player proximity ─────────────────────────────────────────────────────
 	closestWantedPlayerInRange = undefined;
 	ensureWantedBillboards();
@@ -546,6 +682,21 @@ function updateNPCProximityUI() {
 			if (ui.talkButton) {
 				ui.talkButton.Destroy();
 				ui.talkButton = undefined;
+			}
+		}
+	}
+
+	// Inspectable pass: show/hide inspect prompt on closest inspectable
+	for (const [model, ui] of inspectableUIMap) {
+		const shouldShow = model === closestInspectableInRange && !isDialogOpen();
+		if (shouldShow) {
+			if (!ui.inspectPrompt) {
+				ui.inspectPrompt = createInspectPrompt(ui.billboard, model);
+			}
+		} else {
+			if (ui.inspectPrompt) {
+				ui.inspectPrompt.Destroy();
+				ui.inspectPrompt = undefined;
 			}
 		}
 	}
@@ -732,12 +883,13 @@ function setStealthing(stealthing: boolean) {
  * Priority: assassinate (wanted player) > assassinate (NPC) > talk > none.
  * "none" means no valid action — the button should be hidden.
  */
-export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "jump" | "none";
+export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "inspect" | "jump" | "none";
 
 export function getActionContext(): ActionContext {
 	if (isCurrentlyStealthing && closestWantedPlayerInRange) return "assassinate_player";
 	if (isCurrentlyStealthing && closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) return "assassinate_npc";
 	if (closestNPCInRange && !isDialogOpen()) return "talk";
+	if (closestInspectableInRange && !isDialogOpen()) return "inspect";
 	return "jump";
 }
 
@@ -750,6 +902,8 @@ export function fireCurrentAction(): void {
 		assassinationRemote.FireServer(closestNPCInRange);
 	} else if (ctx === "talk" && closestNPCInRange) {
 		requestOpenDialog(closestNPCInRange);
+	} else if (ctx === "inspect" && closestInspectableInRange) {
+		requestOpenInspect(closestInspectableInRange);
 	} else if (ctx === "jump") {
 		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {

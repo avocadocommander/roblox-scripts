@@ -21,6 +21,7 @@ import { RARITY_COLORS, RARITY_LABELS, RARITY_BG_COLORS } from "shared/inventory
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { spawnFloatingText } from "./npc-floating-text";
+import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ const dialogPayloadRemote = getDialogPayloadRemote();
 const purchaseResultRemote = getPurchaseResultRemote();
 const floatingTextRemote = getFloatingNPCTextRemote();
 const turnInRemote = getTurnInBountiesDialogRemote();
+const openInspectRemote = getOpenInspectRemote();
+const inspectPayloadRemote = getInspectPayloadRemote();
 
 // ── Scaling ───────────────────────────────────────────────────────────────────
 
@@ -48,6 +51,8 @@ const TRADE_H = 420; // height in trade mode (compact, grid fills space)
 
 let dialogOpen = false;
 let tradeOpen = false;
+let inspectMode = false;
+let inspectModelRef: Model | undefined;
 let currentPayload: DialogPayload | undefined;
 let currentChatIndex = 0;
 const selectedItemIds = new Set<string>();
@@ -56,6 +61,7 @@ let purchasing = false;
 let distanceCheckConn: RBXScriptConnection | undefined;
 
 const DIALOG_MAX_DISTANCE = 15;
+const INSPECT_MAX_DISTANCE = 10;
 
 // ── UI refs — single panel ────────────────────────────────────────────────────
 
@@ -1173,6 +1179,8 @@ function handleLeave(): void {
 function closeDialog(): void {
 	dialogOpen = false;
 	tradeOpen = false;
+	inspectMode = false;
+	inspectModelRef = undefined;
 	currentPayload = undefined;
 	selectedItemIds.clear();
 	purchasing = false;
@@ -1202,6 +1210,134 @@ function closeDialog(): void {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  INSPECT MODE — reuses the dialog panel for world-object inspection
+// ══════════════════════════════════════════════════════════════════════════════
+
+function openInspectDialog(payload: InspectPayload): void {
+	dialogOpen = true;
+	tradeOpen = false;
+	inspectMode = true;
+	currentPayload = undefined;
+	currentChatIndex = 0;
+
+	// Find the actual model in world for distance check + viewport render
+	inspectModelRef = Workspace.FindFirstChild(payload.modelName) as Model | undefined;
+
+	startInspectDistanceCheck();
+	setupInspectViewport(payload.modelName);
+
+	if (npcNameLabel) {
+		npcNameLabel.Text = payload.displayName;
+		npcNameLabel.TextColor3 = UI_THEME.gold;
+	}
+
+	const statusSub = dialogRoot?.FindFirstChild("TopRow")?.FindFirstChild("NPCStatus") as TextLabel | undefined;
+	if (statusSub) {
+		statusSub.Text = "Inspectable";
+		statusSub.TextColor3 = UI_THEME.textMuted;
+	}
+
+	// Hide trade, show dialog text with the description
+	if (tradeSection) tradeSection.Visible = false;
+	if (dialogTextLabel) {
+		dialogTextLabel.Visible = true;
+		dialogTextLabel.Text = payload.description;
+	}
+	if (playerGoldLabel) playerGoldLabel.Visible = false;
+
+	// Only show Leave button
+	clearOptions();
+	if (optionsFrame) {
+		addDialogOption(optionsFrame, 1, "Leave", UI_THEME.textMuted, () => {
+			closeDialog();
+		});
+	}
+
+	// Open with animation
+	if (dialogRoot) {
+		dialogRoot.Visible = true;
+		dialogRoot.BackgroundTransparency = 0.6;
+		dialogRoot.Size = new UDim2(0, sc(260), 0, sc(220));
+		TweenService.Create(dialogRoot, new TweenInfo(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size: new UDim2(0, sc(PANEL_W), 0, sc(DIALOG_H)),
+			BackgroundTransparency: UI_THEME.bgTransparency,
+		}).Play();
+	}
+}
+
+function setupInspectViewport(modelName: string): void {
+	if (headshotViewport === undefined) return;
+	clearHeadshot();
+
+	const worldModel = Workspace.FindFirstChild(modelName) as Model | undefined;
+	if (!worldModel) return;
+
+	const clone = worldModel.Clone();
+	clone.Name = "InspectClone";
+
+	// Remove scripts from the clone
+	for (const child of clone.GetDescendants()) {
+		if (child.IsA("Script") || child.IsA("LocalScript")) {
+			child.Destroy();
+		}
+	}
+
+	// Remove humanoid if present
+	const hum = clone.FindFirstChildOfClass("Humanoid");
+	if (hum) hum.Destroy();
+
+	clone.Parent = headshotViewport;
+	headshotModel = clone;
+
+	// Set up camera to frame the entire model
+	const cam = new Instance("Camera");
+	cam.FieldOfView = 40;
+	cam.Parent = headshotViewport;
+	headshotViewport.CurrentCamera = cam;
+	headshotCamera = cam;
+
+	// Use model extents to frame the object
+	const [cf, size] = clone.GetBoundingBox();
+	const maxDim = math.max(size.X, size.Y, size.Z);
+	const dist = maxDim * 1.8;
+	const center = cf.Position;
+	cam.CFrame = new CFrame(center.add(new Vector3(dist * 0.5, dist * 0.4, dist)), center);
+}
+
+function startInspectDistanceCheck(): void {
+	stopDistanceCheck();
+	const player = Players.LocalPlayer;
+	if (!player) return;
+
+	distanceCheckConn = RunService.Heartbeat.Connect(() => {
+		if (!dialogOpen || !inspectMode) {
+			stopDistanceCheck();
+			return;
+		}
+		const character = player.Character;
+		if (!character) return;
+		const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (!hrp) return;
+
+		if (!inspectModelRef || !inspectModelRef.Parent) {
+			closeDialog();
+			return;
+		}
+
+		const part =
+			inspectModelRef.PrimaryPart ?? (inspectModelRef.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
+		if (!part) {
+			closeDialog();
+			return;
+		}
+
+		if (hrp.Position.sub(part.Position).Magnitude > INSPECT_MAX_DISTANCE) {
+			closeDialog();
+		}
+	});
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  PUBLIC API
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1214,11 +1350,20 @@ export function requestOpenDialog(npcModel: Model): void {
 	openDialogRemote.FireServer(npcModel);
 }
 
+export function requestOpenInspect(model: Model): void {
+	if (dialogOpen) return;
+	openInspectRemote.FireServer(model);
+}
+
 export function initializeDialogUI(screenGui: ScreenGui): void {
 	buildDialogPanel(screenGui);
 
 	dialogPayloadRemote.OnClientEvent.Connect((data: unknown) => {
 		openDialog(data as DialogPayload);
+	});
+
+	inspectPayloadRemote.OnClientEvent.Connect((data: unknown) => {
+		openInspectDialog(data as InspectPayload);
 	});
 
 	purchaseResultRemote.OnClientEvent.Connect((_success: unknown, _message: unknown) => {

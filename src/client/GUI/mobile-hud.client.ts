@@ -94,6 +94,16 @@ const ACTION_STYLES: Record<ActionContext, ActionStyle> = {
 		glowColor: Color3.fromRGB(180, 40, 30),
 		glowTransparency: 0.4,
 	},
+	inspect: {
+		icon: "?",
+		label: "LOOK",
+		iconColor: UI_THEME.textHeader,
+		labelColor: UI_THEME.textPrimary,
+		borderColor: UI_THEME.textHeader,
+		bgColor: Color3.fromRGB(18, 18, 22),
+		glowColor: UI_THEME.textHeader,
+		glowTransparency: 0.75,
+	},
 };
 
 // -- Circular button factory --------------------------------------------------
