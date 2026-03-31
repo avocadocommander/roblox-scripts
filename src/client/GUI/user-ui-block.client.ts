@@ -138,7 +138,7 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	// Tooltip (positioned above the effect row, hidden by default)
 	const tooltip = new Instance("TextLabel");
 	tooltip.Name = "EffectTooltip";
-	tooltip.Size = new UDim2(0, sc(220), 0, 0);
+	tooltip.Size = new UDim2(0, sc(280), 0, 0);
 	tooltip.AutomaticSize = Enum.AutomaticSize.Y;
 	tooltip.Position = new UDim2(0, 0, 0, sc(-4));
 	tooltip.AnchorPoint = new Vector2(0, 1);
@@ -173,14 +173,45 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	ttPad.PaddingRight = new UDim(0, sc(6));
 	ttPad.Parent = tooltip;
 
+	// Track hover on both the button and the tooltip to prevent flicker
+	let hoveringButton = false;
+	let hoveringTooltip = false;
+
+	function showTooltipIfNeeded(): void {
+		if (!effectTooltip) return;
+		if (hoveringButton || hoveringTooltip) {
+			refreshTooltipText();
+			effectTooltip.Visible = true;
+		}
+	}
+
+	function hideTooltipIfNeeded(): void {
+		// Small delay to let the other element register a MouseEnter
+		task.delay(0.05, () => {
+			if (!hoveringButton && !hoveringTooltip && effectTooltip) {
+				effectTooltip.Visible = false;
+			}
+		});
+	}
+
 	// Hover: show tooltip on mouse enter, hide on mouse leave
 	effHoverBtn.MouseEnter.Connect(() => {
-		if (!effectTooltip) return;
-		refreshTooltipText();
-		effectTooltip.Visible = true;
+		hoveringButton = true;
+		showTooltipIfNeeded();
 	});
 	effHoverBtn.MouseLeave.Connect(() => {
-		if (effectTooltip) effectTooltip.Visible = false;
+		hoveringButton = false;
+		hideTooltipIfNeeded();
+	});
+
+	// Keep tooltip visible while hovering the tooltip itself
+	tooltip.MouseEnter.Connect(() => {
+		hoveringTooltip = true;
+		showTooltipIfNeeded();
+	});
+	tooltip.MouseLeave.Connect(() => {
+		hoveringTooltip = false;
+		hideTooltipIfNeeded();
 	});
 
 	// Tap: toggle tooltip (for mobile)
@@ -506,18 +537,19 @@ function formatTime(secs: number): string {
 /** Build the tooltip text from cached effect state. */
 function refreshTooltipText(): void {
 	if (!effectTooltip || !cachedEffectPayload) return;
-	const lines: string[] = [];
+	let text = "";
 	if (cachedEffectPayload.activePoisonId && cachedEffectPayload.poisonRemainingSecs > 0) {
 		const def = POISONS[cachedEffectPayload.activePoisonId];
 		const name = def ? def.name : "Poison";
-		lines.push("~ " + name + "  --  " + formatTime(cachedEffectPayload.poisonRemainingSecs));
+		text += "~ " + name + " -- " + formatTime(cachedEffectPayload.poisonRemainingSecs);
 	}
 	if (cachedEffectPayload.activeElixirId && cachedEffectPayload.elixirRemainingSecs > 0) {
 		const def = ELIXIRS[cachedEffectPayload.activeElixirId];
 		const name = def ? def.name : "Elixir";
-		lines.push("+ " + name + "  --  " + formatTime(cachedEffectPayload.elixirRemainingSecs));
+		if (text !== "") text += "\n";
+		text += "+ " + name + " -- " + formatTime(cachedEffectPayload.elixirRemainingSecs);
 	}
-	effectTooltip.Text = lines.size() > 0 ? lines.join("\n") : "";
+	effectTooltip.Text = text;
 }
 
 function updateEffects(payload: EffectSyncPayload): void {
