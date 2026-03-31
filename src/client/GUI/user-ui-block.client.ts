@@ -57,6 +57,11 @@ let effectTooltip: TextLabel | undefined;
 
 // Cached effect state for tooltip
 let cachedEffectPayload: EffectSyncPayload | undefined;
+// Which effect side is currently hovered (for per-item tooltip)
+let activeHoveredSide: "poison" | "elixir" | undefined;
+// Hover-button refs so updateEffects can resize them
+let poisonHoverBtn_ref: TextButton | undefined;
+let elixirHoverBtn_ref: TextButton | undefined;
 
 const XP_PER_LEVEL = 1000;
 const TWEEN_XP = new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
@@ -126,14 +131,24 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	elixirLabel.Visible = false;
 	elixirLabel.Parent = effRow;
 
-	// Invisible hover/tap button covering the entire row
-	const effHoverBtn = new Instance("TextButton");
-	effHoverBtn.Name = "EffectHover";
-	effHoverBtn.Size = new UDim2(1, 0, 1, 0);
-	effHoverBtn.BackgroundTransparency = 1;
-	effHoverBtn.Text = "";
-	effHoverBtn.ZIndex = 5;
-	effHoverBtn.Parent = effRow;
+	// Invisible hover/tap buttons — one per label so each shows its own tooltip
+	const poisonHoverBtn = new Instance("TextButton");
+	poisonHoverBtn.Name = "PoisonHover";
+	poisonHoverBtn.Size = new UDim2(0.5, 0, 1, 0);
+	poisonHoverBtn.Position = new UDim2(0, 0, 0, 0);
+	poisonHoverBtn.BackgroundTransparency = 1;
+	poisonHoverBtn.Text = "";
+	poisonHoverBtn.ZIndex = 5;
+	poisonHoverBtn.Parent = effRow;
+
+	const elixirHoverBtn = new Instance("TextButton");
+	elixirHoverBtn.Name = "ElixirHover";
+	elixirHoverBtn.Size = new UDim2(0.5, 0, 1, 0);
+	elixirHoverBtn.Position = new UDim2(0.5, 0, 0, 0);
+	elixirHoverBtn.BackgroundTransparency = 1;
+	elixirHoverBtn.Text = "";
+	elixirHoverBtn.ZIndex = 5;
+	elixirHoverBtn.Parent = effRow;
 
 	// Tooltip (positioned above the effect row, hidden by default)
 	const tooltip = new Instance("TextLabel");
@@ -173,59 +188,82 @@ function buildPlayerPanel(screenGui: ScreenGui): void {
 	ttPad.PaddingRight = new UDim(0, sc(6));
 	ttPad.Parent = tooltip;
 
-	// Track hover on both the button and the tooltip to prevent flicker
-	let hoveringButton = false;
+	poisonHoverBtn_ref = poisonHoverBtn;
+	elixirHoverBtn_ref = elixirHoverBtn;
+
+	// Which side is currently hovered: "poison", "elixir", or undefined
 	let hoveringTooltip = false;
 
-	function showTooltipIfNeeded(): void {
-		if (!effectTooltip) return;
-		if (hoveringButton || hoveringTooltip) {
-			refreshTooltipText();
-			effectTooltip.Visible = true;
+	function showTooltipForSide(side: "poison" | "elixir"): void {
+		if (!effectTooltip || !cachedEffectPayload) return;
+		activeHoveredSide = side;
+		refreshTooltipText();
+		// Position tooltip above whichever half was hovered
+		if (side === "elixir" && elixirLabel && elixirLabel.Visible) {
+			effectTooltip.Position = new UDim2(elixirLabel.Position.X.Scale, 0, 0, sc(-4));
+		} else {
+			effectTooltip.Position = new UDim2(0, 0, 0, sc(-4));
 		}
+		effectTooltip.Visible = true;
 	}
 
 	function hideTooltipIfNeeded(): void {
-		// Small delay to let the other element register a MouseEnter
 		task.delay(0.05, () => {
-			if (!hoveringButton && !hoveringTooltip && effectTooltip) {
+			if (activeHoveredSide === undefined && !hoveringTooltip && effectTooltip) {
 				effectTooltip.Visible = false;
 			}
 		});
 	}
 
-	// Hover: show tooltip on mouse enter, hide on mouse leave
-	effHoverBtn.MouseEnter.Connect(() => {
-		hoveringButton = true;
-		showTooltipIfNeeded();
+	// ── Poison hover ──────────────────────────────────────────────────
+	poisonHoverBtn.MouseEnter.Connect(() => {
+		showTooltipForSide("poison");
 	});
-	effHoverBtn.MouseLeave.Connect(() => {
-		hoveringButton = false;
+	poisonHoverBtn.MouseLeave.Connect(() => {
+		activeHoveredSide = undefined;
 		hideTooltipIfNeeded();
+	});
+	poisonHoverBtn.MouseButton1Click.Connect(() => {
+		if (!effectTooltip) return;
+		if (effectTooltip.Visible && activeHoveredSide === "poison") {
+			effectTooltip.Visible = false;
+			activeHoveredSide = undefined;
+			return;
+		}
+		showTooltipForSide("poison");
+		task.delay(4, () => {
+			if (effectTooltip && activeHoveredSide === "poison") effectTooltip.Visible = false;
+		});
+	});
+
+	// ── Elixir hover ──────────────────────────────────────────────────
+	elixirHoverBtn.MouseEnter.Connect(() => {
+		showTooltipForSide("elixir");
+	});
+	elixirHoverBtn.MouseLeave.Connect(() => {
+		activeHoveredSide = undefined;
+		hideTooltipIfNeeded();
+	});
+	elixirHoverBtn.MouseButton1Click.Connect(() => {
+		if (!effectTooltip) return;
+		if (effectTooltip.Visible && activeHoveredSide === "elixir") {
+			effectTooltip.Visible = false;
+			activeHoveredSide = undefined;
+			return;
+		}
+		showTooltipForSide("elixir");
+		task.delay(4, () => {
+			if (effectTooltip && activeHoveredSide === "elixir") effectTooltip.Visible = false;
+		});
 	});
 
 	// Keep tooltip visible while hovering the tooltip itself
 	tooltip.MouseEnter.Connect(() => {
 		hoveringTooltip = true;
-		showTooltipIfNeeded();
 	});
 	tooltip.MouseLeave.Connect(() => {
 		hoveringTooltip = false;
 		hideTooltipIfNeeded();
-	});
-
-	// Tap: toggle tooltip (for mobile)
-	effHoverBtn.MouseButton1Click.Connect(() => {
-		if (!effectTooltip) return;
-		if (effectTooltip.Visible) {
-			effectTooltip.Visible = false;
-			return;
-		}
-		refreshTooltipText();
-		effectTooltip.Visible = true;
-		task.delay(4, () => {
-			if (effectTooltip) effectTooltip.Visible = false;
-		});
 	});
 
 	// ═════════════════════════════════════════════════════════════════════════
@@ -534,20 +572,27 @@ function formatTime(secs: number): string {
 	return s + "s";
 }
 
-/** Build the tooltip text from cached effect state. */
+/** Build the tooltip text for the currently hovered effect side. */
 function refreshTooltipText(): void {
 	if (!effectTooltip || !cachedEffectPayload) return;
 	let text = "";
-	if (cachedEffectPayload.activePoisonId && cachedEffectPayload.poisonRemainingSecs > 0) {
+	if (
+		activeHoveredSide === "poison" &&
+		cachedEffectPayload.activePoisonId !== undefined &&
+		cachedEffectPayload.poisonRemainingSecs > 0
+	) {
 		const def = POISONS[cachedEffectPayload.activePoisonId];
-		const name = def ? def.name : "Poison";
-		text += "~ " + name + " -- " + formatTime(cachedEffectPayload.poisonRemainingSecs);
+		const name = def !== undefined ? def.name : "Poison";
+		text = "~ " + name + " -- " + formatTime(cachedEffectPayload.poisonRemainingSecs);
 	}
-	if (cachedEffectPayload.activeElixirId && cachedEffectPayload.elixirRemainingSecs > 0) {
+	if (
+		activeHoveredSide === "elixir" &&
+		cachedEffectPayload.activeElixirId !== undefined &&
+		cachedEffectPayload.elixirRemainingSecs > 0
+	) {
 		const def = ELIXIRS[cachedEffectPayload.activeElixirId];
-		const name = def ? def.name : "Elixir";
-		if (text !== "") text += "\n";
-		text += "+ " + name + " -- " + formatTime(cachedEffectPayload.elixirRemainingSecs);
+		const name = def !== undefined ? def.name : "Elixir";
+		text = "+ " + name + " -- " + formatTime(cachedEffectPayload.elixirRemainingSecs);
 	}
 	effectTooltip.Text = text;
 }
@@ -565,8 +610,7 @@ function updateEffects(payload: EffectSyncPayload): void {
 		poisonLabel.Visible = hasPoisonActive;
 		if (hasPoisonActive) {
 			const def = POISONS[payload.activePoisonId!];
-			poisonLabel.Text = "~ " + (def ? def.name : "Poison");
-			// If only poison, take full width; if both, take half
+			poisonLabel.Text = "~ " + (def !== undefined ? def.name : "Poison");
 			poisonLabel.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
 			poisonLabel.Position = new UDim2(0, 0, 0, 0);
 		}
@@ -577,11 +621,22 @@ function updateEffects(payload: EffectSyncPayload): void {
 		elixirLabel.Visible = hasElixirActive;
 		if (hasElixirActive) {
 			const def = ELIXIRS[payload.activeElixirId!];
-			elixirLabel.Text = "+ " + (def ? def.name : "Elixir");
-			// If only elixir, take full width from left; if both, right half
+			elixirLabel.Text = "+ " + (def !== undefined ? def.name : "Elixir");
 			elixirLabel.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
 			elixirLabel.Position = bothActive ? new UDim2(0.5, 0, 0, 0) : new UDim2(0, 0, 0, 0);
 		}
+	}
+
+	// Resize hover buttons to match labels
+	if (poisonHoverBtn_ref) {
+		poisonHoverBtn_ref.Visible = hasPoisonActive;
+		poisonHoverBtn_ref.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
+		poisonHoverBtn_ref.Position = new UDim2(0, 0, 0, 0);
+	}
+	if (elixirHoverBtn_ref) {
+		elixirHoverBtn_ref.Visible = hasElixirActive;
+		elixirHoverBtn_ref.Size = bothActive ? new UDim2(0.5, 0, 1, 0) : new UDim2(1, 0, 1, 0);
+		elixirHoverBtn_ref.Position = bothActive ? new UDim2(0.5, 0, 0, 0) : new UDim2(0, 0, 0, 0);
 	}
 
 	// Show/hide the effect row

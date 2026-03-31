@@ -1,5 +1,4 @@
 import { getRemoteSubFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
-import { CompletedBountyEntry } from "shared/player-state";
 import { KillLog } from "shared/kill-log";
 import { FactionXP } from "shared/config/factions";
 
@@ -11,8 +10,6 @@ export interface KillBookData {
 	totalNPCKills: number;
 	playerKills: number;
 	playerDeaths: number;
-	completedBounties: CompletedBountyEntry[];
-	turnedInBounties: CompletedBountyEntry[];
 	unlockedAchievements: string[];
 	activeBountyName: string | undefined;
 	score: number;
@@ -24,13 +21,6 @@ export interface KillBookData {
 	factionXP: FactionXP;
 }
 
-/** Result of turning in bounties. */
-export interface TurnInResult {
-	totalGold: number;
-	totalXP: number;
-	count: number;
-}
-
 // ─── Remote getters ───────────────────────────────────────────────────────────
 
 function getFolder(): Folder {
@@ -40,11 +30,6 @@ function getFolder(): Folder {
 /** Client -> server: request full kill book data snapshot. */
 export function getKillBookDataRemote(): RemoteFunction {
 	return getRemoteFunction(getFolder(), "GetKillBookData");
-}
-
-/** Client -> server: turn in all completed bounties. */
-export function getTurnInBountiesRemote(): RemoteFunction {
-	return getRemoteFunction(getFolder(), "TurnInBounties");
 }
 
 /** Server -> client: achievement unlocked notification. */

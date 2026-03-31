@@ -9,7 +9,6 @@ import { getActivePoison } from "./effect-handler";
 import { POISONS } from "shared/config/poisons";
 import {
 	addCoins,
-	addCompletedBounty,
 	addExperience,
 	addKill,
 	addPlayerDeath,
@@ -179,16 +178,21 @@ function initializeAssassinationHandler() {
 		onNPCKilled(player, model.Name);
 
 		if (wasLegalKill) {
-			// Legal bounty kill — store as completed bounty (turned in later via kill book)
+			// Legal bounty kill — award scroll to inventory for later turn-in at a guild leader
 			const npcData3 = MEDIEVAL_NPCS[model.Name];
 			const npcStat = (npcData3?.status ?? "Commoner") as string;
 			const scrollGold = BASE_COINS + personalBounty.gold;
 			const scrollXP = BASE_XP + personalBounty.xp;
 
-			addCompletedBounty(player, model.Name, scrollGold, scrollXP, personalBounty.offence);
 			addBountyScrollFromKill(player, model.Name, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
-			log("[ASSASSINATION] " + player.Name + " completed bounty on " + model.Name + " (stored for turn-in)");
+			log(
+				"[ASSASSINATION] " +
+					player.Name +
+					" completed bounty on " +
+					model.Name +
+					" (scroll added to inventory)",
+			);
 		} else {
 			// Illegal kill — no reward, become wanted
 			const npcData2 = MEDIEVAL_NPCS[model.Name];

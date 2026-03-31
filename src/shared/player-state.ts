@@ -10,16 +10,6 @@ import {
 	totalXPFromFactions,
 } from "./config/factions";
 
-/** A completed bounty waiting to be turned in (or already turned in). */
-export interface CompletedBountyEntry {
-	npcName: string;
-	gold: number;
-	xp: number;
-	offence: string;
-	/** Epoch timestamp when completed. */
-	completedAt: number;
-}
-
 const playerStateFolder = ((): Folder => {
 	const root = (ReplicatedStorage.FindFirstChild("PlayerState") as Folder) ?? new Instance("Folder");
 	root.Name = "PlayerState";
@@ -167,10 +157,6 @@ export interface PlayerState {
 	playerKills: number;
 	/** PvP — total deaths to other players. */
 	playerDeaths: number;
-	/** Completed bounties waiting to be turned in for reward. */
-	completedBounties: CompletedBountyEntry[];
-	/** All-time bounties turned in (for the kill book history). */
-	turnedInBounties: CompletedBountyEntry[];
 	/** Achievement IDs the player has unlocked. */
 	unlockedAchievements: string[];
 	/** Total NPC assassinations (all-time). */
@@ -202,8 +188,6 @@ const DEFAULT_STATE: PlayerState = {
 	killLog: {},
 	playerKills: 0,
 	playerDeaths: 0,
-	completedBounties: [],
-	turnedInBounties: [],
 	unlockedAchievements: [],
 	totalNPCKills: 0,
 	ownedTitles: ["sellsword"],
@@ -418,65 +402,6 @@ export function addPlayerDeath(player: Player): void {
 	const state = PLAYER_STATES.get(player);
 	if (!state) return;
 	PLAYER_STATES.set(player, { ...state, playerDeaths: state.playerDeaths + 1 });
-}
-
-// ── Completed bounty collection ──────────────────────────────────────────────────
-
-/** Add a completed bounty to the player's pending collection. */
-export function addCompletedBounty(player: Player, npcName: string, gold: number, xp: number, offence: string): void {
-	const state = PLAYER_STATES.get(player);
-	if (!state) return;
-	const entry: CompletedBountyEntry = {
-		npcName,
-		gold,
-		xp,
-		offence,
-		completedAt: os.time(),
-	};
-	PLAYER_STATES.set(player, {
-		...state,
-		completedBounties: [...state.completedBounties, entry],
-	});
-}
-
-/** Turn in all completed bounties — award gold/XP, move to history, return total.
- *  If `factionId` is provided the XP is also credited to that faction. */
-export function turnInBounties(
-	player: Player,
-	factionId?: FactionId,
-): { totalGold: number; totalXP: number; count: number } {
-	const state = PLAYER_STATES.get(player);
-	if (!state || state.completedBounties.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
-
-	let totalGold = 0;
-	let totalXP = 0;
-	for (const b of state.completedBounties) {
-		totalGold += b.gold;
-		totalXP += b.xp;
-	}
-
-	const count = state.completedBounties.size();
-	PLAYER_STATES.set(player, {
-		...state,
-		completedBounties: [],
-		turnedInBounties: [...state.turnedInBounties, ...state.completedBounties],
-	});
-
-	addCoins(player, totalGold);
-	addExperience(player, totalXP);
-	addScore(player, totalGold);
-
-	// Credit faction XP
-	if (factionId !== undefined) {
-		addFactionXP(player, factionId, totalXP);
-	}
-
-	return { totalGold, totalXP, count };
-}
-
-/** Read completed bounties pending turn-in (server-side). */
-export function getCompletedBounties(player: Player): CompletedBountyEntry[] {
-	return PLAYER_STATES.get(player)?.completedBounties ?? [];
 }
 
 /** Read the full player state snapshot (for kill book data sync). */
