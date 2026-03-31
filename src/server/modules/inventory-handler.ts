@@ -206,6 +206,52 @@ export function getPlayerScrollRarities(player: Player): string[] {
 	return inv.bountyScrolls.map((s) => s.rarity);
 }
 
+/** Return how many bounty scrolls the player currently holds. */
+export function getPlayerBountyScrollCount(player: Player): number {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return 0;
+	return inv.bountyScrolls.size();
+}
+
+/**
+ * Consume ALL bounty scrolls from the player's inventory, awarding their
+ * gold and XP. This is the turn-in action used by guild-leader NPCs.
+ * Returns totals so the dialog can display a result message.
+ */
+export function turnInBountyScrolls(
+	player: Player,
+): { totalGold: number; totalXP: number; count: number } {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv || inv.bountyScrolls.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
+
+	let totalGold = 0;
+	let totalXP = 0;
+	for (const scroll of inv.bountyScrolls) {
+		totalGold += scroll.gold;
+		totalXP += scroll.xp;
+	}
+
+	const count = inv.bountyScrolls.size();
+	inv.bountyScrolls = [];
+
+	pushSync(player);
+	notifyWantedScrollChange(player);
+
+	log(
+		"[BOUNTY-SCROLL] " +
+			player.Name +
+			" turned in " +
+			count +
+			" scroll(s) for " +
+			totalGold +
+			"g + " +
+			totalXP +
+			"xp",
+	);
+
+	return { totalGold, totalXP, count };
+}
+
 /** Rarity ordering for transfer priority (highest first). */
 const RARITY_PRIORITY: Record<string, number> = {
 	player: 5,

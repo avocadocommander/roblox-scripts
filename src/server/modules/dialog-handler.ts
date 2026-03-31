@@ -26,8 +26,13 @@ import {
 	DialogPayload,
 	ShopItemPayload,
 } from "shared/remotes/dialog-remote";
-import { addCoins, getPlayerStateSnapshot, getCompletedBounties, turnInBounties } from "shared/player-state";
-import { givePlayerItem, getPlayerOwnedCount } from "./inventory-handler";
+import { addCoins, getPlayerStateSnapshot, addExperience, addScore, addFactionXP } from "shared/player-state";
+import {
+	givePlayerItem,
+	getPlayerOwnedCount,
+	getPlayerBountyScrollCount,
+	turnInBountyScrolls,
+} from "./inventory-handler";
 import { getQuipForStatus } from "shared/config/npc-quips";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
@@ -97,7 +102,7 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 	}
 
 	const interaction = def?.interaction ?? "Ambient";
-	const pendingBounties = getCompletedBounties(player).size();
+	const pendingBounties = getPlayerBountyScrollCount(player);
 
 	return {
 		npcName,
@@ -237,8 +242,18 @@ export function initializeDialogHandler(): void {
 		// Determine which faction this NPC belongs to
 		const faction = factionForNPC(currentNPC);
 
-		const result = turnInBounties(player, faction);
+		const result = turnInBountyScrolls(player);
 		if (result.count > 0) {
+			// Award gold, XP, score
+			addCoins(player, result.totalGold);
+			addExperience(player, result.totalXP);
+			addScore(player, result.totalGold);
+
+			// Credit faction XP
+			if (faction !== undefined) {
+				addFactionXP(player, faction, result.totalXP);
+			}
+
 			const factionTag = faction !== undefined ? " (" + faction + ")" : "";
 			log(
 				"[DIALOG] " +

@@ -789,7 +789,7 @@ function showScrollTooltip(scroll: BountyScroll, tile: TextButton): void {
 	}
 	if (tooltipDesc) tooltipDesc.Text = "Proof of assassination. Turn in to claim your reward.";
 	if (tooltipEffect) tooltipEffect.Text = "+" + scroll.gold + " Gold  |  +" + scroll.xp + " XP";
-	if (tooltipConsumable) tooltipConsumable.Text = "COLLECTED - press N to turn in";
+	if (tooltipConsumable) tooltipConsumable.Text = "COLLECTED";
 
 	tooltipFrame.BackgroundColor3 = rarityBg;
 	const strokeRef = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
