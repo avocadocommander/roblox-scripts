@@ -349,6 +349,10 @@ const RARITY_ORDER: Record<string, number> = {
 function refreshItemGrid(): void {
 	if (itemGrid === undefined) return;
 
+	// Dismiss any lingering tooltip before destroying tiles
+	if (tooltipFrame) tooltipFrame.Visible = false;
+	currentTooltipItem = undefined;
+
 	for (const child of itemGrid.GetChildren()) {
 		if (child.IsA("TextButton")) {
 			child.Destroy();
