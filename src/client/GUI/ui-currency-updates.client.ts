@@ -1,6 +1,7 @@
 import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
+import { ACHIEVEMENTS } from "shared/achievements";
 import { UI_THEME } from "shared/ui-theme";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
@@ -332,7 +333,10 @@ onPlayerInitialized(() => {
 
 	// Achievement unlocked notification
 	const achievementRemote = getAchievementUnlockedRemote();
-	achievementRemote.OnClientEvent.Connect((name: string, description: string, icon: string) => {
-		showAchievement(name, description, icon, screenGui);
+	achievementRemote.OnClientEvent.Connect((achievementId: unknown) => {
+		const id = achievementId as string;
+		const def = ACHIEVEMENTS[id];
+		if (!def) return;
+		showAchievement(def.title, def.description, def.icon, screenGui);
 	});
 });

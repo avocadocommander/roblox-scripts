@@ -2,10 +2,10 @@ import { Players, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { registerKillBookToggle } from "../modules/ui-toggles";
 import {
-	getAchievementUnlockedRemote,
 	getKillBookDataRemote,
 	KillBookData,
 } from "shared/remotes/kill-book-remote";
+import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
 import { ACHIEVEMENT_LIST, AchievementDef } from "shared/achievements";
 import { TITLES, TITLE_LIST } from "shared/config/titles";
 import { getEquipTitleRemote } from "shared/remotes/title-remote";
@@ -541,15 +541,15 @@ function renderAchievementsTab(data: KillBookData): void {
 	makeDivider(contentFrame, order++);
 
 	// ── Achievements list — Card Layout ─────────────────────────────────────
-	const unlocked = data.unlockedAchievements.size();
+	const unlocked = data.unlockedAchievementIds.size();
 	const total = ACHIEVEMENT_LIST.size();
 	makeSectionHeader(contentFrame, "ACHIEVEMENTS  " + unlocked + "/" + total, order++);
 	makeDivider(contentFrame, order++);
 
 	for (const achievement of ACHIEVEMENT_LIST) {
-		const isUnlocked = data.unlockedAchievements.includes(achievement.id);
+		const isUnlocked = data.unlockedAchievementIds.includes(achievement.id);
 		const isExpanded = achievementExpanded.has(achievement.id);
-		const titleDef = achievement.titleId ? TITLES[achievement.titleId] : undefined;
+		const titleDef = achievement.reward?.titleId ? TITLES[achievement.reward.titleId] : undefined;
 
 		const CARD_COLLAPSED = 64;
 		const CARD_EXPANDED = 130;
@@ -624,8 +624,7 @@ function renderAchievementsTab(data: KillBookData): void {
 		nameLbl.TextColor3 = isUnlocked ? UI_THEME.textHeader : UI_THEME.textMuted;
 		nameLbl.Font = UI_THEME.fontBold;
 		nameLbl.TextSize = 14;
-		nameLbl.Text = isUnlocked ? achievement.name : "???";
-		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.Text = isUnlocked ? achievement.title : "???";		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
 		nameLbl.Parent = card;
 
 		const chevron = new Instance("TextLabel");

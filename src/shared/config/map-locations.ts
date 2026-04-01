@@ -90,6 +90,25 @@ export const MAP_LOCATIONS: MapLocationDef[] = [
 		sounds: [{ soundId: "rbxassetid://132265189523208", volume: 0.3, rollOffMax: 60 }],
 		lights: [{ color: [255, 180, 80], brightness: 0.1, range: 30 }],
 	},
+	{
+		name: "Tavern talking",
+		position: [-77.791, 9.858, -20.077],
+		sounds: [{ soundId: "rbxassetid://926658585", volume: 0.6, rollOffMax: 100 }],
+		lights: [{ color: [255, 180, 80], brightness: 0.1, range: 30 }],
+	},
+	{
+		name: "Tavern Jig",
+		position: [-77.791, 9.858, -20.077],
+		sounds: [{ soundId: "rbxassetid://88538249467439", volume: 0.3, rollOffMax: 80 }],
+		lights: [{ color: [255, 180, 80], brightness: 0.1, range: 30 }],
+	},
+
+	{
+		name: "Church",
+		position: [60.983, 10.697, -199.166],
+		sounds: [{ soundId: "rbxassetid://1835519286", volume: 0.5, rollOffMax: 80 }],
+		lights: [{ color: [255, 180, 80], brightness: 0.5, range: 30 }],
+	},
 	// ── Example: Town Square ──────────────────────────────────────────────
 	// {
 	//     name: "Town Square",

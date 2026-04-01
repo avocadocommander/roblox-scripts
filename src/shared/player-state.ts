@@ -10,6 +10,13 @@ import {
 	totalXPFromFactions,
 } from "./config/factions";
 
+// ── Achievement persistence types ─────────────────────────────────────────────
+
+export interface AchievementUnlockMeta {
+	/** Unix timestamp (os.time()) when the achievement was unlocked. */
+	unlockedAt: number;
+}
+
 const playerStateFolder = ((): Folder => {
 	const root = (ReplicatedStorage.FindFirstChild("PlayerState") as Folder) ?? new Instance("Folder");
 	root.Name = "PlayerState";
@@ -157,8 +164,8 @@ export interface PlayerState {
 	playerKills: number;
 	/** PvP — total deaths to other players. */
 	playerDeaths: number;
-	/** Achievement IDs the player has unlocked. */
-	unlockedAchievements: string[];
+	/** Achievement unlock records keyed by achievement ID. */
+	unlockedAchievements: Record<string, AchievementUnlockMeta>;
 	/** Total NPC assassinations (all-time). */
 	totalNPCKills: number;
 	/** IDs of all titles the player has collected. */
@@ -188,7 +195,7 @@ const DEFAULT_STATE: PlayerState = {
 	killLog: {},
 	playerKills: 0,
 	playerDeaths: 0,
-	unlockedAchievements: [],
+	unlockedAchievements: {},
 	totalNPCKills: 0,
 	ownedTitles: ["sellsword"],
 	factionXP: { ...DEFAULT_FACTION_XP },
@@ -232,6 +239,37 @@ export function getBountyTarget(player: Player) {
 	return PLAYER_STATES.get(player)?.activeBountyName ?? undefined;
 }
 
+// ── Achievement data migration ────────────────────────────────────────────────
+
+/** Convert old string[] format to Record<string, AchievementUnlockMeta>. */
+function migrateAchievements(raw: unknown): Record<string, AchievementUnlockMeta> {
+	if (raw === undefined || raw === undefined) return {};
+	// Already a record — each value should have unlockedAt
+	if (typeIs(raw, "table") && !isArray(raw)) {
+		return raw as Record<string, AchievementUnlockMeta>;
+	}
+	// Old format: string[]
+	if (typeIs(raw, "table") && isArray(raw)) {
+		const migrated: Record<string, AchievementUnlockMeta> = {};
+		for (const id of raw as string[]) {
+			migrated[id] = { unlockedAt: 0 };
+		}
+		return migrated;
+	}
+	return {};
+}
+
+function isArray(t: unknown): boolean {
+	if (!typeIs(t, "table")) return false;
+	const tbl = t as Record<string, unknown>;
+	let i = 0;
+	for (const [k] of pairs(tbl)) {
+		i++;
+		if (!typeIs(k, "number") || k !== i) return false;
+	}
+	return true;
+}
+
 Players.PlayerAdded.Connect((player) => {
 	// Set default state IMMEDIATELY so the player is always in PLAYER_STATES.
 	// This prevents race conditions where an assassination could happen before
@@ -244,7 +282,12 @@ Players.PlayerAdded.Connect((player) => {
 		const savedData = await playerStateStore.fetchPlayerData(player);
 		if (player.Parent !== undefined) {
 			// Player is still in the game — merge saved data on top of defaults
-			PLAYER_STATES.set(player, { ...DEFAULT_STATE, ...savedData, name: player.Name });
+			const merged = { ...DEFAULT_STATE, ...savedData, name: player.Name };
+			// Migrate old string[] achievements to Record<string, AchievementUnlockMeta>
+			merged.unlockedAchievements = migrateAchievements(
+				(savedData as { unlockedAchievements?: unknown }).unlockedAchievements,
+			);
+			PLAYER_STATES.set(player, merged);
 			warn(`[PlayerState] Loaded DataStore data for ${player.Name}`);
 		}
 	});
@@ -436,17 +479,25 @@ export function setPlayerEffectFields(
 export function unlockAchievement(player: Player, achievementId: string): boolean {
 	const state = PLAYER_STATES.get(player);
 	if (!state) return false;
-	if (state.unlockedAchievements.includes(achievementId)) return false;
+	if (state.unlockedAchievements[achievementId] !== undefined) return false;
+	const meta: AchievementUnlockMeta = { unlockedAt: os.time() };
+	const updated = { ...state.unlockedAchievements };
+	updated[achievementId] = meta;
 	PLAYER_STATES.set(player, {
 		...state,
-		unlockedAchievements: [...state.unlockedAchievements, achievementId],
+		unlockedAchievements: updated,
 	});
 	return true;
 }
 
 /** Check if player has a specific achievement. */
 export function hasAchievement(player: Player, achievementId: string): boolean {
-	return PLAYER_STATES.get(player)?.unlockedAchievements.includes(achievementId) ?? false;
+	return PLAYER_STATES.get(player)?.unlockedAchievements[achievementId] !== undefined;
+}
+
+/** Get the full unlocked achievements record for a player. */
+export function getUnlockedAchievements(player: Player): Record<string, AchievementUnlockMeta> {
+	return PLAYER_STATES.get(player)?.unlockedAchievements ?? {};
 }
 
 // ── Titles ───────────────────────────────────────────────────────────────────
@@ -476,6 +527,18 @@ export function equipTitle(player: Player, titleId: string): boolean {
 /** Get all title IDs owned by the player. */
 export function getOwnedTitles(player: Player): string[] {
 	return PLAYER_STATES.get(player)?.ownedTitles ?? [...DEFAULT_STATE.ownedTitles];
+}
+
+/** Reset all achievements and titles (except default). For dev/test use. */
+export function resetAchievementsAndTitles(player: Player): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, {
+		...state,
+		unlockedAchievements: {},
+		ownedTitles: [...DEFAULT_STATE.ownedTitles],
+		title: DEFAULT_STATE.title,
+	});
 }
 
 /** Get the player's currently equipped title ID. */

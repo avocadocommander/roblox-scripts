@@ -1,54 +1,157 @@
 /**
- * Achievement definitions — shared between server and client.
- * Each achievement has an ID, display info, and a description of its unlock condition.
+ * Achievement definitions — data-only config, shared between server and client.
+ *
+ * To add a new achievement, add an entry to `ACHIEVEMENTS`.
+ * ACHIEVEMENT_LIST is built automatically for ordered display.
+ *
+ * Gameplay systems award achievements by calling the achievement service with
+ * an achievement ID. Do NOT embed unlock logic here.
  */
 
-export interface AchievementDef {
-	id: string;
-	name: string;
-	description: string;
-	/** Icon text shown in the kill book (short symbol or emoji-safe label). */
-	icon: string;
-	/** Title ID granted when this achievement is first unlocked. */
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type AchievementCategory = "combat" | "exploration" | "social" | "crafting" | "collection" | "general";
+
+export type AchievementVisibility = "visible" | "hidden" | "secret";
+
+export interface AchievementReward {
+	/** Gold granted on unlock. */
+	coins?: number;
+	/** XP granted on unlock. */
+	xp?: number;
+	/** Title ID unlocked (from titles config). */
 	titleId?: string;
 }
 
-/** All achievements in the game, keyed by ID. */
+export interface AchievementDef {
+	id: string;
+	/** Display name. */
+	title: string;
+	/** Short description of how to earn this. */
+	description: string;
+	/** Short ASCII icon/symbol for compact UI. */
+	icon: string;
+	/** Category for grouping in a future codex/journal. */
+	category?: AchievementCategory;
+	/** Sort order within its category (lower = earlier). Default 0. */
+	sortOrder?: number;
+	/**
+	 * Visibility state:
+	 *  - "visible": always shown in UI even if locked
+	 *  - "hidden": shown only after unlock
+	 *  - "secret": title/description masked until unlock
+	 * Default "visible".
+	 */
+	visibility?: AchievementVisibility;
+	/** Optional reward granted on unlock. */
+	reward?: AchievementReward;
+	/** Roblox badge ID to award alongside this achievement. undefined = no badge. */
+	badgeId?: number;
+}
+
+// ── The Registry ──────────────────────────────────────────────────────────────
+
 export const ACHIEVEMENTS: Record<string, AchievementDef> = {
 	FIRST_ASSASSINATION: {
 		id: "FIRST_ASSASSINATION",
-		name: "First Blood",
+		title: "First Blood",
 		description: "Perform your first assassination.",
 		icon: "I",
-		titleId: "first_blood",
+		category: "combat",
+		sortOrder: 1,
+		reward: { titleId: "first_blood" },
 	},
 	BOUNTY_HUNTER: {
 		id: "BOUNTY_HUNTER",
-		name: "Bounty Hunter",
+		title: "Bounty Hunter",
 		description: "Complete 10 bounty contracts.",
 		icon: "X",
-		titleId: "bounty_hunter",
+		category: "combat",
+		sortOrder: 2,
+		reward: { titleId: "bounty_hunter" },
 	},
 	PLAYER_SLAYER: {
 		id: "PLAYER_SLAYER",
-		name: "Player Slayer",
+		title: "Player Slayer",
 		description: "Assassinate a wanted player.",
 		icon: "P",
-		titleId: "slayer",
+		category: "combat",
+		sortOrder: 3,
+		reward: { titleId: "slayer" },
 	},
 	MOCK_TEST: {
 		id: "MOCK_TEST",
-		name: "Night Owl",
+		title: "Night Owl",
 		description: "Lurk in the shadows long enough to earn your title.",
 		icon: "*",
-		titleId: "night_owl",
+		category: "general",
+		sortOrder: 99,
+		reward: { titleId: "night_owl" },
+	},
+	FIRST_CONTRACT: {
+		id: "FIRST_CONTRACT",
+		title: "First Contract",
+		description: "A marked target yields reward. Contracts define purpose.",
+		icon: "C",
+		category: "combat",
+		sortOrder: 10,
+	},
+	A_COSTLY_MISTAKE: {
+		id: "A_COSTLY_MISTAKE",
+		title: "A Costly Mistake",
+		description: "Killing the unmarked draws attention. The Guard responds to disorder.",
+		icon: "!",
+		category: "combat",
+		sortOrder: 11,
+	},
+	MARKED_BY_THE_REALM: {
+		id: "MARKED_BY_THE_REALM",
+		title: "Marked by the Realm",
+		description: "Once marked, others may hunt you. Not all hunters wear the same face.",
+		icon: "M",
+		category: "combat",
+		sortOrder: 12,
+	},
+	A_CURIOUS_MIND: {
+		id: "A_CURIOUS_MIND",
+		title: "A Curious Mind",
+		description: "Clues and patterns exist beyond the obvious. Observation reveals advantage.",
+		icon: "?",
+		category: "exploration",
+		sortOrder: 10,
+	},
+	FIRST_PURCHASE: {
+		id: "FIRST_PURCHASE",
+		title: "First Purchase",
+		description: "Coin opens doors. Merchants provide tools beyond the blade.",
+		icon: "G",
+		category: "general",
+		sortOrder: 10,
+	},
+	COATED_STEEL: {
+		id: "COATED_STEEL",
+		title: "Coated Steel",
+		description: "Poisons alter outcomes. A prepared blade carries more than steel.",
+		icon: "~",
+		category: "crafting",
+		sortOrder: 10,
+	},
+	A_TASTE_OF_POWER: {
+		id: "A_TASTE_OF_POWER",
+		title: "A Taste of Power",
+		description: "Elixirs enhance the body. Their effects fade, but advantage remains.",
+		icon: "+",
+		category: "crafting",
+		sortOrder: 11,
 	},
 };
 
-/** Ordered list for display purposes. */
-export const ACHIEVEMENT_LIST: AchievementDef[] = [
-	ACHIEVEMENTS.FIRST_ASSASSINATION,
-	ACHIEVEMENTS.BOUNTY_HUNTER,
-	ACHIEVEMENTS.PLAYER_SLAYER,
-	ACHIEVEMENTS.MOCK_TEST,
-];
+/** Ordered list for display — sorted by category then sortOrder. */
+export const ACHIEVEMENT_LIST: AchievementDef[] = (() => {
+	const list: AchievementDef[] = [];
+	for (const [, def] of pairs(ACHIEVEMENTS)) {
+		list.push(def);
+	}
+	list.sort((a, b) => (a.sortOrder ?? 0) < (b.sortOrder ?? 0));
+	return list;
+})();

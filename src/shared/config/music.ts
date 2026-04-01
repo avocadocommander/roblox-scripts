@@ -17,10 +17,7 @@ export interface MusicTrackDef {
 }
 
 export const MUSIC_PLAYLIST: MusicTrackDef[] = [
-	// Add your tracks here, they will rotate in order:
-	// { name: "Dark Tavern",    soundId: "rbxassetid://123456789", volume: 0.25 },
-	// { name: "Eerie Overture", soundId: "rbxassetid://987654321", volume: 0.3 },
-	{ name: "midevil romcom", soundId: "rbxassetid://137906766155111", playbackSpeed: 0.82, volume: 0.48 },
+	{ name: "midevil romcom", soundId: "rbxassetid://137906766155111", playbackSpeed: 0.82, volume: 0.22 },
 ];
 
 /** Whether to shuffle the playlist instead of playing in order. Default false. */

@@ -1,4 +1,4 @@
-import { getRemoteSubFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
+import { getRemoteSubFolder, getRemoteFunction } from "shared/remote-utils";
 import { KillLog } from "shared/kill-log";
 import { FactionXP } from "shared/config/factions";
 
@@ -10,7 +10,8 @@ export interface KillBookData {
 	totalNPCKills: number;
 	playerKills: number;
 	playerDeaths: number;
-	unlockedAchievements: string[];
+	/** Achievement IDs the player has unlocked (keys of the record). */
+	unlockedAchievementIds: string[];
 	activeBountyName: string | undefined;
 	score: number;
 	/** All title IDs owned by the player. */
@@ -30,9 +31,4 @@ function getFolder(): Folder {
 /** Client -> server: request full kill book data snapshot. */
 export function getKillBookDataRemote(): RemoteFunction {
 	return getRemoteFunction(getFolder(), "GetKillBookData");
-}
-
-/** Server -> client: achievement unlocked notification. */
-export function getAchievementUnlockedRemote(): RemoteEvent {
-	return getRemoteEvent(getFolder(), "AchievementUnlocked");
 }

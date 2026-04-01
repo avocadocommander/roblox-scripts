@@ -10,6 +10,7 @@
 
 import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
+import { awardAchievement } from "./achievement-handler";
 import { ITEMS } from "shared/inventory";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npcs";
@@ -163,6 +164,7 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	// Give item
 	givePlayerItem(player, itemId, 1);
 
+	awardAchievement(player, "FIRST_PURCHASE");
 	log("[DIALOG] " + player.Name + " purchased " + itemDef.name + " from " + npcName + " for " + shopItem.price + "g");
 
 	return [true, "Purchased " + itemDef.name + " for " + shopItem.price + " gold."];

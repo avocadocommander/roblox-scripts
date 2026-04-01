@@ -1,5 +1,6 @@
 import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
+import { awardAchievement } from "./achievement-handler";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
 import { isNPCKillable } from "shared/config/npcs";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
@@ -165,6 +166,7 @@ export function setPlayerWanted(player: Player, gold: number, reason: string): v
 	if (existing) {
 		log("[BOUNTY] " + player.DisplayName + " bounty increased to " + newGold + "g (+" + gold + "g)");
 	} else {
+		awardAchievement(player, "MARKED_BY_THE_REALM");
 		log("[BOUNTY] " + player.DisplayName + " is WANTED -- " + newGold + 'g -- "' + newReason + '"');
 	}
 }

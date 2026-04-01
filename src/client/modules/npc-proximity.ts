@@ -81,7 +81,7 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 	const card = new Instance("Frame");
 	card.Size = new UDim2(1, 0, 1, 0);
 	card.BackgroundColor3 = UI_THEME.bg;
-	card.BackgroundTransparency = 0.15;
+	card.BackgroundTransparency = 0.06;
 	card.BorderSizePixel = 0;
 	card.Parent = billboard;
 
@@ -96,17 +96,19 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 
 	// Single-line: "Symbol TitleName PlayerName" or just "PlayerName"
 	const displayText = titleDef !== undefined ? titleDef.symbol + " " + titleDef.name + " " + playerName : playerName;
-	const textColor = titleDef !== undefined ? titleDef.color : UI_THEME.gold;
+	const textColor = titleDef !== undefined ? titleDef.color : Color3.fromRGB(235, 215, 160);
 
 	const nameLabel = new Instance("TextLabel");
-	nameLabel.Size = new UDim2(1, -6, 1, 0);
-	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.Size = new UDim2(1, -10, 0.9, 0);
+	nameLabel.Position = new UDim2(0, 5, 0.05, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = textColor;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 13;
+	nameLabel.TextSize = 14;
 	nameLabel.Text = displayText;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	nameLabel.TextStrokeTransparency = 0.35;
 	nameLabel.BorderSizePixel = 0;
 	nameLabel.Parent = card;
 
@@ -179,7 +181,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	card.Size = new UDim2(1, 0, 0.7, 0);
 	card.Position = new UDim2(0, 0, 0, 0);
 	card.BackgroundColor3 = UI_THEME.bg;
-	card.BackgroundTransparency = 0.15;
+	card.BackgroundTransparency = 0.06;
 	card.BorderSizePixel = 0;
 	card.Parent = billboard;
 
@@ -192,19 +194,21 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	cardStroke.Thickness = 1.2;
 	cardStroke.Parent = card;
 
-	// NPC name — always white text, rarity colour is shown via the card border
+	// NPC name — bright warm white, rarity colour is shown via the card border
 	const hasShopInteraction = getNPCInteraction(npc.Name) === "Shop";
 	const displayName = hasShopInteraction ? "(G) " + npc.Name : npc.Name;
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
-	nameLabel.Size = new UDim2(1, -6, 1, 0);
-	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.Size = new UDim2(1, -10, 0.9, 0);
+	nameLabel.Position = new UDim2(0, 5, 0.05, 0);
 	nameLabel.BackgroundTransparency = 1;
-	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
+	nameLabel.TextColor3 = Color3.fromRGB(245, 238, 220);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 13;
+	nameLabel.TextSize = 14;
 	nameLabel.Text = displayName;
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	nameLabel.TextStrokeTransparency = 0.35;
 	nameLabel.BorderSizePixel = 0;
 	nameLabel.Parent = card;
 
@@ -221,9 +225,12 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 	button.BackgroundColor3 = UI_THEME.headerBg;
 	button.BackgroundTransparency = 0.1;
 	button.TextColor3 = btnColor;
+	button.TextTransparency = 0.15;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
 	button.Text = "ASSASSINATE  [E]";
+	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	button.TextStrokeTransparency = 0.5;
 	button.BorderSizePixel = 0;
 	button.Parent = billboard;
 
@@ -250,9 +257,12 @@ function createTalkButton(billboard: BillboardGui, npc: Model): TextButton {
 	button.BackgroundColor3 = UI_THEME.bgInset;
 	button.BackgroundTransparency = 0.1;
 	button.TextColor3 = UI_THEME.textPrimary;
+	button.TextTransparency = 0.15;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
 	button.Text = "TALK  [F]";
+	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	button.TextStrokeTransparency = 0.55;
 	button.BorderSizePixel = 0;
 	button.Parent = billboard;
 
@@ -313,7 +323,7 @@ function createInspectBillboard(model: Model): BillboardGui {
 	card.Size = new UDim2(1, 0, 0.65, 0);
 	card.Position = new UDim2(0, 0, 0, 0);
 	card.BackgroundColor3 = UI_THEME.bg;
-	card.BackgroundTransparency = 0.15;
+	card.BackgroundTransparency = 0.06;
 	card.BorderSizePixel = 0;
 	card.Visible = false;
 	card.Parent = billboard;
@@ -329,13 +339,15 @@ function createInspectBillboard(model: Model): BillboardGui {
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
-	nameLabel.Size = new UDim2(1, -6, 1, 0);
-	nameLabel.Position = new UDim2(0, 3, 0, 0);
+	nameLabel.Size = new UDim2(1, -10, 0.9, 0);
+	nameLabel.Position = new UDim2(0, 5, 0.05, 0);
 	nameLabel.BackgroundTransparency = 1;
-	nameLabel.TextColor3 = UI_THEME.textHeader;
+	nameLabel.TextColor3 = Color3.fromRGB(230, 200, 120);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 13;
+	nameLabel.TextSize = 14;
 	nameLabel.Text = displayName;
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	nameLabel.TextStrokeTransparency = 0.35;
 	nameLabel.BorderSizePixel = 0;
 	nameLabel.Parent = card;
 
@@ -349,9 +361,12 @@ function createInspectPrompt(billboard: BillboardGui, model: Model): TextButton 
 	button.BackgroundColor3 = UI_THEME.bgInset;
 	button.BackgroundTransparency = 0.1;
 	button.TextColor3 = UI_THEME.textHeader;
+	button.TextTransparency = 0.15;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
 	button.Text = "INSPECT";
+	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	button.TextStrokeTransparency = 0.55;
 	button.BorderSizePixel = 0;
 	button.Parent = billboard;
 
@@ -417,7 +432,7 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	info.Size = new UDim2(1, 0, 0.75, 0);
 	info.Position = new UDim2(0, 0, 0.25, 0);
 	info.BackgroundColor3 = UI_THEME.bg;
-	info.BackgroundTransparency = 0.15;
+	info.BackgroundTransparency = 0.06;
 	info.BorderSizePixel = 0;
 	info.Parent = billboard;
 
@@ -436,22 +451,26 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	wantedTag.Size = new UDim2(1, 0, 0.28, 0);
 	wantedTag.Position = new UDim2(0, 0, 0.02, 0);
 	wantedTag.BackgroundTransparency = 1;
-	wantedTag.TextColor3 = UI_THEME.danger;
+	wantedTag.TextColor3 = Color3.fromRGB(190, 50, 40);
 	wantedTag.Font = UI_THEME.fontBold;
 	wantedTag.TextSize = 9;
 	wantedTag.Text = "WANTED";
+	wantedTag.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	wantedTag.TextStrokeTransparency = 0.4;
 	wantedTag.Parent = info;
 
-	// Player name — RED
+	// Player name — bright red
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "NameLabel";
-	nameLabel.Size = new UDim2(1, 0, 0.38, 0);
-	nameLabel.Position = new UDim2(0, 0, 0.28, 0);
+	nameLabel.Size = new UDim2(1, -8, 0.38, 0);
+	nameLabel.Position = new UDim2(0, 4, 0.28, 0);
 	nameLabel.BackgroundTransparency = 1;
-	nameLabel.TextColor3 = UI_THEME.danger;
+	nameLabel.TextColor3 = Color3.fromRGB(210, 55, 45);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 14;
+	nameLabel.TextSize = 15;
 	nameLabel.Text = playerName;
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	nameLabel.TextStrokeTransparency = 0.3;
 	nameLabel.Parent = info;
 
 	// Gold reward
@@ -460,10 +479,12 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	goldLabel.Size = new UDim2(1, 0, 0.28, 0);
 	goldLabel.Position = new UDim2(0, 0, 0.68, 0);
 	goldLabel.BackgroundTransparency = 1;
-	goldLabel.TextColor3 = UI_THEME.gold;
+	goldLabel.TextColor3 = Color3.fromRGB(215, 175, 60);
 	goldLabel.Font = UI_THEME.fontBold;
 	goldLabel.TextSize = 11;
 	goldLabel.Text = gold + " Gold";
+	goldLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	goldLabel.TextStrokeTransparency = 0.45;
 	goldLabel.Parent = info;
 
 	wantedBillboards.set(playerName, billboard);

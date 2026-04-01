@@ -5,9 +5,10 @@
  * Sound is parented to SoundService so it is non-positional.
  */
 
-import { SoundService, TweenService } from "@rbxts/services";
+import { Players, RunService, SoundService, TweenService } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { MUSIC_PLAYLIST, MUSIC_SHUFFLE, MUSIC_FADE_TIME } from "shared/config/music";
+import { MAP_LOCATIONS } from "shared/config/map-locations";
 import { onPlayerInitialized } from "../modules/client-init";
 
 const TAG = "[MUSIC]";
@@ -47,12 +48,73 @@ function startMusicLoop(): void {
 	const tracks = MUSIC_SHUFFLE ? shuffleArray(MUSIC_PLAYLIST) : MUSIC_PLAYLIST;
 	let index = 0;
 	let currentSound: Sound | undefined;
+	let currentTargetVolume = 0.3;
+	let ducked = false;
+
+	// ── Ducking: lower music when near a map location with ambient sounds ──
+	const DUCK_MULTIPLIER = 0.1; // 10% of normal volume when ducked
+	const DUCK_TWEEN = new TweenInfo(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+	// Pre-compute which map locations have sounds and their max rolloff
+	const soundLocations = MAP_LOCATIONS.filter((loc) => loc.sounds !== undefined && loc.sounds.size() > 0).map(
+		(loc) => {
+			let maxRollOff = 0;
+			for (const s of loc.sounds!) {
+				const r = s.rollOffMax ?? 80;
+				if (r > maxRollOff) maxRollOff = r;
+			}
+			return {
+				position: new Vector3(loc.position[0], loc.position[1], loc.position[2]),
+				range: maxRollOff,
+			};
+		},
+	);
+
+	let checkTimer = 0;
+	if (soundLocations.size() > 0) {
+		RunService.Heartbeat.Connect((dt) => {
+			checkTimer += dt;
+			if (checkTimer < 0.5) return; // check twice per second
+			checkTimer = 0;
+
+			const char = Players.LocalPlayer.Character;
+			if (!char) return;
+			const root = char.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+			if (!root) return;
+			const pos = root.Position;
+
+			let nearAmbient = false;
+			for (const loc of soundLocations) {
+				if (pos.sub(loc.position).Magnitude < loc.range) {
+					nearAmbient = true;
+					break;
+				}
+			}
+
+			if (nearAmbient && !ducked) {
+				ducked = true;
+				if (currentSound && currentSound.IsPlaying) {
+					TweenService.Create(currentSound, DUCK_TWEEN, {
+						Volume: currentTargetVolume * DUCK_MULTIPLIER,
+					}).Play();
+				}
+			} else if (!nearAmbient && ducked) {
+				ducked = false;
+				if (currentSound && currentSound.IsPlaying) {
+					TweenService.Create(currentSound, DUCK_TWEEN, {
+						Volume: currentTargetVolume,
+					}).Play();
+				}
+			}
+		});
+	}
 
 	const playNext = (): void => {
 		const track = tracks[index % tracks.size()];
 		index++;
 
 		const targetVolume = track.volume ?? 0.3;
+		currentTargetVolume = targetVolume;
 
 		log(`${TAG} Now playing: ${track.name}`);
 
@@ -68,7 +130,9 @@ function startMusicLoop(): void {
 			fadeOut(currentSound, MUSIC_FADE_TIME);
 		}
 
-		fadeIn(sound, targetVolume, MUSIC_FADE_TIME);
+		// If currently ducked, fade in at the reduced volume
+		const startVolume = ducked ? targetVolume * DUCK_MULTIPLIER : targetVolume;
+		fadeIn(sound, startVolume, MUSIC_FADE_TIME);
 		currentSound = sound;
 
 		// When the track ends, play the next one

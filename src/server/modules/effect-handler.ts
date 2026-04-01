@@ -1,5 +1,6 @@
 import { Players } from "@rbxts/services";
 import { log } from "shared/helpers";
+import { awardAchievement } from "./achievement-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
 import { getEffectSyncRemote, EffectSyncPayload } from "shared/remotes/effect-remote";
@@ -82,6 +83,7 @@ export function activateElixir(player: Player, elixirId: string): void {
 	const effects = getOrCreate(player);
 	effects.elixirId = elixirId;
 	effects.elixirRemainingSecs = def.effectDurationSecs;
+	awardAchievement(player, "A_TASTE_OF_POWER");
 	log("[EFFECT] " + player.Name + " activated elixir: " + def.name + " (" + def.effectDurationSecs + "s)");
 	persistEffects(player);
 	pushEffectSync(player);

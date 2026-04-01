@@ -1,7 +1,6 @@
 import { Players } from "@rbxts/services";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getPlayerAssassinationRemote } from "shared/remotes/bounty-remote";
-import { getAchievementUnlockedRemote } from "shared/remotes/kill-book-remote";
 import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
@@ -14,9 +13,7 @@ import {
 	addPlayerDeath,
 	addPlayerKill,
 	addScore,
-	hasAchievement,
 	savePlayerData,
-	unlockAchievement,
 } from "shared/player-state";
 import {
 	getPlayerNPCBounty,
@@ -28,6 +25,7 @@ import {
 } from "./bounty-manager";
 import { transferBountyScrolls, addPlayerBountyScroll, addBountyScrollFromKill } from "./inventory-handler";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
+import { awardAchievement } from "./achievement-handler";
 import { isNPCKillable } from "shared/config/npcs";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
@@ -186,6 +184,7 @@ function initializeAssassinationHandler() {
 
 			addBountyScrollFromKill(player, model.Name, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
+			awardAchievement(player, "FIRST_CONTRACT");
 			log(
 				"[ASSASSINATION] " +
 					player.Name +
@@ -200,6 +199,7 @@ function initializeAssassinationHandler() {
 			const wantedGold = WANTED_GOLD_BY_STATUS[npcStatus] ?? 300;
 			const decree = DECREE_BY_STATUS[npcStatus] ?? "Committed murder — by royal decree";
 			setPlayerWanted(player, wantedGold, decree);
+			awardAchievement(player, "A_COSTLY_MISTAKE");
 			print("[WANTED CHECK] " + player.Name + " is now WANTED for " + wantedGold + "g by decree of the king");
 		}
 
@@ -210,11 +210,9 @@ function initializeAssassinationHandler() {
 		}
 
 		// ── Achievement checks ─────────────────────────────────────────────────
-		if (!hasAchievement(player, "FIRST_ASSASSINATION")) {
-			if (unlockAchievement(player, "FIRST_ASSASSINATION")) {
-				getAchievementUnlockedRemote().FireClient(player, "FIRST_ASSASSINATION");
-				log("[ACHIEVEMENT] " + player.Name + " unlocked: First Blood");
-			}
+		awardAchievement(player, "FIRST_ASSASSINATION");
+		if (poisonDef) {
+			awardAchievement(player, "COATED_STEEL");
 		}
 
 		// Persist immediately so data is not lost if the server crashes
@@ -277,12 +275,7 @@ function initializeAssassinationHandler() {
 		addPlayerDeath(targetPlayer);
 
 		// Achievement: Player Slayer
-		if (!hasAchievement(killer, "PLAYER_SLAYER")) {
-			if (unlockAchievement(killer, "PLAYER_SLAYER")) {
-				getAchievementUnlockedRemote().FireClient(killer, "PLAYER_SLAYER");
-				log("[ACHIEVEMENT] " + killer.Name + " unlocked: Player Slayer");
-			}
-		}
+		awardAchievement(killer, "PLAYER_SLAYER");
 
 		// Award a "player" rarity bounty scroll to the killer
 		addPlayerBountyScroll(killer, targetPlayer.Name, wantedGold, math.floor(wantedGold * 1.5));

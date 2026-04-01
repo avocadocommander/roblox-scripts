@@ -8,6 +8,7 @@
 
 import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
+import { awardAchievement } from "./achievement-handler";
 import { getInspectDef } from "shared/config/inspectables";
 import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
 
@@ -52,6 +53,7 @@ export function initializeInspectHandler(): void {
 			description: def.description,
 		};
 
+		awardAchievement(player, "A_CURIOUS_MIND");
 		inspectPayloadRemote.FireClient(player, payload);
 		log("[INSPECT] " + player.Name + " inspecting " + def.displayName + " (" + model.Name + ")");
 	});
