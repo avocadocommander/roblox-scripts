@@ -1,8 +1,8 @@
 import { Players } from "@rbxts/services";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getPlayerAssassinationRemote } from "shared/remotes/bounty-remote";
-import { isPlayerStealthing } from "./stealth-tracker";
 import { log } from "shared/helpers";
+import { getPlayerEquippedWeapon } from "./inventory-handler";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
 import { getActivePoison } from "./effect-handler";
 import { POISONS } from "shared/config/poisons";
@@ -79,9 +79,9 @@ function initializeAssassinationHandler() {
 
 		log(`[ASSASSINATION] ${player.Name} attempting to assassinate ${model.Name}`);
 
-		// Validate player is stealthing
-		if (!isPlayerStealthing(player)) {
-			log(`[ASSASSINATION] ${player.Name} is not stealthing, assassination denied`, "WARN");
+		// Require a real weapon — fists cannot assassinate
+		if (getPlayerEquippedWeapon(player) === "fists") {
+			log(`[ASSASSINATION] ${player.Name} has no weapon equipped, assassination denied`, "WARN");
 			return;
 		}
 
@@ -238,8 +238,9 @@ function initializeAssassinationHandler() {
 			return;
 		}
 
-		if (!isPlayerStealthing(killer)) {
-			log("[ASSASSINATION] " + killer.Name + " not stealthing for player assassination", "WARN");
+		// Require a real weapon — fists cannot assassinate
+		if (getPlayerEquippedWeapon(killer) === "fists") {
+			log("[ASSASSINATION] " + killer.Name + " has no weapon equipped, player assassination denied", "WARN");
 			return;
 		}
 

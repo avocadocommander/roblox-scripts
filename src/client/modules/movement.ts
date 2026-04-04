@@ -1,7 +1,6 @@
 import { Players, UserInputService, Workspace } from "@rbxts/services";
 import { getOrCreateMovementRemote } from "shared/remotes/movement-remote";
 import { log } from "shared/helpers";
-import { setStealthing } from "./npc-proximity";
 import { getEffectSyncRemote, EffectSyncPayload } from "shared/remotes/effect-remote";
 import { ELIXIRS } from "shared/config/elixirs";
 

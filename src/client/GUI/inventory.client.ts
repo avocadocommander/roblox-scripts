@@ -850,6 +850,8 @@ function applyInventorySync(payload: InventoryPayload): void {
 	currentActivePoison = payload.activePoison;
 	currentActiveElixirs = payload.activeElixirs ?? [];
 	currentBountyScrolls = payload.bountyScrolls ?? [];
+	// Let other client scripts detect the active weapon via attribute
+	Players.LocalPlayer.SetAttribute("EquippedWeapon", currentEquippedWeapon ?? "fists");
 	refreshActiveStatusBar();
 	if (inventoryOpen) {
 		refreshItemGrid();

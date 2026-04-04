@@ -90,219 +90,220 @@ function showXPGain(delta: number, screenGui: ScreenGui): void {
 	spawnFloatPop(screenGui, "+" + delta + " xp", UI_THEME.textHeader, 128, 176, 18);
 }
 
+// ── Notification stack ────────────────────────────────────────────────────────
+// Cards slide in from the right at the top-right corner.
+// Max 3 visible; oldest is dismissed when a 4th arrives.
+
+const CARD_WIDTH = 320;
+const CARD_HEIGHT = 80;
+const CARD_GAP = 10;
+// 20% from the top of the screen is the anchor for the first card
+const CARD_TOP_SCALE = 0.2;
+const MAX_STACK = 3;
+const HOLD_SECS = 8;
+const FADE_SECS = 0.4;
+
+interface StackEntry {
+	frame: Frame;
+	dismissFn: () => void;
+}
+
+const notifyStack: StackEntry[] = [];
+
+// Returns the UDim2 position for stack slot i (0 = topmost / newest)
+function stackPos(i: number): UDim2 {
+	return new UDim2(0.5, -CARD_WIDTH / 2, CARD_TOP_SCALE, i * (CARD_HEIGHT + CARD_GAP));
+}
+
+// Off-screen-above start / exit position for a given slot
+function stackPosAbove(i: number): UDim2 {
+	return new UDim2(0.5, -CARD_WIDTH / 2, CARD_TOP_SCALE, -(CARD_HEIGHT + 20) + i * (CARD_HEIGHT + CARD_GAP));
+}
+
+function reorderStack(screenGui: ScreenGui): void {
+	for (let i = 0; i < notifyStack.size(); i++) {
+		const entry = notifyStack[i];
+		TweenService.Create(
+			entry.frame,
+			new TweenInfo(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Position: stackPos(i) },
+		).Play();
+	}
+}
+
+function pushNotification(frame: Frame, screenGui: ScreenGui): () => void {
+	// If we're already at max, forcibly dismiss the oldest
+	if (notifyStack.size() >= MAX_STACK) {
+		const oldest = notifyStack[notifyStack.size() - 1];
+		oldest.dismissFn();
+	}
+
+	// Drop in from just above the anchor
+	frame.Position = stackPosAbove(0);
+	frame.Parent = screenGui;
+	TweenService.Create(frame, new TweenInfo(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Position: stackPos(0),
+	}).Play();
+
+	let dismissed = false;
+	const dismiss = () => {
+		if (dismissed) return;
+		dismissed = true;
+		const idx = notifyStack.indexOf(entry);
+		if (idx >= 0) notifyStack.remove(idx);
+		// Slide up and fade out
+		TweenService.Create(frame, new TweenInfo(FADE_SECS, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position: new UDim2(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset - CARD_HEIGHT),
+			BackgroundTransparency: 1,
+		}).Play();
+		for (const child of frame.GetDescendants()) {
+			if (child.IsA("TextLabel")) {
+				TweenService.Create(child, new TweenInfo(FADE_SECS, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+					TextTransparency: 1,
+				}).Play();
+			} else if (child.IsA("UIStroke")) {
+				TweenService.Create(child, new TweenInfo(FADE_SECS, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+					Transparency: 1,
+				}).Play();
+			}
+		}
+		task.delay(FADE_SECS + 0.05, () => frame.Destroy());
+		reorderStack(screenGui);
+	};
+
+	const entry: StackEntry = { frame, dismissFn: dismiss };
+	notifyStack.insert(0, entry);
+	reorderStack(screenGui);
+
+	// Auto-dismiss after hold time
+	task.delay(HOLD_SECS, dismiss);
+
+	return dismiss;
+}
+
+function makeBaseCard(): Frame {
+	const card = new Instance("Frame");
+	card.Size = new UDim2(0, CARD_WIDTH, 0, CARD_HEIGHT);
+	card.AnchorPoint = new Vector2(0, 0);
+	card.BackgroundColor3 = UI_THEME.headerBg;
+	card.BackgroundTransparency = 0.04;
+	card.BorderSizePixel = 0;
+	card.ZIndex = 30;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = UI_THEME.cornerRadius;
+	corner.Parent = card;
+
+	return card;
+}
+
 // ── Level up ─────────────────────────────────────────────────────────────────
 
 function showLevelUp(level: number, screenGui: ScreenGui): void {
-	// Dramatic dark vignette flash
-	const flash = new Instance("Frame");
-	flash.Size = new UDim2(1, 0, 1, 0);
-	flash.BackgroundColor3 = UI_THEME.bg;
-	flash.BackgroundTransparency = 0.42;
-	flash.BorderSizePixel = 0;
-	flash.ZIndex = 20;
-	flash.Parent = screenGui;
-
-	const flashFade = TweenService.Create(flash, new TweenInfo(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency: 1,
-	});
-	flashFade.Play();
-	flashFade.Completed.Once(() => flash.Destroy());
-
-	// Card — starts small, scales to full size
-	const card = new Instance("Frame");
-	card.Size = new UDim2(0, 140, 0, 38); // start compressed
-	card.Position = new UDim2(0.5, 0, 0.44, 0);
-	card.AnchorPoint = new Vector2(0.5, 0.5);
-	card.BackgroundColor3 = UI_THEME.headerBg;
-	card.BackgroundTransparency = 0;
-	card.BorderSizePixel = 0;
-	card.ZIndex = 21;
-	card.Parent = screenGui;
-
-	const cardCorner = new Instance("UICorner");
-	cardCorner.CornerRadius = UI_THEME.cornerRadius;
-	cardCorner.Parent = card;
+	const card = makeBaseCard();
 
 	const cardStroke = new Instance("UIStroke");
 	cardStroke.Color = UI_THEME.border;
 	cardStroke.Thickness = 1.5;
 	cardStroke.Parent = card;
 
-	// Sub-header
+	// Icon / badge area
+	const iconLabel = new Instance("TextLabel");
+	iconLabel.Size = new UDim2(0, 60, 1, 0);
+	iconLabel.BackgroundTransparency = 1;
+	iconLabel.Text = "^";
+	iconLabel.TextColor3 = UI_THEME.textHeader;
+	iconLabel.Font = UI_THEME.fontDisplay;
+	iconLabel.TextSize = 36;
+	iconLabel.ZIndex = 31;
+	iconLabel.Parent = card;
+
 	const topLine = new Instance("TextLabel");
-	topLine.Size = new UDim2(1, 0, 0.4, 0);
+	topLine.Size = new UDim2(1, -64, 0.38, 0);
+	topLine.Position = new UDim2(0, 60, 0.04, 0);
 	topLine.BackgroundTransparency = 1;
-	topLine.Text = "—  LEVEL UP  —";
+	topLine.Text = "-- LEVEL UP --";
 	topLine.TextColor3 = UI_THEME.textSection;
-	topLine.TextTransparency = 1; // fades in alongside scale
 	topLine.Font = UI_THEME.fontBold;
-	topLine.TextSize = 10;
-	topLine.ZIndex = 22;
+	topLine.TextSize = 9;
+	topLine.TextXAlignment = Enum.TextXAlignment.Left;
+	topLine.ZIndex = 31;
 	topLine.Parent = card;
 
-	// Big level number
 	const levelLine = new Instance("TextLabel");
-	levelLine.Size = new UDim2(1, 0, 0.68, 0);
-	levelLine.Position = new UDim2(0, 0, 0.34, 0);
+	levelLine.Size = new UDim2(1, -64, 0.52, 0);
+	levelLine.Position = new UDim2(0, 60, 0.38, 0);
 	levelLine.BackgroundTransparency = 1;
 	levelLine.Text = "Level " + level;
 	levelLine.TextColor3 = UI_THEME.textHeader;
-	levelLine.TextTransparency = 1;
 	levelLine.Font = UI_THEME.fontDisplay;
-	levelLine.TextSize = 30;
-	levelLine.ZIndex = 22;
+	levelLine.TextSize = 28;
+	levelLine.TextXAlignment = Enum.TextXAlignment.Left;
+	levelLine.ZIndex = 31;
 	levelLine.Parent = card;
 
-	// Scale card in + fade text in simultaneously
-	TweenService.Create(card, new TweenInfo(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size: new UDim2(0, 310, 0, 76),
-	}).Play();
-	TweenService.Create(topLine, new TweenInfo(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-	TweenService.Create(levelLine, new TweenInfo(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-
-	// Hold then fade out
-	task.delay(2.2, () => {
-		TweenService.Create(card, new TweenInfo(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			BackgroundTransparency: 1,
-		}).Play();
-		TweenService.Create(topLine, new TweenInfo(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			TextTransparency: 1,
-		}).Play();
-		const finish = TweenService.Create(
-			levelLine,
-			new TweenInfo(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ TextTransparency: 1 },
-		);
-		finish.Play();
-		finish.Completed.Once(() => card.Destroy());
-	});
+	pushNotification(card, screenGui);
 }
 
 // ── Achievement unlocked ──────────────────────────────────────────────────────
 
 function showAchievement(achievementName: string, description: string, icon: string, screenGui: ScreenGui): void {
-	// Subtle dark flash
-	const flash = new Instance("Frame");
-	flash.Size = new UDim2(1, 0, 1, 0);
-	flash.BackgroundColor3 = UI_THEME.bg;
-	flash.BackgroundTransparency = 0.55;
-	flash.BorderSizePixel = 0;
-	flash.ZIndex = 20;
-	flash.Parent = screenGui;
-
-	const flashFade = TweenService.Create(flash, new TweenInfo(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency: 1,
-	});
-	flashFade.Play();
-	flashFade.Completed.Once(() => flash.Destroy());
-
-	// Card — starts compressed, scales out
-	const card = new Instance("Frame");
-	card.Size = new UDim2(0, 120, 0, 30);
-	card.Position = new UDim2(0.5, 0, 0.38, 0);
-	card.AnchorPoint = new Vector2(0.5, 0.5);
-	card.BackgroundColor3 = UI_THEME.headerBg;
-	card.BackgroundTransparency = 0;
-	card.BorderSizePixel = 0;
-	card.ZIndex = 21;
-	card.Parent = screenGui;
-
-	const cardCorner = new Instance("UICorner");
-	cardCorner.CornerRadius = UI_THEME.cornerRadius;
-	cardCorner.Parent = card;
+	const card = makeBaseCard();
 
 	const cardStroke = new Instance("UIStroke");
 	cardStroke.Color = UI_THEME.gold;
 	cardStroke.Thickness = 1.5;
 	cardStroke.Parent = card;
 
-	// Icon badge — left side
 	const iconLabel = new Instance("TextLabel");
-	iconLabel.Size = new UDim2(0, 44, 1, 0);
+	iconLabel.Size = new UDim2(0, 56, 1, 0);
 	iconLabel.BackgroundTransparency = 1;
 	iconLabel.Text = icon;
 	iconLabel.TextColor3 = UI_THEME.gold;
-	iconLabel.TextTransparency = 1;
 	iconLabel.Font = UI_THEME.fontDisplay;
 	iconLabel.TextSize = 32;
-	iconLabel.ZIndex = 22;
+	iconLabel.ZIndex = 31;
 	iconLabel.Parent = card;
 
-	// "ACHIEVEMENT UNLOCKED" sub-header
 	const topLine = new Instance("TextLabel");
-	topLine.Size = new UDim2(1, -48, 0.38, 0);
-	topLine.Position = new UDim2(0, 48, 0.02, 0);
+	topLine.Size = new UDim2(1, -60, 0.32, 0);
+	topLine.Position = new UDim2(0, 58, 0.04, 0);
 	topLine.BackgroundTransparency = 1;
 	topLine.Text = "-- ACHIEVEMENT UNLOCKED --";
 	topLine.TextColor3 = UI_THEME.textSection;
-	topLine.TextTransparency = 1;
 	topLine.Font = UI_THEME.fontBold;
 	topLine.TextSize = 9;
 	topLine.TextXAlignment = Enum.TextXAlignment.Left;
-	topLine.ZIndex = 22;
+	topLine.ZIndex = 31;
 	topLine.Parent = card;
 
-	// Achievement name — large
 	const nameLine = new Instance("TextLabel");
-	nameLine.Size = new UDim2(1, -48, 0.36, 0);
-	nameLine.Position = new UDim2(0, 48, 0.32, 0);
+	nameLine.Size = new UDim2(1, -60, 0.36, 0);
+	nameLine.Position = new UDim2(0, 58, 0.32, 0);
 	nameLine.BackgroundTransparency = 1;
 	nameLine.Text = achievementName;
 	nameLine.TextColor3 = UI_THEME.textHeader;
-	nameLine.TextTransparency = 1;
 	nameLine.Font = UI_THEME.fontDisplay;
-	nameLine.TextSize = 22;
+	nameLine.TextSize = 20;
+	nameLine.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameLine.TextXAlignment = Enum.TextXAlignment.Left;
-	nameLine.ZIndex = 22;
+	nameLine.ZIndex = 31;
 	nameLine.Parent = card;
 
-	// Description — smaller muted text
 	const descLine = new Instance("TextLabel");
-	descLine.Size = new UDim2(1, -48, 0.26, 0);
-	descLine.Position = new UDim2(0, 48, 0.7, 0);
+	descLine.Size = new UDim2(1, -60, 0.26, 0);
+	descLine.Position = new UDim2(0, 58, 0.7, 0);
 	descLine.BackgroundTransparency = 1;
 	descLine.Text = description;
 	descLine.TextColor3 = UI_THEME.textMuted;
-	descLine.TextTransparency = 1;
 	descLine.Font = UI_THEME.fontBody;
-	descLine.TextSize = 11;
+	descLine.TextSize = 10;
+	descLine.TextTruncate = Enum.TextTruncate.AtEnd;
 	descLine.TextXAlignment = Enum.TextXAlignment.Left;
-	descLine.ZIndex = 22;
+	descLine.ZIndex = 31;
 	descLine.Parent = card;
 
-	// Animate: scale card in + fade all text
-	TweenService.Create(card, new TweenInfo(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size: new UDim2(0, 340, 0, 86),
-	}).Play();
-	TweenService.Create(iconLabel, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-	TweenService.Create(topLine, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-	TweenService.Create(nameLine, new TweenInfo(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-	TweenService.Create(descLine, new TweenInfo(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		TextTransparency: 0,
-	}).Play();
-
-	// Hold then fade out
-	task.delay(3.0, () => {
-		const fadeInfo = new TweenInfo(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In);
-		TweenService.Create(card, fadeInfo, { BackgroundTransparency: 1 }).Play();
-		TweenService.Create(cardStroke, fadeInfo, { Transparency: 1 }).Play();
-		TweenService.Create(iconLabel, fadeInfo, { TextTransparency: 1 }).Play();
-		TweenService.Create(topLine, fadeInfo, { TextTransparency: 1 }).Play();
-		TweenService.Create(nameLine, fadeInfo, { TextTransparency: 1 }).Play();
-		const finish = TweenService.Create(descLine, fadeInfo, { TextTransparency: 1 });
-		finish.Play();
-		finish.Completed.Once(() => card.Destroy());
-	});
+	pushNotification(card, screenGui);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

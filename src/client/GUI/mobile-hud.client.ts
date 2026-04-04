@@ -1,7 +1,13 @@
 import { Players, RunService, StarterGui, TweenService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
-import { getActionContext, fireCurrentAction, ActionContext, setStealthing } from "../modules/npc-proximity";
+import {
+	getActionContext,
+	fireCurrentAction,
+	ActionContext,
+	getAssassinateContext,
+	fireAssassinateAction,
+} from "../modules/npc-proximity";
 import { toggleInventory, toggleKillBook } from "../modules/ui-toggles";
 import { getPlaceCampfireRemote } from "shared/remotes/campfire-remote";
 
@@ -13,7 +19,6 @@ function sc(base: number): number {
 
 // -- State --------------------------------------------------------------------
 
-let assassinMode = false;
 let campfireOnCooldown = false;
 const CAMPFIRE_COOLDOWN = 2;
 
@@ -24,11 +29,15 @@ let actionIconLabel: TextLabel | undefined;
 let actionTextLabel: TextLabel | undefined;
 let actionStroke: UIStroke | undefined;
 let actionGlow: Frame | undefined;
-let assassinBtn: TextButton | undefined;
-let assassinIcon: TextLabel | undefined;
-let assassinStroke: UIStroke | undefined;
-let lastContext: ActionContext = "none"; // will update to "jump" on first frame
+let lastContext: ActionContext = "none";
+let lastAssassinCtx: string = "none";
+let lastWeaponEquipped = false;
 let dangerPulseTween: Tween | undefined;
+
+// Small contextual kill button (1-o-clock of primary button)
+let smallKillBtn: TextButton | undefined;
+let smallKillIcon: TextLabel | undefined;
+let smallKillStroke: UIStroke | undefined;
 
 // -- Action style definitions -------------------------------------------------
 
@@ -249,32 +258,21 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 	// North = Assassin Toggle, then Codex, Campfire, West = Inventory
 	// =========================================================================
 	const arcRadius = primaryDiameter / 2 + gap + secondaryDiameter / 2;
-	const SEC_COUNT = 4;
+	const SEC_COUNT = 3;
 
-	// Returns a position on the NW arc. index 0 = north, index 3 = west.
-	// Angle sweeps from 0 (straight up) to 105 degrees (7*PI/12).
+	// Returns a position on the NW arc. index 0 = NNW, index 2 = west.
+	// Angle sweeps from 35 degrees to 105 degrees (7*PI/12).
 	function arcPosition(idx: number): UDim2 {
-		const angle = (idx / (SEC_COUNT - 1)) * ((7 * math.pi) / 12);
+		const startAngle = (35 * math.pi) / 180;
+		const endAngle = (7 * math.pi) / 12;
+		const angle = startAngle + (idx / (SEC_COUNT - 1)) * (endAngle - startAngle);
 		const dx = -arcRadius * math.sin(angle);
 		const dy = -arcRadius * math.cos(angle);
 		return new UDim2(1, primaryCenterX + dx, 1, primaryCenterY + dy);
 	}
 
-	// -- 0: Assassin Mode toggle (north) --------------------------------------
-	const assParts = makeButton(screenGui, "AssassinToggle", secondaryDiameter, arcPosition(0));
-	assassinBtn = assParts.button;
-	assassinIcon = assParts.icon;
-	assassinStroke = assParts.stroke;
-	assParts.icon.Text = "/";
-	assParts.icon.TextColor3 = UI_THEME.textMuted;
-	assParts.icon.TextSize = math.floor(secondaryDiameter * 0.44);
-
-	assassinBtn.Activated.Connect(() => {
-		toggleAssassinMode();
-	});
-
-	// -- 1: Campfire ----------------------------------------------------------
-	const campParts = makeButton(screenGui, "CampfireButton", secondaryDiameter, arcPosition(1));
+	// -- 0: Campfire ----------------------------------------------------------
+	const campParts = makeButton(screenGui, "CampfireButton", secondaryDiameter, arcPosition(0));
 	campParts.icon.Text = "*";
 	campParts.icon.TextColor3 = UI_THEME.gold;
 	campParts.icon.TextSize = math.floor(secondaryDiameter * 0.48);
@@ -283,8 +281,8 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		placeCampfire(campParts.button, campParts.stroke);
 	});
 
-	// -- 2: Codex (Kill Book) -------------------------------------------------
-	const codexParts = makeButton(screenGui, "CodexButton", secondaryDiameter, arcPosition(2));
+	// -- 1: Codex (Kill Book) -------------------------------------------------
+	const codexParts = makeButton(screenGui, "CodexButton", secondaryDiameter, arcPosition(1));
 	codexParts.icon.Text = "=";
 	codexParts.icon.TextColor3 = UI_THEME.textMuted;
 	codexParts.icon.TextSize = math.floor(secondaryDiameter * 0.44);
@@ -294,8 +292,8 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		pulseButton(codexParts.button);
 	});
 
-	// -- 3: Inventory (west) --------------------------------------------------
-	const invParts = makeButton(screenGui, "InventoryButton", secondaryDiameter, arcPosition(3));
+	// -- 2: Inventory (west) --------------------------------------------------
+	const invParts = makeButton(screenGui, "InventoryButton", secondaryDiameter, arcPosition(2));
 	invParts.icon.Text = "#";
 	invParts.icon.TextColor3 = UI_THEME.textMuted;
 	invParts.icon.TextSize = math.floor(secondaryDiameter * 0.44);
@@ -306,15 +304,59 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 	});
 
 	// =========================================================================
-	// PER-FRAME CONTEXT UPDATE
+	// SMALL KILL BUTTON — 1-o-clock position relative to primary button
+	// Completely hidden when out of assassination range.
+	// Red = weapon equipped (ready to strike), grey = no weapon equipped.
 	// =========================================================================
+	const killBtnX = math.floor(primaryCenterX + arcRadius * 0.5);
+	const killBtnY = math.floor(primaryCenterY - arcRadius * 0.866);
+	const killBtnPos = new UDim2(1, killBtnX, 1, killBtnY);
+
+	const smallKillParts = makeButton(screenGui, "SmallKillButton", secondaryDiameter, killBtnPos);
+	smallKillBtn = smallKillParts.button;
+	smallKillIcon = smallKillParts.icon;
+	smallKillStroke = smallKillParts.stroke;
+	smallKillIcon.Text = "/";
+	smallKillIcon.TextSize = math.floor(secondaryDiameter * 0.48);
+
+	// Start hidden — no visible presence when out of range
+	smallKillBtn.Visible = false;
+
+	smallKillBtn.Activated.Connect(() => {
+		fireAssassinateAction();
+		pulseButton(smallKillBtn!);
+	});
+
 	RunService.RenderStepped.Connect(() => {
 		const ctx = getActionContext();
 		if (ctx !== lastContext) {
 			applyActionStyle(ctx);
 			lastContext = ctx;
 		}
+		const assCtx = getAssassinateContext();
+		const equippedWeapon = Players.LocalPlayer.GetAttribute("EquippedWeapon") as string | undefined;
+		const weaponEquipped = equippedWeapon !== undefined && equippedWeapon !== "fists";
+		if (assCtx !== lastAssassinCtx || weaponEquipped !== lastWeaponEquipped) {
+			updateSmallKillButton(assCtx !== "none", weaponEquipped);
+			lastAssassinCtx = assCtx;
+			lastWeaponEquipped = weaponEquipped;
+		}
 	});
+}
+
+// -- Small kill button update -------------------------------------------------
+
+function updateSmallKillButton(inRange: boolean, weaponEquipped: boolean): void {
+	if (!smallKillBtn || !smallKillIcon || !smallKillStroke) return;
+	if (!inRange) {
+		smallKillBtn.Visible = false;
+		return;
+	}
+	const accentColor = weaponEquipped ? UI_THEME.danger : UI_THEME.textMuted;
+	smallKillBtn.Visible = true;
+	smallKillBtn.BackgroundColor3 = weaponEquipped ? Color3.fromRGB(28, 8, 8) : UI_THEME.bgInset;
+	smallKillIcon.TextColor3 = accentColor;
+	smallKillStroke.Color = accentColor;
 }
 
 // -- Action style switching ---------------------------------------------------
@@ -358,7 +400,6 @@ function applyActionStyle(ctx: ActionContext): void {
 }
 
 // -- Danger pulse animation (assassination glow throb) ------------------------
-
 function startDangerPulse(): void {
 	if (dangerPulseTween) return; // already running
 	if (!actionGlow) return;
@@ -381,38 +422,6 @@ function stopDangerPulse(): void {
 	}
 	if (actionGlow) {
 		actionGlow.BackgroundTransparency = 1;
-	}
-}
-
-// -- Assassin mode toggle -----------------------------------------------------
-
-function toggleAssassinMode(): void {
-	assassinMode = !assassinMode;
-	print("[MOBILE-HUD] Assassin mode: " + (assassinMode ? "ON" : "OFF"));
-
-	// Update npc-proximity's internal stealth flag so getActionContext() returns assassinate
-	setStealthing(assassinMode);
-	Players.LocalPlayer.SetAttribute("IsStealthing", assassinMode);
-
-	updateAssassinButtonVisuals();
-	pulseButton(assassinBtn!);
-}
-
-function updateAssassinButtonVisuals(): void {
-	if (!assassinBtn || !assassinIcon || !assassinStroke) return;
-	assassinStroke.Color = assassinMode ? UI_THEME.danger : UI_THEME.border;
-	assassinIcon.TextColor3 = assassinMode ? UI_THEME.danger : UI_THEME.textMuted;
-	assassinBtn.BackgroundColor3 = assassinMode ? Color3.fromRGB(28, 10, 10) : UI_THEME.bgInset;
-	assassinBtn.BackgroundTransparency = assassinMode ? 0.04 : 0.08;
-}
-
-function syncAssassinModeFromAttribute(): void {
-	const val = Players.LocalPlayer.GetAttribute("IsStealthing") as boolean | undefined;
-	const stealthing = val === true;
-	if (stealthing !== assassinMode) {
-		assassinMode = stealthing;
-		setStealthing(assassinMode);
-		updateAssassinButtonVisuals();
 	}
 }
 
@@ -469,8 +478,4 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildMobileHUD(screenGui);
-
-	Players.LocalPlayer.GetAttributeChangedSignal("IsStealthing").Connect(() => {
-		syncAssassinModeFromAttribute();
-	});
 });

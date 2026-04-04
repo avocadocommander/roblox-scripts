@@ -1,4 +1,4 @@
-import { Players, RunService, Workspace, CollectionService, UserInputService } from "@rbxts/services";
+import { Players, RunService, TweenService, Workspace, CollectionService, UserInputService } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
 import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
@@ -43,7 +43,6 @@ const INSPECT_RANGE = 8; // Distance at which inspectable objects show prompt
 const BTN_SAFE = Color3.fromRGB(68, 138, 82);
 const BTN_SPOTTED = UI_THEME.danger;
 
-let isCurrentlyStealthing = false;
 let closestNPCInRange: Model | undefined = undefined;
 let closestInspectableInRange: Model | undefined = undefined;
 
@@ -166,7 +165,7 @@ const npcUIMap = new Map<Model, NPCProximityUI>();
 
 function createNPCBillboard(npc: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
-	billboard.Size = new UDim2(5, 0, 1.6, 0);
+	billboard.Size = new UDim2(5, 0, 2.0, 0);
 	billboard.MaxDistance = math.huge;
 	billboard.StudsOffset = new Vector3(0, 6.5, 0);
 	billboard.AlwaysOnTop = false;
@@ -178,7 +177,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	// Outer card frame
 	const card = new Instance("Frame");
 	card.Name = "NPCCard";
-	card.Size = new UDim2(1, 0, 0.7, 0);
+	card.Size = new UDim2(1, 0, 0.56, 0);
 	card.Position = new UDim2(0, 0, 0, 0);
 	card.BackgroundColor3 = UI_THEME.bg;
 	card.BackgroundTransparency = 0.06;
@@ -215,20 +214,54 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	return billboard;
 }
 
+// ── Button fade helpers ───────────────────────────────────────────────────────
+
+function fadeInButton(button: TextButton): void {
+	button.BackgroundTransparency = 1;
+	button.TextTransparency = 1;
+	const stroke = button.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	if (stroke) stroke.Transparency = 1;
+	TweenService.Create(button, new TweenInfo(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency: 0.1,
+		TextTransparency: 0.15,
+	}).Play();
+	if (stroke) {
+		TweenService.Create(stroke, new TweenInfo(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Transparency: 0,
+		}).Play();
+	}
+}
+
+function fadeOutAndDestroy(button: TextButton): void {
+	TweenService.Create(button, new TweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency: 1,
+		TextTransparency: 1,
+	}).Play();
+	const stroke = button.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
+	if (stroke) {
+		TweenService.Create(stroke, new TweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Transparency: 1,
+		}).Play();
+	}
+	task.delay(0.21, () => {
+		if (button.Parent) button.Destroy();
+	});
+}
+
 function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButton {
 	const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
 	const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
 
 	const button = new Instance("TextButton");
-	button.Size = new UDim2(1, 0, 0.42, 0);
-	button.Position = new UDim2(0, 0, 0.72, 0);
-	button.BackgroundColor3 = UI_THEME.headerBg;
-	button.BackgroundTransparency = 0.1;
+	button.Size = new UDim2(1, 0, 0.17, 0);
+	button.Position = new UDim2(0, 0, 0.78, 0);
+	button.BackgroundColor3 = Color3.fromRGB(28, 8, 8);
+	button.BackgroundTransparency = 1;
 	button.TextColor3 = btnColor;
-	button.TextTransparency = 0.15;
+	button.TextTransparency = 1;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
-	button.Text = "ASSASSINATE  [E]";
+	button.Text = "[X] KILL";
 	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	button.TextStrokeTransparency = 0.5;
 	button.BorderSizePixel = 0;
@@ -247,17 +280,18 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 		assassinationRemote.FireServer(npc);
 	});
 
+	fadeInButton(button);
 	return button;
 }
 
 function createTalkButton(billboard: BillboardGui, npc: Model): TextButton {
 	const button = new Instance("TextButton");
-	button.Size = new UDim2(1, 0, 0.42, 0);
-	button.Position = new UDim2(0, 0, 0.72, 0);
+	button.Size = new UDim2(1, 0, 0.17, 0);
+	button.Position = new UDim2(0, 0, 0.58, 0);
 	button.BackgroundColor3 = UI_THEME.bgInset;
-	button.BackgroundTransparency = 0.1;
+	button.BackgroundTransparency = 1;
 	button.TextColor3 = UI_THEME.textPrimary;
-	button.TextTransparency = 0.15;
+	button.TextTransparency = 1;
 	button.Font = UI_THEME.fontBold;
 	button.TextSize = 11;
 	button.Text = "TALK  [F]";
@@ -279,6 +313,7 @@ function createTalkButton(billboard: BillboardGui, npc: Model): TextButton {
 		requestOpenDialog(npc);
 	});
 
+	fadeInButton(button);
 	return button;
 }
 
@@ -681,8 +716,8 @@ function updateNPCProximityUI() {
 		const npcHasDialog = hasNPCDialog(npc.Name);
 		const talkRange = npcHasDialog ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
 		const inTalkRange = npc === closestNPC && closestDistance <= talkRange;
-		const shouldShowAssassinate = isCurrentlyStealthing && npc === closestNPC && npcIsKillable;
-		const shouldShowTalk = !isCurrentlyStealthing && inTalkRange && !isDialogOpen();
+		const shouldShowAssassinate = npc === closestNPC && npcIsKillable && closestDistance <= PROXIMITY_RANGE;
+		const shouldShowTalk = inTalkRange && !isDialogOpen();
 
 		if (shouldShowAssassinate) {
 			if (!ui.assassinateButton) {
@@ -690,7 +725,7 @@ function updateNPCProximityUI() {
 			}
 		} else {
 			if (ui.assassinateButton) {
-				ui.assassinateButton.Destroy();
+				fadeOutAndDestroy(ui.assassinateButton);
 				ui.assassinateButton = undefined;
 			}
 		}
@@ -701,7 +736,7 @@ function updateNPCProximityUI() {
 			}
 		} else {
 			if (ui.talkButton) {
-				ui.talkButton.Destroy();
+				fadeOutAndDestroy(ui.talkButton);
 				ui.talkButton = undefined;
 			}
 		}
@@ -729,7 +764,6 @@ function updateNPCProximityUI() {
 
 		const wantedPlayer = Players.FindFirstChild(wantedName) as Player | undefined;
 		const shouldShow =
-			isCurrentlyStealthing &&
 			wantedPlayer !== undefined &&
 			wantedPlayer.IsA("Player") &&
 			wantedPlayer.Character === closestWantedPlayerInRange;
@@ -742,14 +776,15 @@ function updateNPCProximityUI() {
 
 			const btn = new Instance("TextButton");
 			btn.Name = "AssassinateBtn";
-			btn.Size = new UDim2(1, 0, 0.22, 0);
-			btn.Position = new UDim2(0, 0, 0, 0);
-			btn.BackgroundColor3 = UI_THEME.headerBg;
-			btn.BackgroundTransparency = 0.1;
+			btn.Size = new UDim2(1, 0, 0.17, 0);
+			btn.Position = new UDim2(0, 0, 0.78, 0);
+			btn.BackgroundColor3 = Color3.fromRGB(28, 8, 8);
+			btn.BackgroundTransparency = 1;
 			btn.TextColor3 = btnColor;
+			btn.TextTransparency = 1;
 			btn.Font = UI_THEME.fontBold;
 			btn.TextSize = 11;
-			btn.Text = "[E] ASSASSINATE";
+			btn.Text = "[X] KILL";
 			btn.BorderSizePixel = 0;
 			btn.Parent = billboard;
 
@@ -767,8 +802,9 @@ function updateNPCProximityUI() {
 					playerAssassinationRemote.FireServer(wantedPlayer.Character);
 				}
 			});
+			fadeInButton(btn);
 		} else if (!shouldShow && existingBtn) {
-			existingBtn.Destroy();
+			fadeOutAndDestroy(existingBtn);
 		}
 	}
 
@@ -895,7 +931,6 @@ function initializeNPCProximity() {
 }
 
 function setStealthing(stealthing: boolean) {
-	isCurrentlyStealthing = stealthing;
 	stealthRemote.FireServer(stealthing);
 }
 
@@ -907,21 +942,32 @@ function setStealthing(stealthing: boolean) {
 export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "inspect" | "jump" | "none";
 
 export function getActionContext(): ActionContext {
-	if (isCurrentlyStealthing && closestWantedPlayerInRange) return "assassinate_player";
-	if (isCurrentlyStealthing && closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) return "assassinate_npc";
 	if (closestNPCInRange && !isDialogOpen()) return "talk";
 	if (closestInspectableInRange && !isDialogOpen()) return "inspect";
 	return "jump";
 }
 
-/** Fire the current action (called by mobile HUD primary button). */
-export function fireCurrentAction(): void {
-	const ctx = getActionContext();
+/** Returns whether an assassination target is currently in range. */
+export function getAssassinateContext(): "assassinate_player" | "assassinate_npc" | "none" {
+	if (closestWantedPlayerInRange) return "assassinate_player";
+	if (closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) return "assassinate_npc";
+	return "none";
+}
+
+/** Fire the assassination action (called by dedicated kill button). */
+export function fireAssassinateAction(): void {
+	const ctx = getAssassinateContext();
 	if (ctx === "assassinate_player" && closestWantedPlayerInRange) {
 		playerAssassinationRemote.FireServer(closestWantedPlayerInRange);
 	} else if (ctx === "assassinate_npc" && closestNPCInRange) {
 		assassinationRemote.FireServer(closestNPCInRange);
-	} else if (ctx === "talk" && closestNPCInRange) {
+	}
+}
+
+/** Fire the current action (called by mobile HUD primary button). */
+export function fireCurrentAction(): void {
+	const ctx = getActionContext();
+	if (ctx === "talk" && closestNPCInRange) {
 		requestOpenDialog(closestNPCInRange);
 	} else if (ctx === "inspect" && closestInspectableInRange) {
 		requestOpenInspect(closestInspectableInRange);
