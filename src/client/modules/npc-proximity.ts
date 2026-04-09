@@ -8,7 +8,8 @@ import { isNPCKillable, getNPCInteraction, hasNPCDialog } from "shared/config/np
 import { getInspectDef } from "shared/config/inspectables";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
-import { requestOpenDialog, requestOpenInspect, isDialogOpen } from "./npc-dialog";
+import { requestOpenDialog, requestOpenInspect, requestOpenPremiumOffer, isDialogOpen } from "./npc-dialog";
+import { getPremiumOffer } from "shared/config/premium-offers";
 import {
 	getPlayerAssassinationRemote,
 	getPlayerWantedRemote,
@@ -38,6 +39,7 @@ const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further 
 const WANTED_PLAYER_RANGE = 15; // Range for PvP assassination (matches server MAX_ASSASSINATION_DISTANCE)
 const NAME_VISIBLE_RANGE = 15; // Distance at which NPC names become visible
 const INSPECT_RANGE = 8; // Distance at which inspectable objects show prompt
+const PREMIUM_OFFER_RANGE = 10; // Distance at which premium offer objects show prompt
 
 // Assassinate button colors — green when safe, red when spotted
 const BTN_SAFE = Color3.fromRGB(68, 138, 82);
@@ -45,6 +47,7 @@ const BTN_SPOTTED = UI_THEME.danger;
 
 let closestNPCInRange: Model | undefined = undefined;
 let closestInspectableInRange: Model | undefined = undefined;
+let closestPremiumOfferInRange: Model | undefined = undefined;
 
 // ── Wanted Player Tracking ──────────────────────────────────────────────────────
 const wantedPlayerInfo = new Map<string, { gold: number; displayName: string }>();
@@ -194,7 +197,8 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	cardStroke.Parent = card;
 
 	// NPC name — bright warm white, rarity colour is shown via the card border
-	const hasShopInteraction = getNPCInteraction(npc.Name) === "Shop";
+	const npcInteractionAttr = npc.GetAttribute("Interaction") as string | undefined;
+	const hasShopInteraction = (npcInteractionAttr ?? getNPCInteraction(npc.Name)) === "Shop";
 	const displayName = hasShopInteraction ? "(G) " + npc.Name : npc.Name;
 
 	const nameLabel = new Instance("TextLabel");
@@ -434,6 +438,171 @@ function setupInspectableProximity(model: Model): void {
 	});
 }
 
+// ── Premium Offer Object Billboards ─────────────────────────────────────────────
+
+interface PremiumOfferUI {
+	billboard: BillboardGui;
+	nameLabel: TextLabel;
+	interactPrompt: TextButton | undefined;
+}
+
+const premiumOfferUIMap = new Map<Model, PremiumOfferUI>();
+
+function createPremiumOfferBillboard(model: Model): BillboardGui {
+	const offerId = model.GetAttribute("offerId") as string;
+	const offer = getPremiumOffer(offerId);
+	const displayName = offer ? offer.title : model.Name;
+
+	const billboard = new Instance("BillboardGui");
+	billboard.Size = new UDim2(5, 0, 1.4, 0);
+	billboard.MaxDistance = math.huge;
+	billboard.StudsOffset = new Vector3(0, 4, 0);
+	billboard.AlwaysOnTop = false;
+	billboard.Parent = model;
+
+	const card = new Instance("Frame");
+	card.Name = "OfferCard";
+	card.Size = new UDim2(1, 0, 0.65, 0);
+	card.Position = new UDim2(0, 0, 0, 0);
+	card.BackgroundColor3 = UI_THEME.bg;
+	card.BackgroundTransparency = 0.06;
+	card.BorderSizePixel = 0;
+	card.Visible = false;
+	card.Parent = billboard;
+
+	const cardCorner = new Instance("UICorner");
+	cardCorner.CornerRadius = new UDim(0, 5);
+	cardCorner.Parent = card;
+
+	const cardStroke = new Instance("UIStroke");
+	cardStroke.Color = UI_THEME.gold;
+	cardStroke.Thickness = 1.2;
+	cardStroke.Parent = card;
+
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Name = "TextLabel";
+	nameLabel.Size = new UDim2(1, -10, 0.9, 0);
+	nameLabel.Position = new UDim2(0, 5, 0.05, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = UI_THEME.gold;
+	nameLabel.Font = UI_THEME.fontDisplay;
+	nameLabel.TextSize = 14;
+	nameLabel.Text = displayName;
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	nameLabel.TextStrokeTransparency = 0.35;
+	nameLabel.BorderSizePixel = 0;
+	nameLabel.Parent = card;
+
+	return billboard;
+}
+
+function createPremiumOfferPrompt(billboard: BillboardGui, model: Model): TextButton {
+	const button = new Instance("TextButton");
+	button.Size = new UDim2(1, 0, 0.42, 0);
+	button.Position = new UDim2(0, 0, 0.68, 0);
+	button.BackgroundColor3 = UI_THEME.bgInset;
+	button.BackgroundTransparency = 0.1;
+	button.TextColor3 = UI_THEME.gold;
+	button.TextTransparency = 0.15;
+	button.Font = UI_THEME.fontBold;
+	button.TextSize = 11;
+	button.Text = "VIEW OFFER  [F]";
+	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
+	button.TextStrokeTransparency = 0.55;
+	button.BorderSizePixel = 0;
+	button.Parent = billboard;
+
+	const btnCorner = new Instance("UICorner");
+	btnCorner.CornerRadius = new UDim(0, 4);
+	btnCorner.Parent = button;
+
+	const btnStroke = new Instance("UIStroke");
+	btnStroke.Color = UI_THEME.gold;
+	btnStroke.Thickness = 0.8;
+	btnStroke.Parent = button;
+
+	button.MouseButton1Click.Connect(() => {
+		requestOpenPremiumOffer(model);
+	});
+
+	return button;
+}
+
+function setupPremiumOfferProximity(model: Model): void {
+	if (premiumOfferUIMap.has(model)) return;
+
+	const billboard = createPremiumOfferBillboard(model);
+	const nameLabel = billboard.FindFirstChild("TextLabel") as TextLabel;
+
+	premiumOfferUIMap.set(model, {
+		billboard,
+		nameLabel,
+		interactPrompt: undefined,
+	});
+
+	// ── Ambient visual effects: bob, rotate, glow ───────────────────────
+	const pivot = model.GetPivot();
+
+	// Anchor every part so physics doesn't interfere
+	const allParts = model.GetDescendants().filter((d): d is BasePart => d.IsA("BasePart"));
+	for (const part of allParts) {
+		part.Anchored = true;
+	}
+
+	// Highlight — renders a radiant gold fill + outline over the entire model
+	const highlight = new Instance("Highlight");
+	highlight.FillColor = Color3.fromRGB(255, 215, 80);
+	highlight.FillTransparency = 0.4;
+	highlight.OutlineColor = Color3.fromRGB(255, 200, 50);
+	highlight.OutlineTransparency = 0;
+	highlight.Parent = model;
+
+	// Gold point light on first part
+	const firstPart = allParts[0];
+	if (firstPart) {
+		const glow = new Instance("PointLight");
+		glow.Name = "PremiumGlow";
+		glow.Color = UI_THEME.gold;
+		glow.Brightness = 2;
+		glow.Range = 12;
+		glow.Parent = firstPart;
+
+		// Sparkle particles
+		const emitter = new Instance("ParticleEmitter");
+		emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		emitter.Color = new ColorSequence(Color3.fromRGB(255, 215, 80));
+		emitter.Size = new NumberSequence(0.3, 0);
+		emitter.Lifetime = new NumberRange(0.5, 1.2);
+		emitter.Rate = 25;
+		emitter.Speed = new NumberRange(1, 3);
+		emitter.SpreadAngle = new Vector2(180, 180);
+		emitter.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.2),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+		emitter.LightEmission = 1;
+		emitter.Parent = firstPart;
+	}
+
+	// Continuous bob + rotate via Heartbeat
+	let elapsed = 0;
+	RunService.Heartbeat.Connect((dt) => {
+		if (!model.Parent) return;
+		elapsed += dt;
+
+		// Bob: 0.5 stud amplitude, 1.5s period
+		const bobOffset = math.sin(elapsed * math.pi * 2 / 1.5) * 0.5;
+
+		// Rotate: one full revolution every 8 seconds
+		const angle = (elapsed / 8) * math.pi * 2;
+
+		const newCF = pivot
+			.mul(CFrame.Angles(0, angle, 0))
+			.add(new Vector3(0, bobOffset, 0));
+		model.PivotTo(newCF);
+	});
+}
+
 function isNPCInCameraFrame(camera: Instance, npcPosition: Vector3): boolean {
 	// Simplified: just check if NPC is close enough (proximity-based button show)
 	// Camera frame checks were causing issues, so we rely on proximity range instead
@@ -638,7 +807,9 @@ function updateNPCProximityUI() {
 		}
 
 		// Track closest NPC in range (camera frame check optional for tracking)
-		const npcMaxRange = hasNPCDialog(npc.Name) ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
+		const npcMaxRange = (hasNPCDialog(npc.Name) || npc.GetAttribute("Interaction") !== undefined)
+			? MERCHANT_PROXIMITY_RANGE
+			: PROXIMITY_RANGE;
 		if (distance <= npcMaxRange) {
 			inRangeCount = inRangeCount + 1;
 			const inCameraFrame = isNPCInCameraFrame(camera, npcPosition);
@@ -684,6 +855,41 @@ function updateNPCProximityUI() {
 		}
 	}
 
+	// ── Premium offer object proximity ──────────────────────────────────────────────
+	closestPremiumOfferInRange = undefined;
+	{
+		const offerModels = Workspace.GetDescendants().filter(
+			(inst): inst is Model => inst.IsA("Model") && inst.GetAttribute("offerId") !== undefined,
+		);
+		let closestOfferDist = PREMIUM_OFFER_RANGE + 1;
+		for (const model of offerModels) {
+			setupPremiumOfferProximity(model);
+			const part = model.PrimaryPart ?? (model.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
+			if (!part) continue;
+			const dist = playerPosition.sub(part.Position).Magnitude;
+
+			// Show/hide the name card
+			const ui = premiumOfferUIMap.get(model);
+			if (ui) {
+				const card = ui.billboard.FindFirstChild("OfferCard") as Frame | undefined;
+				if (card) card.Visible = dist <= PREMIUM_OFFER_RANGE;
+			}
+
+			if (dist < closestOfferDist) {
+				closestOfferDist = dist;
+				closestPremiumOfferInRange = model;
+			}
+		}
+
+		// Clean up billboards for offer models that no longer exist
+		for (const [model, ui] of premiumOfferUIMap) {
+			if (!model.Parent) {
+				ui.billboard.Destroy();
+				premiumOfferUIMap.delete(model);
+			}
+		}
+	}
+
 	// ── Wanted player proximity ─────────────────────────────────────────────────────
 	closestWantedPlayerInRange = undefined;
 	ensureWantedBillboards();
@@ -713,7 +919,7 @@ function updateNPCProximityUI() {
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
 		const npcIsKillable = isNPCKillable(npc.Name);
-		const npcHasDialog = hasNPCDialog(npc.Name);
+		const npcHasDialog = hasNPCDialog(npc.Name) || npc.GetAttribute("Interaction") !== undefined;
 		const talkRange = npcHasDialog ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
 		const inTalkRange = npc === closestNPC && closestDistance <= talkRange;
 		const shouldShowAssassinate = npc === closestNPC && npcIsKillable && closestDistance <= PROXIMITY_RANGE;
@@ -753,6 +959,21 @@ function updateNPCProximityUI() {
 			if (ui.inspectPrompt) {
 				ui.inspectPrompt.Destroy();
 				ui.inspectPrompt = undefined;
+			}
+		}
+	}
+
+	// Premium offer pass: show/hide interact prompt on closest offer model
+	for (const [model, ui] of premiumOfferUIMap) {
+		const shouldShow = model === closestPremiumOfferInRange && !isDialogOpen();
+		if (shouldShow) {
+			if (!ui.interactPrompt) {
+				ui.interactPrompt = createPremiumOfferPrompt(ui.billboard, model);
+			}
+		} else {
+			if (ui.interactPrompt) {
+				ui.interactPrompt.Destroy();
+				ui.interactPrompt = undefined;
 			}
 		}
 	}
@@ -939,11 +1160,12 @@ function setStealthing(stealthing: boolean) {
  * Priority: assassinate (wanted player) > assassinate (NPC) > talk > none.
  * "none" means no valid action — the button should be hidden.
  */
-export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "inspect" | "jump" | "none";
+export type ActionContext = "assassinate_player" | "assassinate_npc" | "talk" | "inspect" | "premium_offer" | "jump" | "none";
 
 export function getActionContext(): ActionContext {
 	if (closestNPCInRange && !isDialogOpen()) return "talk";
 	if (closestInspectableInRange && !isDialogOpen()) return "inspect";
+	if (closestPremiumOfferInRange && !isDialogOpen()) return "premium_offer";
 	return "jump";
 }
 
@@ -971,6 +1193,8 @@ export function fireCurrentAction(): void {
 		requestOpenDialog(closestNPCInRange);
 	} else if (ctx === "inspect" && closestInspectableInRange) {
 		requestOpenInspect(closestInspectableInRange);
+	} else if (ctx === "premium_offer" && closestPremiumOfferInRange) {
+		requestOpenPremiumOffer(closestPremiumOfferInRange);
 	} else if (ctx === "jump") {
 		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {

@@ -3,8 +3,9 @@ import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-rem
 import { getPlayerAssassinationRemote } from "shared/remotes/bounty-remote";
 import { log } from "shared/helpers";
 import { getPlayerEquippedWeapon } from "./inventory-handler";
+import { executeDelivery } from "./delivery-handler";
 import { DEATH_EFFECTS, isNPCActive } from "shared/npc-manager";
-import { getActivePoison } from "./effect-handler";
+import { getActivePoison, consumePoisonCharge } from "./effect-handler";
 import { POISONS } from "shared/config/poisons";
 import {
 	addCoins,
@@ -29,8 +30,6 @@ import { awardAchievement } from "./achievement-handler";
 import { isNPCKillable } from "shared/config/npcs";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
-// POISON is a status effect, not a death animation — keep it out of this list.
-const DEATH_STYLES: Array<keyof typeof DEATH_EFFECTS> = ["DEFAULT", "EVAPORATE", "SMOKE"];
 
 /** Base rewards granted for every assassination regardless of bounty. */
 const BASE_SCORE = 100;
@@ -131,27 +130,38 @@ function initializeAssassinationHandler() {
 		// Perform the assassination
 		log(`[ASSASSINATION] ${player.Name} assassinated ${model.Name}!`);
 
-		// Kill the NPC — use levitation if player has an active poison, otherwise random
+		// Resolve kill: poison ALWAYS does the killing blow.
+		// No poison = weapon handles everything.
+		// With poison = weapon delivery, then poison's death effect.
 		const activePoisonId = getActivePoison(player);
 		const poisonDef = activePoisonId ? POISONS[activePoisonId] : undefined;
-		let selectedStyle: keyof typeof DEATH_EFFECTS;
+		const equippedWeapon = getPlayerEquippedWeapon(player);
 
-		if (poisonDef && poisonDef.poisonEffect === "floating_death") {
-			selectedStyle = "LEVITATION";
+		if (poisonDef) {
+			// Poison active — it determines the death effect
+			let poisonDeathStyle: keyof typeof DEATH_EFFECTS;
+			if (poisonDef.poisonEffect === "floating_death") {
+				poisonDeathStyle = "LEVITATION";
+			} else if (poisonDef.poisonEffect === "shrinking_death") {
+				poisonDeathStyle = "SHRINK";
+			} else if (poisonDef.poisonEffect === "divine_pull") {
+				poisonDeathStyle = "DIVINE_PULL";
+			} else {
+				poisonDeathStyle = "DISMEMBER";
+			}
 			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
-		} else if (poisonDef && poisonDef.poisonEffect === "shrinking_death") {
-			selectedStyle = "SHRINK";
-			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
-		} else if (poisonDef && poisonDef.poisonEffect === "dismember_death") {
-			selectedStyle = "DISMEMBER";
-			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
+			executeDelivery(
+				model,
+				equippedWeapon,
+				playerPosition,
+				DEATH_EFFECTS[poisonDeathStyle],
+				poisonDef.poisonDelaySecs,
+			);
+			// Consume a charge for charge-based poisons (e.g. O's Guidance)
+			consumePoisonCharge(player);
 		} else {
-			selectedStyle = DEATH_STYLES[math.random(0, DEATH_STYLES.size() - 1)];
-		}
-		const deathFunction = DEATH_EFFECTS[selectedStyle];
-
-		if (deathFunction) {
-			task.spawn(() => deathFunction(model));
+			// No poison — weapon handles the full kill (no death effect passed)
+			executeDelivery(model, equippedWeapon, playerPosition);
 		}
 
 		// --- Reward the player ---

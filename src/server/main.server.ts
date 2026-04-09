@@ -5,6 +5,7 @@ import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "shared/
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
 import { serverIsReady } from "./server-status";
+import { getReservedMerchantNames } from "./modules/merchant-handler";
 import "shared/player-state"; // Ensure DataStore listeners are registered at server start
 import "./bootstrap"; // Load and initialize server bootstrap
 
@@ -52,7 +53,11 @@ function getNPCRoutes(): Folder[] {
 		});
 
 	const updatedRoutes = CollectionService.GetTagged("Route").filter((child): child is Folder => {
-		return child.IsA("Folder");
+		if (!child.IsA("Folder")) return false;
+		// Skip routes that live inside a MerchantShop site — those are managed by merchant-handler
+		const parent = child.Parent;
+		if (parent !== undefined && CollectionService.HasTag(parent, "MerchantShop")) return false;
+		return true;
 	});
 
 	if (updatedRoutes.size() === 0) {
@@ -88,7 +93,10 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			}
 
 			const takenNames: string[] = getActiveNPCNames(assigned);
-			const avaliableNames = ROUTABLE_NPC_NAMES.filter((name: string) => !takenNames.includes(name));
+			const reservedMerchants = getReservedMerchantNames();
+			const avaliableNames = ROUTABLE_NPC_NAMES.filter(
+				(name: string) => !takenNames.includes(name) && !reservedMerchants.has(name),
+			);
 			const npcName = avaliableNames[math.random(0, avaliableNames.size() - 1)];
 
 			if (!npcName) {
@@ -202,7 +210,7 @@ function coreGameLoop() {
 		if (!def || !def.fixedRouteId) continue;
 		const route = routesByName.get(def.fixedRouteId);
 		if (!route) {
-			log(`[CORE LOOP] Fixed route "${def.fixedRouteId}" not found for NPC ${npcName}`, "ERROR");
+			log(`[CORE LOOP] Fixed route "${def.fixedRouteId}" not found for NPC ${npcName}`, "WARN");
 			continue;
 		}
 		spawnFixedRouteNPC(npcName, route, assigned);

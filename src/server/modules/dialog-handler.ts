@@ -15,6 +15,7 @@ import { ITEMS } from "shared/inventory";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npcs";
 import { pickRandom } from "shared/config/npc-shops";
+import { getMerchantShop } from "./merchant-handler";
 import { factionForNPC } from "shared/config/factions";
 import {
 	getOpenDialogRemote,
@@ -35,6 +36,7 @@ import {
 	turnInBountyScrolls,
 } from "./inventory-handler";
 import { getQuipForStatus } from "shared/config/npc-quips";
+import { playerOwnsPass } from "./pass-handler";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -58,9 +60,12 @@ const lastQuipTime = new Map<Player, number>();
 
 function buildDialogPayload(npcName: string, player: Player): DialogPayload | undefined {
 	const def = NPC_REGISTRY[npcName];
-	const shop = def?.shop;
+	// Dynamic merchant assignment takes precedence over static shop data
+	const merchantItems = getMerchantShop(npcName);
+	const shop = merchantItems !== undefined ? { shopItems: merchantItems } : def?.shop;
 	const dlg = def?.dialog;
 	const hasShop = shop !== undefined;
+	const isMerchant = merchantItems !== undefined;
 
 	// Dialog lines — use NPC-specific dialog if available, else generic fallback
 	let greeting: string;
@@ -88,6 +93,7 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 		for (const si of shop.shopItems) {
 			const itemDef = ITEMS[si.itemId];
 			if (!itemDef) continue;
+			const passId = itemDef.gamePassId;
 			shopItems.push({
 				itemId: si.itemId,
 				name: itemDef.name,
@@ -98,11 +104,13 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 				rarity: itemDef.rarity,
 				price: si.price,
 				owned: getPlayerOwnedCount(player, si.itemId),
+				gamePassId: passId,
+				ownsPass: passId !== undefined ? playerOwnsPass(player, passId) : undefined,
 			});
 		}
 	}
 
-	const interaction = def?.interaction ?? "Ambient";
+	const interaction = isMerchant ? "Shop" : (def?.interaction ?? "Ambient");
 	const pendingBounties = getPlayerBountyScrollCount(player);
 
 	return {
@@ -124,8 +132,9 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 		return [false, "You are not talking to this vendor."];
 	}
 
-	// Validate the NPC has a shop and the item is in it
-	const shop = NPC_REGISTRY[npcName]?.shop;
+	// Validate the NPC has a shop and the item is in it (dynamic merchant takes precedence)
+	const merchantItems = getMerchantShop(npcName);
+	const shop = merchantItems !== undefined ? { shopItems: merchantItems } : NPC_REGISTRY[npcName]?.shop;
 	if (!shop) {
 		return [false, "This NPC has nothing to sell."];
 	}
@@ -147,6 +156,11 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 		if (owned >= shopItem.maxOwned) {
 			return [false, "You already own the maximum of this item."];
 		}
+	}
+
+	// Premium item — requires Game Pass ownership to purchase, but costs gold like normal
+	if (itemDef.gamePassId !== undefined && !playerOwnsPass(player, itemDef.gamePassId)) {
+		return [false, "You must own the Game Pass to purchase this item."];
 	}
 
 	// Check player has enough gold
@@ -190,9 +204,9 @@ export function initializeDialogHandler(): void {
 		const dist = hrp.Position.sub(npcPart.Position).Magnitude;
 		if (dist > 15) return; // Too far away
 
-		// Ambient-only NPCs get a floating quip instead of the full dialog panel.
+		// Dynamic merchants always get the full dialog panel even if registry says Ambient.
 		const npcData = MEDIEVAL_NPCS[npcName];
-		if (!hasNPCDialog(npcName)) {
+		if (!hasNPCDialog(npcName) && getMerchantShop(npcName) === undefined) {
 			const now = tick();
 			const lastTime = lastQuipTime.get(player) ?? 0;
 			if (now - lastTime < QUIP_COOLDOWN) return; // rate-limit

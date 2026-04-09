@@ -78,4 +78,8 @@ export interface ShopItemPayload {
 	price: number;
 	/** How many the player currently owns. */
 	owned: number;
+	/** If set, this item requires a Roblox Game Pass to unlock. */
+	gamePassId?: number;
+	/** Whether the player already owns the required Game Pass. */
+	ownsPass?: boolean;
 }

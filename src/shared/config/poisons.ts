@@ -11,12 +11,13 @@
 /** Default duration a poison stays active on a weapon (30 minutes). */
 export const DEFAULT_COAT_DURATION_SECS = 1800;
 
-export type PoisonEffect = "floating_death" | "shrinking_death" | "dismember_death";
+export type PoisonEffect = "floating_death" | "shrinking_death" | "dismember_death" | "divine_pull";
 
 export const POISON_EFFECT_LABELS: Record<PoisonEffect, string> = {
 	floating_death: "Levitate",
 	shrinking_death: "Shrink",
 	dismember_death: "Dismember",
+	divine_pull: "O's Guidance",
 };
 
 export interface PoisonDef {
@@ -41,6 +42,10 @@ export interface PoisonDef {
 	familyId: string;
 	/** Short description of what this tier adds over the base. Undefined on the base tier. */
 	tierBonus?: string;
+	/** Developer Product ID for Robux-purchasable poisons (repeat-purchase). */
+	devProductId?: number;
+	/** Number of charges granted per activation (undefined = standard 1-use coat). */
+	chargesPerUse?: number;
 }
 
 /** Master poison catalogue — keyed by poison ID. */
@@ -135,6 +140,23 @@ export const POISONS: Record<string, PoisonDef> = {
 		poisonEffect: "dismember_death",
 		poisonDelaySecs: 3,
 		coatDurationSecs: 2700,
+	},
+
+	// ── O's Guidance (Developer Product) ────────────────────────────────
+	os_guidance: {
+		id: "os_guidance",
+		familyId: "os_guidance",
+		name: "O's Guidance",
+		description:
+			"A divine vial humming with holy light. Upon striking a target, a beam descends from the heavens and wrenches the soul skyward -- swift and merciless.",
+		effect: "Beam from sky, ragdoll, rapid pull upward. Lasts 30 gameplay min.",
+		poisonType: "Vial",
+		icon: "*",
+		rarity: "legendary",
+		poisonEffect: "divine_pull",
+		poisonDelaySecs: 0.15,
+		coatDurationSecs: DEFAULT_COAT_DURATION_SECS,
+		devProductId: 3571561126,
 	},
 };
 

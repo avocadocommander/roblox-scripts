@@ -47,7 +47,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * DEFAULT: Break joints so the NPC collapses, then destroy after a short wait.
 	 */
 	DEFAULT: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -69,7 +69,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * EVAPORATE: Disable collisions and fade the NPC out gradually, then destroy.
 	 */
 	EVAPORATE: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -99,7 +99,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * SMOKE: Spawn a smoke cloud at the root part, then destroy.
 	 */
 	SMOKE: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -123,7 +123,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * upward ~20 studs over 5 seconds, then fade out and destroy.
 	 */
 	LEVITATION: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -203,7 +203,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * particle implosion and destroy. Eerie and unsettling.
 	 */
 	SHRINK: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -276,7 +276,7 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 	 * remains fade and are destroyed.
 	 */
 	DISMEMBER: (model: Model) => {
-		if (!isNPCActive(model)) return;
+		if (!model.Parent) return;
 		markNPCDying(model);
 
 		const humanoid = model.FindFirstChildOfClass("Humanoid");
@@ -345,6 +345,149 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 
 		model.Destroy();
 	},
+
+	/**
+	 * DIVINE_PULL: A beam of light descends from the sky onto the NPC,
+	 * ragdolls it, then rapidly pulls it upward into the heavens.
+	 * Faster and more violent than LEVITATION — divine judgement.
+	 */
+	DIVINE_PULL: (model: Model) => {
+		if (!model.Parent) return;
+		markNPCDying(model);
+
+		const humanoid = model.FindFirstChildOfClass("Humanoid");
+		if (humanoid) {
+			humanoid.PlatformStand = true;
+			humanoid.WalkSpeed = 0;
+			humanoid.JumpPower = 0;
+		}
+
+		// Disable collisions so the body flies through geometry
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				(descendant as BasePart).CanCollide = false;
+			}
+		});
+
+		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (!rootPart) {
+			model.Destroy();
+			return;
+		}
+
+		// ── Beam from sky ──────────────────────────────────────────────
+		// Create a tall glowing beam part from the NPC position upward
+		const beamPart = new Instance("Part");
+		beamPart.Name = "DivineBeam";
+		beamPart.Anchored = true;
+		beamPart.CanCollide = false;
+		beamPart.Size = new Vector3(5, 200, 5);
+		beamPart.CFrame = new CFrame(rootPart.Position.add(new Vector3(0, 100, 0)));
+		beamPart.Material = Enum.Material.Neon;
+		beamPart.Color = Color3.fromRGB(255, 230, 150);
+		beamPart.Transparency = 0.88;
+		beamPart.Parent = Workspace;
+
+		// Golden sparkle particles on the beam
+		const beamEmitter = new Instance("ParticleEmitter");
+		beamEmitter.Parent = beamPart;
+		beamEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		beamEmitter.Speed = new NumberRange(2, 6);
+		beamEmitter.Lifetime = new NumberRange(0.5, 1);
+		beamEmitter.Size = new NumberSequence(0.6, 0.1);
+		beamEmitter.Color = new ColorSequence(Color3.fromRGB(255, 215, 80));
+		beamEmitter.Rate = 80;
+		beamEmitter.SpreadAngle = new Vector2(15, 15);
+		beamEmitter.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.2),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+
+		// Bright sparks on the NPC root
+		const npcEmitter = new Instance("ParticleEmitter");
+		npcEmitter.Parent = rootPart;
+		npcEmitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		npcEmitter.Speed = new NumberRange(4, 10);
+		npcEmitter.Lifetime = new NumberRange(0.3, 0.8);
+		npcEmitter.Size = new NumberSequence(0.5, 0);
+		npcEmitter.Color = new ColorSequence(Color3.fromRGB(255, 240, 180));
+		npcEmitter.Rate = 120;
+		npcEmitter.SpreadAngle = new Vector2(180, 180);
+		npcEmitter.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+
+		// ── Ragdoll the NPC ────────────────────────────────────────────
+		// Break Motor6D joints and replace with BallSocketConstraints
+		const descendants = model.GetDescendants();
+		for (const desc of descendants) {
+			if (desc.IsA("Motor6D")) {
+				const part0 = desc.Part0;
+				const part1 = desc.Part1;
+				if (part0 && part1) {
+					const att0 = new Instance("Attachment");
+					att0.CFrame = desc.C0;
+					att0.Parent = part0;
+
+					const att1 = new Instance("Attachment");
+					att1.CFrame = desc.C1;
+					att1.Parent = part1;
+
+					const socket = new Instance("BallSocketConstraint");
+					socket.Attachment0 = att0;
+					socket.Attachment1 = att1;
+					socket.Parent = part0;
+				}
+				desc.Destroy();
+			}
+		}
+
+		// Tint golden-white to show divine energy
+		model.GetDescendants().forEach((descendant) => {
+			if (descendant.IsA("BasePart")) {
+				const part = descendant as BasePart;
+				part.Color = Color3.fromRGB(255, 235, 180);
+				part.Transparency = math.max(part.Transparency, 0.2);
+			}
+		});
+
+		// Brief pause for the beam to register visually
+		task.wait(0.4);
+
+		// ── Rapid upward pull ──────────────────────────────────────────
+		// Much faster than LEVITATION (velocity 25 vs 4)
+		rootPart.Anchored = false;
+		const bv = new Instance("BodyVelocity");
+		bv.Velocity = new Vector3(0, 25, 0);
+		bv.MaxForce = new Vector3(0, math.huge, 0);
+		bv.P = 5000;
+		bv.Parent = rootPart;
+
+		// Kill humanoid as the body rockets upward
+		if (humanoid) {
+			humanoid.Health = 0;
+		}
+
+		// Fade out rapidly over 2 seconds as the NPC ascends
+		for (let i = 0; i <= 20; i++) {
+			model.GetDescendants().forEach((descendant) => {
+				if (descendant.IsA("BasePart")) {
+					(descendant as BasePart).Transparency = math.min(1, i / 20);
+				}
+			});
+			task.wait(0.1);
+		}
+
+		// Fade the beam out
+		for (let i = 0; i <= 10; i++) {
+			beamPart.Transparency = math.min(1, 0.3 + i * 0.07);
+			task.wait(0.05);
+		}
+
+		beamPart.Destroy();
+		model.Destroy();
+	},
 };
 
 /**
@@ -363,48 +506,58 @@ export const STATUS_EFFECTS: Record<string, StatusEffectFn> = {
 		if (!isNPCActive(model)) return;
 		markNPCDying(model);
 
-		// Visual: tint the NPC purple and add transparency to show poisoning
-		model.GetDescendants().forEach((descendant) => {
-			if (descendant.IsA("BasePart")) {
-				const part = descendant as BasePart;
-				part.Color = Color3.fromRGB(138, 43, 226);
-				part.Transparency = math.min(1, (part.Transparency ?? 0) + 0.3);
-			}
-		});
-
-		// Particle effect while alive
-		const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
-		let particle: ParticleEmitter | undefined;
-		if (rootPart) {
-			particle = new Instance("ParticleEmitter");
-			particle.Parent = rootPart;
-			particle.Texture = "rbxasset://textures/particles/sparkles_main.dds";
-			particle.Speed = new NumberRange(3, 6);
-			particle.Lifetime = new NumberRange(1.5, 3);
-			particle.Size = new NumberSequence(0.3, 0.1);
-			particle.Color = new ColorSequence(Color3.fromRGB(138, 43, 226));
-			particle.Rate = 30;
-			particle.Transparency = new NumberSequence([
-				new NumberSequenceKeypoint(0, 0.5),
-				new NumberSequenceKeypoint(1, 1),
-			]);
-		}
-
-		// Poison lasts 4 seconds, then the NPC dies via the provided death effect
-		task.wait(4);
-
-		// Stop emitting new particles before the death animation fires
-		if (particle) {
-			particle.Rate = 0;
-		}
-
-		// Hand off to the death effect — the NPC still collapses / evaporates / etc.
-		onDeath(model);
+		applyPoisonVisuals(model, 4, () => onDeath(model));
 	},
 };
 
 /** Convenience alias kept for backwards compatibility. */
 export const DEATH_TYPES = DEATH_EFFECTS;
+
+/**
+ * Apply poison visuals to an NPC (purple tint + particles) for the given
+ * duration, then invoke `onComplete`. This does NOT check `isNPCActive` or
+ * call `markNPCDying` — the caller is responsible for that.
+ *
+ * Used by the delivery handler to sequence:
+ *   weapon hit-effect → poison visuals → death effect
+ */
+export function applyPoisonVisuals(model: Model, durationSecs: number, onComplete: () => void): void {
+	// Visual: tint the NPC purple and add transparency to show poisoning
+	model.GetDescendants().forEach((descendant) => {
+		if (descendant.IsA("BasePart")) {
+			const part = descendant as BasePart;
+			part.Color = Color3.fromRGB(138, 43, 226);
+			part.Transparency = math.min(1, (part.Transparency ?? 0) + 0.3);
+		}
+	});
+
+	// Particle effect while alive
+	const rootPart = model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+	let particle: ParticleEmitter | undefined;
+	if (rootPart) {
+		particle = new Instance("ParticleEmitter");
+		particle.Parent = rootPart;
+		particle.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		particle.Speed = new NumberRange(3, 6);
+		particle.Lifetime = new NumberRange(1.5, 3);
+		particle.Size = new NumberSequence(0.3, 0.1);
+		particle.Color = new ColorSequence(Color3.fromRGB(138, 43, 226));
+		particle.Rate = 30;
+		particle.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.5),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+	}
+
+	// Wait for the poison duration, then clean up and hand off
+	task.wait(durationSecs);
+
+	if (particle) {
+		particle.Rate = 0;
+	}
+
+	onComplete();
+}
 
 export function assassinateTarget(player: Player, npcTarget: NPC) {
 	warn(`${player.Name} wanting to get that ${npcTarget.name}`);

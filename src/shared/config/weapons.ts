@@ -17,6 +17,16 @@ export interface WeaponDef {
 	icon: string;
 	/** Rarity tier — drives border colour. */
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
+	/** References a key in DELIVERY_TYPES — controls kill behaviour (blunt or pierce). */
+	deliveryType: string;
+	/** If set, this weapon requires the given Roblox Game Pass to own/equip. */
+	gamePassId?: number;
+	/** Knockback force on hit (blunt weapons). Default 0. */
+	knockbackForce?: number;
+	/** Upward lift force on hit (blunt weapons). Default 0. */
+	knockbackLift?: number;
+	/** Seconds target stays ragdolled before death resolves (blunt weapons). Default 1. */
+	ragdollSecs?: number;
 }
 
 /** Master weapon catalogue — keyed by weapon ID. */
@@ -29,6 +39,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		weaponType: "Unarmed",
 		icon: "/",
 		rarity: "common",
+		deliveryType: "dagger",
 	},
 	dagger: {
 		id: "dagger",
@@ -38,6 +49,21 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		weaponType: "Blade",
 		icon: "/",
 		rarity: "uncommon",
+		deliveryType: "dagger",
+	},
+	warhammer: {
+		id: "warhammer",
+		name: "Warhammer",
+		description: "A heavy instrument of force. Subtlety is not its purpose.",
+		effect: "Knocks targets back with force. Death resolves after impact.",
+		weaponType: "Blunt",
+		icon: "T",
+		rarity: "rare",
+		deliveryType: "warhammer",
+		gamePassId: 1786246558, // TODO: replace with real Roblox Game Pass ID
+		knockbackForce: 55,
+		knockbackLift: 18,
+		ragdollSecs: 1,
 	},
 };
 

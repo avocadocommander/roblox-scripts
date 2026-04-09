@@ -22,12 +22,14 @@ onPlayerInitialized(() => {
 });
 
 function initializeMapAccess() {
-	// Initial check: setup all existing barriers based on current level
-	for (const inst of CollectionService.GetTagged(TAG)) {
-		setupBarrier(inst as Model);
-	}
+	// Defer initial scan so CollectionService tags and model children are fully replicated
+	task.delay(3, () => {
+		for (const inst of CollectionService.GetTagged(TAG)) {
+			setupBarrier(inst as Model);
+		}
+	});
 
-	// When new models are tagged, setup barriers for them
+	// When new models are tagged after initial load, set them up immediately
 	CollectionService.GetInstanceAddedSignal(TAG).Connect((inst) => {
 		setupBarrier(inst as Model);
 	});
@@ -45,9 +47,6 @@ function setupBarrier(accessModelInstance: Model) {
 	const playerLevel: number = GetPlayerLevel.InvokeServer() as number;
 
 	const accessModelRequiredLevel = accessModelInstance.GetAttribute("AccessLevel");
-
-	// Wait briefly for model to replicate fully
-	task.wait(1);
 
 	// Try to find Wall child, otherwise use the model itself or first Part child
 	let wall: Part | undefined = accessModelInstance.FindFirstChild("Wall") as Part | undefined;

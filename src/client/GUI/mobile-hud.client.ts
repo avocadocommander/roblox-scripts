@@ -113,6 +113,16 @@ const ACTION_STYLES: Record<ActionContext, ActionStyle> = {
 		glowColor: UI_THEME.textHeader,
 		glowTransparency: 0.75,
 	},
+	premium_offer: {
+		icon: "$",
+		label: "VIEW",
+		iconColor: UI_THEME.gold,
+		labelColor: UI_THEME.gold,
+		borderColor: UI_THEME.gold,
+		bgColor: Color3.fromRGB(22, 20, 16),
+		glowColor: UI_THEME.gold,
+		glowTransparency: 0.65,
+	},
 };
 
 // -- Circular button factory --------------------------------------------------

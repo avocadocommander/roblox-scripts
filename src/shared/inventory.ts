@@ -48,6 +48,8 @@ export interface ItemDef {
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
 	/** Whether this item is consumed on use (poisons, elixirs). */
 	consumable: boolean;
+	/** If set, this item requires the given Roblox Game Pass to own/equip. */
+	gamePassId?: number;
 }
 
 // ── Build ITEMS + ITEM_LIST from config maps ──────────────────────────────────
@@ -67,6 +69,7 @@ for (const [, w] of pairs(WEAPONS)) {
 		icon: w.icon,
 		rarity: w.rarity,
 		consumable: false,
+		gamePassId: w.gamePassId,
 	};
 }
 

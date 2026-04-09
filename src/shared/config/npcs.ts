@@ -156,9 +156,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 	},
 	"Veyra Ashenmaw": {
 		...std("Veyra Ashenmaw", "F", "Elf", "Merchant", "Merchant"),
-		interaction: "Shop",
-		fixedRouteId: "Merchant House Main",
-		killable: true,
 		dialog: {
 			greetings: [
 				"Another errand runner. Show me what you have.",
@@ -177,18 +174,9 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"We are not finished. We are never finished.",
 			],
 		},
-		shop: {
-			shopItems: [
-				{ itemId: "fleetfoot_elixir", price: 280 },
-				{ itemId: "featherfall_draught", price: 400 },
-				{ itemId: "veil_of_silence", price: 580 },
-			],
-		},
 	},
 	"Lyra Goldmead": {
 		...std("Lyra Goldmead", "F", "Human", "Merchant", "Merchant"),
-		interaction: "Shop",
-		fixedRouteId: "Merchant House 1",
 		dialog: {
 			greetings: [
 				"Step closer, dear. I have just the thing.",
@@ -207,20 +195,11 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Return when you need more. You always do.",
 			],
 		},
-		shop: {
-			shopItems: [
-				{ itemId: "levitation_poison", price: 300 },
-				{ itemId: "shrinking_curse", price: 450 },
-				{ itemId: "dismembering_blight", price: 700 },
-			],
-		},
 	},
 	"Edric Thornwell": std("Edric Thornwell", "M", "Human", "Commoner"),
 	"Moira Blackfen": std("Moira Blackfen", "F", "Human", "Serf"),
 	"Garrick Hallowmere": {
 		...std("Garrick Hallowmere", "M", "Human", "Merchant", "Merchant"),
-		interaction: "Shop",
-		fixedRouteId: "Tender",
 		dialog: {
 			greetings: [
 				"Need something to keep you alive? You have come to the right place.",
@@ -239,13 +218,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Off you go. And remember -- drink responsibly.",
 			],
 		},
-		shop: {
-			shopItems: [
-				{ itemId: "fleetfoot_elixir", price: 250 },
-				{ itemId: "featherfall_draught", price: 380 },
-				{ itemId: "veil_of_silence", price: 550 },
-			],
-		},
 	},
 	"Halric Stonvein": std("Halric Stonvein", "M", "Human", "Commoner"),
 	"Ansel Ravendock": std("Ansel Ravendock", "M", "Human", "Serf"),
@@ -256,8 +228,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Idris Moorwatch": std("Idris Moorwatch", "M", "Human", "Commoner"),
 	"Rowena Brambleholt": {
 		...std("Rowena Brambleholt", "F", "Human", "Merchant", "Merchant"),
-		fixedRouteId: "Back Camp Merchant",
-		interaction: "Shop",
 		dialog: {
 			greetings: [
 				"What do you need, stranger? Make it quick.",
@@ -274,13 +244,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"May your steel stay sharp.",
 				"Do not come back broken. Come back richer.",
 				"Mind the edge. I just honed it.",
-			],
-		},
-		shop: {
-			shopItems: [
-				{ itemId: "dagger", price: 450 },
-				{ itemId: "levitation_poison", price: 280 },
-				{ itemId: "fleetfoot_elixir", price: 260 },
 			],
 		},
 	},
@@ -305,8 +268,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Aerendyl Silversong": std("Aerendyl Silversong", "F", "Elf", "Royalty"),
 	"Thessaly Nywen": {
 		...std("Thessaly Nywen", "F", "Elf", "Merchant", "Merchant"),
-		interaction: "Shop",
-		fixedRouteId: "Cart Merchant",
 		dialog: {
 			greetings: [
 				"An outsider. How... quaint. What do you seek?",
@@ -320,16 +281,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 				"Do not mistake my patience for weakness.",
 			],
 			farewells: ["Walk softly, short-lived one.", "The forest watches. As do I.", "Until the next moon."],
-		},
-		shop: {
-			shopItems: [
-				{ itemId: "levitation_poison", price: 350 },
-				{ itemId: "shrinking_curse", price: 500 },
-				{ itemId: "dismembering_blight", price: 750 },
-				{ itemId: "fleetfoot_elixir", price: 300 },
-				{ itemId: "featherfall_draught", price: 400 },
-				{ itemId: "veil_of_silence", price: 600 },
-			],
 		},
 	},
 	"Varethion Hollowmantle": std("Varethion Hollowmantle", "M", "Elf", "Nobility", "Noble"),

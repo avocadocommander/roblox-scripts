@@ -31,6 +31,19 @@ function notifyWantedScrollChange(player: Player): void {
 	_broadcastWantedScrollUpdate(player);
 }
 
+// Lazy import to avoid circular dependency with pass-handler
+let _playerOwnsPass: ((player: Player, passId: number) => boolean) | undefined;
+function checkPlayerOwnsPass(player: Player, passId: number): boolean {
+	if (!_playerOwnsPass) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const ph = require(script.Parent!.FindFirstChild("pass-handler") as ModuleScript) as {
+			playerOwnsPass: (player: Player, passId: number) => boolean;
+		};
+		_playerOwnsPass = ph.playerOwnsPass;
+	}
+	return _playerOwnsPass(player, passId);
+}
+
 // ── Per-player inventory state ────────────────────────────────────────────────
 
 interface PlayerInventory {
@@ -85,6 +98,10 @@ function initPlayerInventory(player: Player): PlayerInventory {
 	// Default: just fists.
 	owned.set("fists", 1);
 
+	// TEST: Grant all weapons for testing
+	owned.set("dagger", 1);
+	owned.set("warhammer", 1);
+
 	const inv: PlayerInventory = {
 		owned,
 		equippedWeapon: "fists",
@@ -94,6 +111,21 @@ function initPlayerInventory(player: Player): PlayerInventory {
 	};
 	PLAYER_INVENTORIES.set(player, inv);
 	return inv;
+}
+
+// ── Consumable cooldown (3 seconds between any poison/elixir activation) ──────
+
+const CONSUMABLE_COOLDOWN_SECS = 3;
+const consumableCooldowns = new Map<Player, number>();
+
+function isOnConsumableCooldown(player: Player): boolean {
+	const lastUse = consumableCooldowns.get(player);
+	if (lastUse === undefined) return false;
+	return os.clock() - lastUse < CONSUMABLE_COOLDOWN_SECS;
+}
+
+function stampConsumableCooldown(player: Player): void {
+	consumableCooldowns.set(player, os.clock());
 }
 
 // ── Activation logic ──────────────────────────────────────────────────────────
@@ -109,6 +141,11 @@ function handleActivateItem(player: Player, itemId: string): void {
 	if (ownedCount <= 0) return;
 
 	if (itemDef.category === "weapon") {
+		// Premium weapon — require Game Pass ownership
+		if (itemDef.gamePassId !== undefined && !checkPlayerOwnsPass(player, itemDef.gamePassId)) {
+			log(`[INVENTORY] ${player.Name} tried to equip premium weapon ${itemDef.name} without pass`);
+			return;
+		}
 		// Equip weapon (toggle — if already equipped, switch back to fists)
 		if (inv.equippedWeapon === itemId) {
 			inv.equippedWeapon = "fists";
@@ -118,18 +155,30 @@ function handleActivateItem(player: Player, itemId: string): void {
 			log(`[INVENTORY] ${player.Name} equipped weapon: ${itemDef.name}`);
 		}
 	} else if (itemDef.category === "poison") {
+		// Consumable cooldown check
+		if (isOnConsumableCooldown(player)) {
+			log(`[INVENTORY] ${player.Name} tried to use poison on cooldown`);
+			return;
+		}
 		// Activate poison (replaces current active poison, consumes 1)
 		inv.activePoison = itemId;
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
 		effectActivatePoison(player, itemId);
+		stampConsumableCooldown(player);
 		log(`[INVENTORY] ${player.Name} activated poison: ${itemDef.name}`);
 	} else if (itemDef.category === "elixir") {
+		// Consumable cooldown check
+		if (isOnConsumableCooldown(player)) {
+			log(`[INVENTORY] ${player.Name} tried to use elixir on cooldown`);
+			return;
+		}
 		// Activate elixir (replaces current active elixir — max 1 at a time, consumes 1)
 		inv.activeElixirs = [itemId];
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
 		effectActivateElixir(player, itemId);
+		stampConsumableCooldown(player);
 		log(`[INVENTORY] ${player.Name} activated elixir: ${itemDef.name}`);
 	}
 
@@ -218,9 +267,7 @@ export function getPlayerBountyScrollCount(player: Player): number {
  * gold and XP. This is the turn-in action used by guild-leader NPCs.
  * Returns totals so the dialog can display a result message.
  */
-export function turnInBountyScrolls(
-	player: Player,
-): { totalGold: number; totalXP: number; count: number } {
+export function turnInBountyScrolls(player: Player): { totalGold: number; totalXP: number; count: number } {
 	const inv = PLAYER_INVENTORIES.get(player);
 	if (!inv || inv.bountyScrolls.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
 
@@ -427,6 +474,7 @@ export function initializeInventorySystem(): void {
 	// Cleanup on leave
 	Players.PlayerRemoving.Connect((player) => {
 		PLAYER_INVENTORIES.delete(player);
+		consumableCooldowns.delete(player);
 	});
 
 	// ── Mock bounty kill (B key) ──────────────────────────────────────────────

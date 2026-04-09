@@ -5,7 +5,7 @@
  * text area is replaced by the shop grid + tooltip inline. No second modal.
  */
 
-import { Players, TweenService, Workspace, RunService } from "@rbxts/services";
+import { Players, TweenService, Workspace, RunService, MarketplaceService } from "@rbxts/services";
 import {
 	getOpenDialogRemote,
 	getPurchaseItemRemote,
@@ -22,6 +22,13 @@ import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { spawnFloatingText } from "./npc-floating-text";
 import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
+import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
+import {
+	getOpenPremiumOfferRemote,
+	getBuyPremiumOfferRemote,
+	getPremiumOfferPayloadRemote,
+	PremiumOfferPayload,
+} from "shared/remotes/premium-offer-remote";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +40,11 @@ const purchaseResultRemote = getPurchaseResultRemote();
 const floatingTextRemote = getFloatingNPCTextRemote();
 const turnInRemote = getTurnInBountiesDialogRemote();
 const openInspectRemote = getOpenInspectRemote();
+const promptPassRemote = getPromptPassPurchaseRemote();
+const passOwnershipRemote = getPassOwnershipSyncRemote();
+const openPremiumOfferRemote = getOpenPremiumOfferRemote();
+const buyPremiumOfferRemote = getBuyPremiumOfferRemote();
+const premiumOfferPayloadRemote = getPremiumOfferPayloadRemote();
 const inspectPayloadRemote = getInspectPayloadRemote();
 
 // ── Scaling ───────────────────────────────────────────────────────────────────
@@ -52,13 +64,18 @@ const TRADE_H = 420; // height in trade mode (compact, grid fills space)
 let dialogOpen = false;
 let tradeOpen = false;
 let inspectMode = false;
+let premiumOfferMode = false;
 let inspectModelRef: Model | undefined;
+let premiumOfferModelRef: Model | undefined;
+let currentPremiumOffer: PremiumOfferPayload | undefined;
 let currentPayload: DialogPayload | undefined;
 let currentChatIndex = 0;
 const selectedItemIds = new Set<string>();
 let playerGold = 0;
 let purchasing = false;
 let distanceCheckConn: RBXScriptConnection | undefined;
+let pendingDialogNPC: Model | undefined;
+let activeDialogNPC: Model | undefined;
 
 const DIALOG_MAX_DISTANCE = 15;
 const INSPECT_MAX_DISTANCE = 10;
@@ -561,7 +578,7 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	icon.Position = new UDim2(0, 0, 0, sc(4));
 	icon.BackgroundTransparency = 1;
 	icon.Text = shopItem.icon;
-	icon.TextColor3 = rarityColor;
+	icon.TextColor3 = shopItem.gamePassId !== undefined ? UI_THEME.gold : rarityColor;
 	icon.Font = UI_THEME.fontDisplay;
 	icon.TextSize = sc(20);
 	icon.ZIndex = 33;
@@ -584,12 +601,19 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	priceTag.Size = new UDim2(1, 0, 0, sc(12));
 	priceTag.Position = new UDim2(0, 0, 1, -sc(14));
 	priceTag.BackgroundTransparency = 1;
-	priceTag.Text = shopItem.price + "g";
-	priceTag.TextColor3 = UI_THEME.gold;
 	priceTag.Font = UI_THEME.fontBold;
 	priceTag.TextSize = sc(10);
 	priceTag.ZIndex = 34;
 	priceTag.Parent = tile;
+
+	if (shopItem.gamePassId !== undefined) {
+		// Premium item — still sold for gold, just themed gold
+		priceTag.Text = shopItem.price + "g";
+		priceTag.TextColor3 = UI_THEME.gold;
+	} else {
+		priceTag.Text = shopItem.price + "g";
+		priceTag.TextColor3 = UI_THEME.gold;
+	}
 
 	if (shopItem.owned > 0) {
 		const badge = new Instance("TextLabel");
@@ -607,6 +631,25 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 		const badgeCorner = new Instance("UICorner");
 		badgeCorner.CornerRadius = new UDim(0, 3);
 		badgeCorner.Parent = badge;
+	}
+
+	// Premium badge (top-left) — gold-themed star
+	if (shopItem.gamePassId !== undefined) {
+		const premBadge = new Instance("TextLabel");
+		premBadge.Size = new UDim2(0, sc(14), 0, sc(10));
+		premBadge.Position = new UDim2(0, sc(2), 0, sc(2));
+		premBadge.BackgroundColor3 = UI_THEME.gold;
+		premBadge.BackgroundTransparency = 0.2;
+		premBadge.Text = "*";
+		premBadge.TextColor3 = Color3.fromRGB(255, 255, 255);
+		premBadge.Font = UI_THEME.fontBold;
+		premBadge.TextSize = sc(7);
+		premBadge.ZIndex = 35;
+		premBadge.Parent = tile;
+
+		const premCorner = new Instance("UICorner");
+		premCorner.CornerRadius = new UDim(0, 3);
+		premCorner.Parent = premBadge;
 	}
 
 	const rarityBar = new Instance("Frame");
@@ -942,32 +985,38 @@ function switchToTradeMode(): void {
 
 // ── Distance check — auto-close dialog when player walks too far ──────────────
 
-function startDistanceCheck(npcName: string): void {
+function startDistanceCheck(npcModel: Model | undefined, maxDist: number): void {
 	stopDistanceCheck();
 	const player = Players.LocalPlayer;
-	if (!player) return;
+	if (!player || !npcModel) return;
 
-	distanceCheckConn = RunService.Heartbeat.Connect(() => {
-		if (!dialogOpen) {
-			stopDistanceCheck();
-			return;
-		}
-		const character = player.Character;
-		if (!character) return;
-		const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
-		if (!hrp) return;
+	// Delay 0.5s before checking — ensures NPC replication/physics position has settled
+	task.delay(0.5, () => {
+		if (!dialogOpen) return; // dialog already closed during grace period
+		distanceCheckConn = RunService.Heartbeat.Connect(() => {
+			if (!dialogOpen) {
+				stopDistanceCheck();
+				return;
+			}
+			const character = player.Character;
+			if (!character) return;
+			const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+			if (!hrp) return;
 
-		const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
-		if (!npcModel) {
-			closeDialog();
-			return;
-		}
-		const npcRoot = npcModel.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
-		const npcPos = npcRoot ? npcRoot.Position : npcModel.GetPivot().Position;
+			// If the NPC model was destroyed/removed, close dialog
+			if (!npcModel.IsDescendantOf(Workspace)) {
+				closeDialog();
+				return;
+			}
 
-		if (hrp.Position.sub(npcPos).Magnitude > DIALOG_MAX_DISTANCE) {
-			closeDialog();
-		}
+			const npcRoot = npcModel.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+			const npcPos = npcRoot ? npcRoot.Position : npcModel.GetPivot().Position;
+
+			const dist = hrp.Position.sub(npcPos).Magnitude;
+			if (dist > maxDist) {
+				closeDialog();
+			}
+		});
 	});
 }
 
@@ -985,7 +1034,10 @@ function openDialog(payload: DialogPayload): void {
 	tradeOpen = false;
 	selectedItemIds.clear();
 
-	startDistanceCheck(payload.npcName);
+	activeDialogNPC = pendingDialogNPC;
+	pendingDialogNPC = undefined;
+
+	startDistanceCheck(activeDialogNPC, payload.interaction === "Shop" ? 40 : DIALOG_MAX_DISTANCE);
 	setupHeadshot(payload.npcName);
 
 	if (npcNameLabel) npcNameLabel.Text = payload.npcName;
@@ -1119,25 +1171,50 @@ function showTradeOptions(): void {
 	addDialogOption(optionsFrame, optOrder++, "Back", UI_THEME.textPrimary, () => handleCloseTrade(), true);
 
 	if (selectedItemIds.size() > 0) {
+		// Check if any selected items are premium (need Game Pass)
+		let hasPremiumUnowned = false;
 		let totalCost = 0;
+		let premiumPassId: number | undefined;
 		for (const itemId of selectedItemIds) {
 			const item = currentPayload.shopItems.find((si) => si.itemId === itemId);
-			if (item) totalCost += item.price;
+			if (item) {
+				if (item.gamePassId !== undefined && !item.ownsPass) {
+					hasPremiumUnowned = true;
+					premiumPassId = item.gamePassId;
+				} else {
+					totalCost += item.price;
+				}
+			}
 		}
-		const canAfford = playerGold >= totalCost;
-		const purchaseColor = canAfford ? Color3.fromRGB(120, 180, 90) : UI_THEME.danger;
-		const btn = addDialogOption(
-			optionsFrame,
-			optOrder++,
-			"Purchase (" + totalCost + "g)",
-			purchaseColor,
-			() => {
-				if (canAfford) handleBatchPurchase();
-			},
-			true,
-		);
-		if (!canAfford) {
-			btn.Active = false;
+
+		if (hasPremiumUnowned && premiumPassId !== undefined) {
+			// Premium unlock button — prompts Game Pass purchase
+			addDialogOption(
+				optionsFrame,
+				optOrder++,
+				"Unlock (R$)",
+				Color3.fromRGB(40, 180, 240),
+				() => {
+					promptPassRemote.FireServer(premiumPassId);
+				},
+				true,
+			);
+		} else {
+			const canAfford = playerGold >= totalCost;
+			const purchaseColor = canAfford ? Color3.fromRGB(120, 180, 90) : UI_THEME.danger;
+			const btn = addDialogOption(
+				optionsFrame,
+				optOrder++,
+				"Purchase (" + totalCost + "g)",
+				purchaseColor,
+				() => {
+					if (canAfford) handleBatchPurchase();
+				},
+				true,
+			);
+			if (!canAfford) {
+				btn.Active = false;
+			}
 		}
 	}
 
@@ -1180,7 +1257,12 @@ function closeDialog(): void {
 	dialogOpen = false;
 	tradeOpen = false;
 	inspectMode = false;
+	premiumOfferMode = false;
 	inspectModelRef = undefined;
+	premiumOfferModelRef = undefined;
+	currentPremiumOffer = undefined;
+	activeDialogNPC = undefined;
+	pendingDialogNPC = undefined;
 	currentPayload = undefined;
 	selectedItemIds.clear();
 	purchasing = false;
@@ -1338,6 +1420,152 @@ function startInspectDistanceCheck(): void {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  PREMIUM OFFER MODE — reuses the dialog panel for world-object purchases
+// ══════════════════════════════════════════════════════════════════════════════
+
+const PREMIUM_OFFER_MAX_DISTANCE = 12;
+
+function openPremiumOfferDialog(payload: PremiumOfferPayload, sourceModel?: Model): void {
+	dialogOpen = true;
+	tradeOpen = false;
+	inspectMode = false;
+	premiumOfferMode = true;
+	currentPayload = undefined;
+	currentChatIndex = 0;
+	currentPremiumOffer = payload;
+	premiumOfferModelRef = sourceModel;
+
+	startPremiumOfferDistanceCheck();
+
+	// Title
+	if (npcNameLabel) {
+		npcNameLabel.Text = payload.title;
+		npcNameLabel.TextColor3 = UI_THEME.gold;
+	}
+
+	// Subtitle
+	const statusSub = dialogRoot?.FindFirstChild("TopRow")?.FindFirstChild("NPCStatus") as TextLabel | undefined;
+	if (statusSub) {
+		statusSub.Text = payload.purchaseTypeLabel;
+		statusSub.TextColor3 =
+			payload.offerType === "gamepass" ? Color3.fromRGB(88, 160, 220) : Color3.fromRGB(195, 155, 50);
+	}
+
+	// Hide trade, show dialog text with rich description
+	if (tradeSection) tradeSection.Visible = false;
+	if (playerGoldLabel) playerGoldLabel.Visible = false;
+
+	if (dialogTextLabel) {
+		dialogTextLabel.Visible = true;
+		// Build multi-line display: description + blank line + flavour text
+		dialogTextLabel.Text = payload.description + "\n\n" + '"' + payload.flavorText + '"';
+	}
+
+	// Headshot — try to render the world model in the viewport
+	if (premiumOfferModelRef) {
+		setupInspectViewport(premiumOfferModelRef.Name);
+	} else {
+		clearHeadshot();
+	}
+
+	// Options: Buy + Leave (or Owned + Leave)
+	clearOptions();
+	if (optionsFrame) {
+		if (payload.alreadyOwned) {
+			addDialogOption(optionsFrame, 1, "Already Owned", UI_THEME.textMuted, () => {
+				// No-op — already owned
+			});
+		} else {
+			const buyColor = payload.offerType === "gamepass" ? Color3.fromRGB(88, 160, 220) : UI_THEME.gold;
+			addDialogOption(optionsFrame, 1, "Buy", buyColor, () => {
+				handlePremiumBuy();
+			});
+		}
+
+		addDialogOption(optionsFrame, 2, "Leave", UI_THEME.textMuted, () => {
+			closeDialog();
+		});
+	}
+
+	// Open with animation
+	if (dialogRoot) {
+		dialogRoot.Visible = true;
+		dialogRoot.BackgroundTransparency = 0.6;
+		dialogRoot.Size = new UDim2(0, sc(260), 0, sc(220));
+		TweenService.Create(dialogRoot, new TweenInfo(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size: new UDim2(0, sc(PANEL_W), 0, sc(DIALOG_H)),
+			BackgroundTransparency: UI_THEME.bgTransparency,
+		}).Play();
+	}
+}
+
+function handlePremiumBuy(): void {
+	if (!currentPremiumOffer) return;
+
+	// Fire the buy remote — server will prompt the correct Roblox purchase
+	buyPremiumOfferRemote.FireServer(currentPremiumOffer.offerId);
+
+	// Update the dialog text to show a "processing" message
+	if (dialogTextLabel) {
+		dialogTextLabel.Text = "Opening purchase prompt...";
+	}
+
+	// For Developer Products, listen for the purchase result and close the dialog
+	if (currentPremiumOffer.offerType === "developerProduct") {
+		const productId = currentPremiumOffer.productId;
+		const conn = MarketplaceService.PromptProductPurchaseFinished.Connect(
+			(userId: number, purchasedProductId: number, wasPurchased: boolean) => {
+				conn.Disconnect();
+				if (userId === Players.LocalPlayer.UserId && purchasedProductId === productId) {
+					if (wasPurchased) {
+						closeDialog();
+					} else {
+						// Cancelled — restore the Buy option text
+						if (dialogTextLabel && currentPremiumOffer) {
+							dialogTextLabel.Text = currentPremiumOffer.description;
+						}
+					}
+				}
+			},
+		);
+	}
+}
+
+function startPremiumOfferDistanceCheck(): void {
+	stopDistanceCheck();
+	const player = Players.LocalPlayer;
+	if (!player) return;
+
+	distanceCheckConn = RunService.Heartbeat.Connect(() => {
+		if (!dialogOpen || !premiumOfferMode) {
+			stopDistanceCheck();
+			return;
+		}
+		const character = player.Character;
+		if (!character) return;
+		const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
+		if (!hrp) return;
+
+		if (!premiumOfferModelRef || !premiumOfferModelRef.Parent) {
+			closeDialog();
+			return;
+		}
+
+		const part =
+			premiumOfferModelRef.PrimaryPart ??
+			(premiumOfferModelRef.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
+		if (!part) {
+			closeDialog();
+			return;
+		}
+
+		if (hrp.Position.sub(part.Position).Magnitude > PREMIUM_OFFER_MAX_DISTANCE) {
+			closeDialog();
+		}
+	});
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  PUBLIC API
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1347,12 +1575,24 @@ export function isDialogOpen(): boolean {
 
 export function requestOpenDialog(npcModel: Model): void {
 	if (dialogOpen) return;
+	pendingDialogNPC = npcModel;
 	openDialogRemote.FireServer(npcModel);
 }
 
 export function requestOpenInspect(model: Model): void {
 	if (dialogOpen) return;
 	openInspectRemote.FireServer(model);
+}
+
+/** Tracked ref so the distance check can access the model. */
+let pendingPremiumOfferModel: Model | undefined;
+
+export function requestOpenPremiumOffer(model: Model): void {
+	if (dialogOpen) return;
+	const offerId = model.GetAttribute("offerId") as string | undefined;
+	if (!offerId) return;
+	pendingPremiumOfferModel = model;
+	openPremiumOfferRemote.FireServer(offerId);
 }
 
 export function initializeDialogUI(screenGui: ScreenGui): void {
@@ -1366,6 +1606,12 @@ export function initializeDialogUI(screenGui: ScreenGui): void {
 		openInspectDialog(data as InspectPayload);
 	});
 
+	premiumOfferPayloadRemote.OnClientEvent.Connect((data: unknown) => {
+		const payload = data as PremiumOfferPayload;
+		openPremiumOfferDialog(payload, pendingPremiumOfferModel);
+		pendingPremiumOfferModel = undefined;
+	});
+
 	purchaseResultRemote.OnClientEvent.Connect((_success: unknown, _message: unknown) => {
 		// Handled in the purchase invoke callback; this is a secondary channel.
 	});
@@ -1373,5 +1619,41 @@ export function initializeDialogUI(screenGui: ScreenGui): void {
 	// Ambient floating text for non-vendor NPCs (guards, commoners, etc.)
 	floatingTextRemote.OnClientEvent.Connect((npcName: unknown, message: unknown) => {
 		spawnFloatingText(npcName as string, message as string);
+	});
+
+	// Pass ownership updates — refresh shop if open so premium tiles update
+	passOwnershipRemote.OnClientEvent.Connect((passId: unknown, owns: unknown) => {
+		const pid = passId as number;
+		const owned = owns as boolean;
+
+		// If the player just bought a pass while viewing a premium offer, refresh
+		if (premiumOfferMode && currentPremiumOffer && currentPremiumOffer.offerType === "gamepass" && owned) {
+			if (currentPremiumOffer.productId === pid) {
+				currentPremiumOffer.alreadyOwned = true;
+				// Refresh options to show "Already Owned"
+				clearOptions();
+				if (optionsFrame) {
+					addDialogOption(optionsFrame, 1, "Already Owned", UI_THEME.textMuted, () => {});
+					addDialogOption(optionsFrame, 2, "Leave", UI_THEME.textMuted, () => {
+						closeDialog();
+					});
+				}
+				if (dialogTextLabel) {
+					dialogTextLabel.Text = "Unlocked! " + currentPremiumOffer.description;
+				}
+				return;
+			}
+		}
+
+		if (!currentPayload || !tradeOpen) return;
+		// Update the local payload so tiles reflect the new ownership
+		for (const si of currentPayload.shopItems) {
+			if (si.gamePassId === pid) {
+				si.ownsPass = owned;
+			}
+		}
+		selectedItemIds.clear();
+		refreshShopGrid();
+		showTradeOptions();
 	});
 }

@@ -13,6 +13,8 @@ const effectSyncRemote = getEffectSyncRemote();
 interface ActiveEffects {
 	poisonId: string | undefined;
 	poisonRemainingSecs: number;
+	/** Remaining charges for charge-based poisons (e.g. O's Guidance). -1 = duration-based. */
+	poisonCharges: number;
 	elixirId: string | undefined;
 	elixirRemainingSecs: number;
 }
@@ -22,7 +24,13 @@ const PLAYER_EFFECTS = new Map<Player, ActiveEffects>();
 function getOrCreate(player: Player): ActiveEffects {
 	let effects = PLAYER_EFFECTS.get(player);
 	if (!effects) {
-		effects = { poisonId: undefined, poisonRemainingSecs: 0, elixirId: undefined, elixirRemainingSecs: 0 };
+		effects = {
+			poisonId: undefined,
+			poisonRemainingSecs: 0,
+			poisonCharges: -1,
+			elixirId: undefined,
+			elixirRemainingSecs: 0,
+		};
 		PLAYER_EFFECTS.set(player, effects);
 	}
 	return effects;
@@ -68,7 +76,35 @@ export function activatePoison(player: Player, poisonId: string): void {
 	const effects = getOrCreate(player);
 	effects.poisonId = poisonId;
 	effects.poisonRemainingSecs = def.coatDurationSecs;
-	log("[EFFECT] " + player.Name + " activated poison: " + def.name + " (" + def.coatDurationSecs + "s)");
+	// Charge-based poisons (e.g. O's Guidance) use charges instead of pure duration
+	effects.poisonCharges = def.chargesPerUse !== undefined ? def.chargesPerUse : -1;
+	log(
+		"[EFFECT] " +
+			player.Name +
+			" activated poison: " +
+			def.name +
+			(def.chargesPerUse !== undefined ? " (" + def.chargesPerUse + " charges)" : " (" + def.coatDurationSecs + "s)"),
+	);
+	persistEffects(player);
+	pushEffectSync(player);
+}
+
+/**
+ * Consume one poison charge after a kill. For charge-based poisons this
+ * decrements the counter and clears the poison at 0. For duration-based
+ * poisons this is a no-op (they expire on a timer instead).
+ */
+export function consumePoisonCharge(player: Player): void {
+	const effects = PLAYER_EFFECTS.get(player);
+	if (!effects || !effects.poisonId) return;
+	if (effects.poisonCharges < 0) return; // duration-based, nothing to consume
+	effects.poisonCharges -= 1;
+	if (effects.poisonCharges <= 0) {
+		log("[EFFECT] Poison charges depleted for " + player.Name);
+		effects.poisonId = undefined;
+		effects.poisonRemainingSecs = 0;
+		effects.poisonCharges = -1;
+	}
 	persistEffects(player);
 	pushEffectSync(player);
 }
