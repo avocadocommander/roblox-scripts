@@ -8,7 +8,7 @@ import {
 	getAssassinateContext,
 	fireAssassinateAction,
 } from "../modules/npc-proximity";
-import { toggleInventory, toggleKillBook } from "../modules/ui-toggles";
+import { toggleInventory, toggleKillBook, registerCampfireAction, registerActionPulse, registerKillPulse } from "../modules/ui-toggles";
 import { getPlaceCampfireRemote } from "shared/remotes/campfire-remote";
 
 // -- Scaling ------------------------------------------------------------------
@@ -488,4 +488,25 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildMobileHUD(screenGui);
+
+	// Register campfire action for keyboard hotkey
+	registerCampfireAction(() => {
+		if (campfireOnCooldown) return;
+		const character = Players.LocalPlayer.Character;
+		if (!character || !character.PrimaryPart) return;
+		const hrp = character.PrimaryPart;
+		getPlaceCampfireRemote().FireServer(hrp.Position, hrp.CFrame.LookVector);
+		campfireOnCooldown = true;
+		task.delay(CAMPFIRE_COOLDOWN, () => {
+			campfireOnCooldown = false;
+		});
+	});
+
+	// Register pulse callbacks so proximity system can hint mobile buttons
+	registerActionPulse(() => {
+		if (actionButton) pulseButton(actionButton);
+	});
+	registerKillPulse(() => {
+		if (smallKillBtn) pulseButton(smallKillBtn);
+	});
 });

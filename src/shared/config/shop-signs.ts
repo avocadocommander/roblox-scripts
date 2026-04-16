@@ -16,10 +16,10 @@ import { ShopType } from "./shop-types";
 // Plain ASCII only. These are always shown so the shop type is readable at a glance.
 
 export const SHOP_TYPE_MARKERS: Record<ShopType, string> = {
-	weapon: "<+> FORGE",
-	elixir: "<*> BREWS",
-	poison: "<~> TOXINS",
-	rare: "<=> WARES",
+	weapon: "FORGE",
+	elixir: "BREWS",
+	poison: "TOXINS",
+	rare: "WARES",
 };
 
 // ── Sign color schemes ────────────────────────────────────────────────────────

@@ -9,6 +9,13 @@ import {
 	levelFromXP,
 	totalXPFromFactions,
 } from "./config/factions";
+import {
+	STARTING_COINS,
+	STARTING_LEVEL,
+	DEFAULT_PLAYER_NAME,
+	DEFAULT_TITLE,
+	DEFAULT_OWNED_TITLES,
+} from "./config/player";
 
 // ── Achievement persistence types ─────────────────────────────────────────────
 
@@ -184,12 +191,12 @@ export interface PlayerState {
 
 const DEFAULT_STATE: PlayerState = {
 	birth: 0,
-	coins: 0,
+	coins: STARTING_COINS,
 	expierence: 0,
-	level: 1,
+	level: STARTING_LEVEL,
 	score: 0,
-	name: "Strider",
-	title: "sellsword",
+	name: DEFAULT_PLAYER_NAME,
+	title: DEFAULT_TITLE,
 	activeBountyName: undefined,
 	wanted: false,
 	killLog: {},
@@ -197,7 +204,7 @@ const DEFAULT_STATE: PlayerState = {
 	playerDeaths: 0,
 	unlockedAchievements: {},
 	totalNPCKills: 0,
-	ownedTitles: ["sellsword"],
+	ownedTitles: [...DEFAULT_OWNED_TITLES],
 	factionXP: { ...DEFAULT_FACTION_XP },
 	activePoisonId: undefined,
 	activePoisonRemainingSecs: 0,

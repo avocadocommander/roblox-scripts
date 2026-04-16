@@ -7,6 +7,9 @@
 
 let inventoryToggleFn: (() => void) | undefined;
 let killBookToggleFn: (() => void) | undefined;
+let campfireActionFn: (() => void) | undefined;
+let actionPulseFn: (() => void) | undefined;
+let killPulseFn: (() => void) | undefined;
 
 export function registerInventoryToggle(fn: () => void): void {
 	inventoryToggleFn = fn;
@@ -16,10 +19,34 @@ export function registerKillBookToggle(fn: () => void): void {
 	killBookToggleFn = fn;
 }
 
+export function registerCampfireAction(fn: () => void): void {
+	campfireActionFn = fn;
+}
+
 export function toggleInventory(): void {
 	if (inventoryToggleFn) inventoryToggleFn();
 }
 
 export function toggleKillBook(): void {
 	if (killBookToggleFn) killBookToggleFn();
+}
+
+export function fireCampfireAction(): void {
+	if (campfireActionFn) campfireActionFn();
+}
+
+export function registerActionPulse(fn: () => void): void {
+	actionPulseFn = fn;
+}
+
+export function registerKillPulse(fn: () => void): void {
+	killPulseFn = fn;
+}
+
+export function pulseActionButton(): void {
+	if (actionPulseFn) actionPulseFn();
+}
+
+export function pulseKillButton(): void {
+	if (killPulseFn) killPulseFn();
 }

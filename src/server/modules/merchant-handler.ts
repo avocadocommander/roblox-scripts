@@ -23,11 +23,12 @@
  *   initializeMerchantSystem()     — call once from bootstrap BEFORE setServerStatus.
  */
 
-import { CollectionService } from "@rbxts/services";
+import { CollectionService, ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { NPC_REGISTRY } from "shared/config/npcs";
 import { ShopType, SHOP_TYPE_POOLS, REQUIRED_SHOP_TYPES, MERCHANT_NPC_POOL } from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
+import { getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { RouteConfig, getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
@@ -110,16 +111,34 @@ function buildSignContents(
 	grainMid.ZIndex = bg.ZIndex;
 	grainMid.Parent = bg;
 
-	// ── Tier 1: type marker with icon — large, pushed up ────────────────────
+	// ── Tier 1: main shop name — large, top area ────────────────────────────
+	const nameLabel = new Instance("TextLabel");
+	nameLabel.Name = "NameLabel";
+	nameLabel.Size = new UDim2(1, -8, 0.6, 0);
+	nameLabel.Position = new UDim2(0, 4, 0.02, 0);
+	nameLabel.BackgroundTransparency = 1;
+	nameLabel.TextColor3 = colors.name;
+	nameLabel.Font = Enum.Font.GothamBold;
+	nameLabel.TextScaled = false;
+	nameLabel.TextSize = 52;
+	nameLabel.TextWrapped = true;
+	nameLabel.ClipsDescendants = false;
+	nameLabel.TextStrokeTransparency = 0.75;
+	nameLabel.Text = shopName.upper();
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Center;
+	nameLabel.ZIndex = 3;
+	nameLabel.Parent = bg;
+
+	// ── Tier 2: shop type — smaller, bottom area ────────────────────────────
 	const markerLabel = new Instance("TextLabel");
 	markerLabel.Name = "MarkerLabel";
-	markerLabel.Size = new UDim2(1, -8, 0.38, 0);
-	markerLabel.Position = new UDim2(0, 4, 0.03, 0);
+	markerLabel.Size = new UDim2(1, -8, 0.3, 0);
+	markerLabel.Position = new UDim2(0, 4, 0.65, 0);
 	markerLabel.BackgroundTransparency = 1;
 	markerLabel.TextColor3 = colors.marker;
-	markerLabel.Font = Enum.Font.GothamBold;
+	markerLabel.Font = Enum.Font.SourceSansBold;
 	markerLabel.TextScaled = false;
-	markerLabel.TextSize = 56;
+	markerLabel.TextSize = 36;
 	markerLabel.TextWrapped = false;
 	markerLabel.ClipsDescendants = false;
 	markerLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
@@ -128,24 +147,6 @@ function buildSignContents(
 	markerLabel.TextXAlignment = Enum.TextXAlignment.Center;
 	markerLabel.ZIndex = 3;
 	markerLabel.Parent = bg;
-
-	// ── Tier 2: main shop name — tight under marker, wraps ──────────────────
-	const nameLabel = new Instance("TextLabel");
-	nameLabel.Name = "NameLabel";
-	nameLabel.Size = new UDim2(1, -8, 0.58, 0);
-	nameLabel.Position = new UDim2(0, 4, 0.4, 0);
-	nameLabel.BackgroundTransparency = 1;
-	nameLabel.TextColor3 = colors.name;
-	nameLabel.Font = Enum.Font.SourceSansBold;
-	nameLabel.TextScaled = false;
-	nameLabel.TextSize = 42;
-	nameLabel.TextWrapped = true;
-	nameLabel.ClipsDescendants = false;
-	nameLabel.TextStrokeTransparency = 0.75;
-	nameLabel.Text = shopName.upper();
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Center;
-	nameLabel.ZIndex = 3;
-	nameLabel.Parent = bg;
 }
 
 function applySignText(signPart: BasePart, shopType: ShopType, npcName: string): void {
@@ -223,6 +224,114 @@ function resolveSignPart(shopSite: Model): BasePart | undefined {
 	return undefined;
 }
 
+// ── Offer Slot Spawning ───────────────────────────────────────────────────────
+
+/**
+ * Find OfferSlot attachments/parts in a ShopSite and spawn a floating display
+ * model for each, stamped with the matching `offerId` attribute.
+ * The client picks these up via the existing premium-offer proximity system.
+ */
+function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
+	const offerIds = getOfferSlotsForShopType(shopType);
+	if (offerIds.size() === 0) return;
+
+	// Collect slot positions: Attachments (must be inside a BasePart) or BaseParts named "OfferSlot"
+	const slots: { position: Vector3 }[] = [];
+
+	for (const desc of shopSite.GetDescendants()) {
+		if (desc.Name === "OfferSlot") {
+			if (desc.IsA("Attachment")) {
+				// WorldPosition only works when parented to a BasePart
+				if (desc.Parent?.IsA("BasePart")) {
+					slots.push({ position: desc.WorldPosition });
+				} else {
+					log(
+						"[MERCHANT] OfferSlot Attachment in " +
+							shopSite.Name +
+							" is not inside a BasePart -- move it under a Part/MeshPart",
+						"WARN",
+					);
+				}
+			} else if (desc.IsA("BasePart")) {
+				slots.push({ position: desc.Position });
+			}
+		}
+	}
+
+	if (slots.size() === 0) {
+		log("[MERCHANT] No OfferSlot attachments in " + shopSite.Name + " for " + shopType);
+		return;
+	}
+
+	// Fill slots with offer IDs (1-to-1; extra slots stay empty)
+	const count = math.min(slots.size(), offerIds.size());
+	for (let i = 0; i < count; i++) {
+		const offerId = offerIds[i];
+		const offer = getPremiumOffer(offerId);
+		if (!offer) {
+			log("[MERCHANT] Unknown offerId '" + offerId + "' in SHOP_OFFER_SLOTS." + shopType, "WARN");
+			continue;
+		}
+
+		const slot = slots[i];
+
+		// Create the offer model the client will detect via `offerId` attribute
+		const model = new Instance("Model");
+		model.Name = "OfferSlot_" + offerId;
+
+		// Clone the 3D display model from ReplicatedStorage > DisplayModels
+		const displayFolder = ReplicatedStorage.FindFirstChild("DisplayModels") as Folder | undefined;
+		let displayClone: Model | undefined;
+		if (offer.displayModelName !== undefined && displayFolder) {
+			const source = displayFolder.FindFirstChild(offer.displayModelName) as Model | undefined;
+			if (source) {
+				displayClone = source.Clone();
+				displayClone.Parent = model;
+				// Anchor all parts so physics doesn't interfere
+				for (const part of displayClone.GetDescendants()) {
+					if (part.IsA("BasePart")) {
+						part.Anchored = true;
+						part.CanCollide = false;
+					}
+				}
+			} else {
+				log("[MERCHANT] DisplayModels/" + offer.displayModelName + " not found in ReplicatedStorage", "WARN");
+			}
+		}
+
+		// Invisible anchor that defines the slot position
+		const anchor = new Instance("Part");
+		anchor.Name = "Anchor";
+		anchor.Size = new Vector3(1, 1, 1);
+		anchor.Anchored = true;
+		anchor.CanCollide = false;
+		anchor.Transparency = 1;
+		anchor.Position = slot.position;
+		anchor.Parent = model;
+
+		model.PrimaryPart = anchor;
+
+		// Position the display clone at the slot
+		if (displayClone) {
+			displayClone.PivotTo(new CFrame(slot.position));
+		}
+
+		model.SetAttribute("offerId", offerId);
+		model.Parent = Workspace;
+
+		log(
+			"[MERCHANT] Spawned offer slot '" +
+				offerId +
+				"' (" +
+				offer.title +
+				")" +
+				(displayClone ? " with display model" : " no display model") +
+				" at " +
+				shopSite.Name,
+		);
+	}
+}
+
 function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], shopType: ShopType): void {
 	const def = NPC_REGISTRY[npcName];
 	if (!def) {
@@ -271,6 +380,9 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 		applySignText(signPart, shopType, npcName);
 	}
 
+	// Spawn premium offer display items at OfferSlot attachments
+	spawnOfferSlots(shopSite, shopType);
+
 	log("[MERCHANT] " + npcName + " placed as merchant at " + shopSite.Name);
 
 	// Respawn on death — sign re-applied with same shop type and new merchant name
@@ -298,7 +410,7 @@ export function getReservedMerchantNames(): Set<string> {
 }
 
 function runMerchantInit(): void {
-	// Collect ShopSite_* models — prefer CollectionService tag, fall back to name prefix
+	// Collect shop sites: tagged "MerchantShop" + any Model named "Shop"
 	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => inst.IsA("Model"));
 
 	const byName: Model[] = [];
@@ -308,13 +420,30 @@ function runMerchantInit(): void {
 		}
 	}
 
-	// Merge: use tagged list if non-empty, otherwise fall back to name scan
-	const shopSites = tagged.size() > 0 ? tagged : byName;
+	// Merge both lists, deduplicating
+	const seen = new Set<Model>();
+	const shopSites: Model[] = [];
+	for (const m of [...tagged, ...byName]) {
+		if (!seen.has(m)) {
+			seen.add(m);
+			shopSites.push(m);
+		}
+	}
 
 	if (shopSites.size() === 0) {
-		log("[MERCHANT] No ShopSite_* models found (checked tag + name prefix) -- no merchants spawned.");
+		log("[MERCHANT] No ShopSite models found (checked tag + name) -- no merchants spawned.");
 		return;
 	}
+
+	log(
+		"[MERCHANT] Found " +
+			shopSites.size() +
+			" shop site(s) (" +
+			tagged.size() +
+			" tagged, " +
+			byName.size() +
+			" by name).",
+	);
 
 	// ── Assign shop types ────────────────────────────────────────────────────
 	// Shuffle sites so type assignments are random each session
@@ -353,6 +482,15 @@ function runMerchantInit(): void {
 		// ShopType attribute on the ShopSite model overrides the auto-assigned type
 		const attrType = shopSite.GetAttribute("ShopType") as string | undefined;
 		const resolvedType: ShopType = (attrType as ShopType) ?? shopType;
+
+		log(
+			"[MERCHANT] Site " +
+				shopSite.Name +
+				" -> type '" +
+				resolvedType +
+				"'" +
+				(attrType !== undefined ? " (from attribute)" : " (auto-assigned)"),
+		);
 
 		const shopItems = SHOP_TYPE_POOLS[resolvedType];
 		if (!shopItems) {

@@ -37,6 +37,7 @@ import {
 } from "./inventory-handler";
 import { getQuipForStatus } from "shared/config/npc-quips";
 import { playerOwnsPass } from "./pass-handler";
+import { getGamePassForItem } from "shared/config/game-passes";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 		for (const si of shop.shopItems) {
 			const itemDef = ITEMS[si.itemId];
 			if (!itemDef) continue;
-			const passId = itemDef.gamePassId;
+			const passId = getGamePassForItem(si.itemId);
 			shopItems.push({
 				itemId: si.itemId,
 				name: itemDef.name,
@@ -159,7 +160,8 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	}
 
 	// Premium item — requires Game Pass ownership to purchase, but costs gold like normal
-	if (itemDef.gamePassId !== undefined && !playerOwnsPass(player, itemDef.gamePassId)) {
+	const requiredPassId = getGamePassForItem(itemId);
+	if (requiredPassId !== undefined && !playerOwnsPass(player, requiredPassId)) {
 		return [false, "You must own the Game Pass to purchase this item."];
 	}
 

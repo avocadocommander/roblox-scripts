@@ -17,6 +17,7 @@ import {
 } from "shared/remotes/inventory-remote";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, Status } from "shared/module";
 import { activatePoison as effectActivatePoison, activateElixir as effectActivateElixir } from "./effect-handler";
+import { getGamePassForItem } from "shared/config/game-passes";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -142,7 +143,8 @@ function handleActivateItem(player: Player, itemId: string): void {
 
 	if (itemDef.category === "weapon") {
 		// Premium weapon — require Game Pass ownership
-		if (itemDef.gamePassId !== undefined && !checkPlayerOwnsPass(player, itemDef.gamePassId)) {
+		const requiredPassId = getGamePassForItem(itemId);
+		if (requiredPassId !== undefined && !checkPlayerOwnsPass(player, requiredPassId)) {
 			log(`[INVENTORY] ${player.Name} tried to equip premium weapon ${itemDef.name} without pass`);
 			return;
 		}

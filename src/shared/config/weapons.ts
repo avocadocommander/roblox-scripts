@@ -3,6 +3,9 @@
  *
  * Weapons change the player's look (models TBD) and deal different
  * damage / speed on assassination. Non-consumable — once owned, always kept.
+ *
+ * Game Pass requirements are defined in game-passes.ts via `unlocksItemId`.
+ * Use `getGamePassForItem(weaponId)` to check if a weapon needs a pass.
  */
 
 export interface WeaponDef {
@@ -19,8 +22,6 @@ export interface WeaponDef {
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
 	/** References a key in DELIVERY_TYPES — controls kill behaviour (blunt or pierce). */
 	deliveryType: string;
-	/** If set, this weapon requires the given Roblox Game Pass to own/equip. */
-	gamePassId?: number;
 	/** Knockback force on hit (blunt weapons). Default 0. */
 	knockbackForce?: number;
 	/** Upward lift force on hit (blunt weapons). Default 0. */
@@ -60,7 +61,6 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		icon: "T",
 		rarity: "rare",
 		deliveryType: "warhammer",
-		gamePassId: 1786246558, // TODO: replace with real Roblox Game Pass ID
 		knockbackForce: 55,
 		knockbackLift: 18,
 		ragdollSecs: 1,

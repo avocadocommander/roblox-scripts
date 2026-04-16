@@ -9,7 +9,7 @@
 import { MarketplaceService, Players } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
-import { WEAPONS } from "shared/config/weapons";
+import { ALL_GAME_PASS_IDS, GAME_PASSES, getGamePassByPassId } from "shared/config/game-passes";
 import { givePlayerItem } from "./inventory-handler";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
@@ -21,12 +21,9 @@ const ownershipSyncRemote = getPassOwnershipSyncRemote();
 
 const ownershipCache = new Map<Player, Set<number>>();
 
-// ── Collect all game-pass IDs referenced by weapons ───────────────────────────
+// ── All known game-pass IDs (from centralised config) ─────────────────────────
 
-const ALL_PASS_IDS = new Set<number>();
-for (const [, w] of pairs(WEAPONS)) {
-	if (w.gamePassId !== undefined) ALL_PASS_IDS.add(w.gamePassId);
-}
+const ALL_PASS_IDS = new Set<number>(ALL_GAME_PASS_IDS);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -61,15 +58,14 @@ function warmCache(player: Player): void {
 }
 
 /**
- * After a pass purchase succeeds, auto-grant the weapon item so the player
+ * After a pass purchase succeeds, auto-grant the linked item so the player
  * does not have to visit a shop.
  */
-function autoGrantWeaponForPass(player: Player, passId: number): void {
-	for (const [, w] of pairs(WEAPONS)) {
-		if (w.gamePassId === passId) {
-			givePlayerItem(player, w.id, 1);
-			log("[PASS] Auto-granted weapon " + w.id + " to " + player.Name + " for pass " + passId);
-		}
+function autoGrantItemForPass(player: Player, passId: number): void {
+	const passDef = getGamePassByPassId(passId);
+	if (passDef && passDef.unlocksItemId !== undefined) {
+		givePlayerItem(player, passDef.unlocksItemId, 1);
+		log("[PASS] Auto-granted item " + passDef.unlocksItemId + " to " + player.Name + " for pass " + passId);
 	}
 }
 
@@ -115,8 +111,8 @@ export function initializePassHandler(): void {
 		// Notify client
 		ownershipSyncRemote.FireClient(player, passId, true);
 
-		// Auto-grant the weapon
-		autoGrantWeaponForPass(player, passId);
+		// Auto-grant the linked item
+		autoGrantItemForPass(player, passId);
 	});
 
 	// Warm cache when players join

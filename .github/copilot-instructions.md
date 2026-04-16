@@ -42,13 +42,31 @@ src/
     modules/           — client-only logic (movement, npc-proximity…)
     environment/       — world interaction scripts
   shared/            → ReplicatedStorage (importable from both sides)
-    config/            — DATA-ONLY maps (weapons, poisons, elixirs) — easy to edit
+    config/            — DATA-ONLY config maps — the SINGLE SOURCE OF TRUTH for all game data
+      weapons.ts         — weapon definitions (WeaponDef, WEAPONS)
+      poisons.ts         — poison definitions (PoisonDef, POISONS)
+      elixirs.ts         — elixir definitions (ElixirDef, ELIXIRS)
+      game-passes.ts     — all Roblox Game Pass IDs & metadata (GamePassDef, GAME_PASSES)
+      dev-products.ts    — all Roblox Developer Product IDs & grants (DevProductDef, DEV_PRODUCTS)
+      premium-offers.ts  — world-object Robux offers (references game-passes & dev-products)
+      player.ts          — player defaults & balance constants (starting coins, speeds, limits)
+      npcs.ts            — full NPC registry (NPCDef, NPC_REGISTRY)
+      factions.ts        — faction definitions & XP helpers
+      titles.ts          — player title definitions
+      achievements.ts    — (in shared/) achievement definitions
+      delivery.ts        — weapon delivery types (blunt / pierce)
+      shop-types.ts      — dynamic shop item pools & merchant NPC pool
+      npc-clothing.ts    — tier-based NPC clothing data
+      npc-quips.ts       — ambient NPC dialog lines
+      map-locations.ts   — world locations with ambient sounds/effects
+      music.ts           — music playlist
+      inspectables.ts    — inspectable world objects
     remotes/           — remote event/function factories
-    inventory.ts       — unified ItemDef, rarity colours, bounty scroll types
+    inventory.ts       — unified ItemDef, rarity colours, bounty scroll types (builds from configs)
     ui-theme.ts        — UI_THEME palette, responsive scaling helpers
-    module.ts          — NPC names, NPC data, medieval constants
+    module.ts          — NPC re-exports, medieval constants
     helpers.ts         — log(), isTable(), speed helpers
-    player-state.ts    — DataStore persistence, coins, XP, kills, achievements
+    player-state.ts    — DataStore persistence (imports defaults from config/player.ts)
 ```
 
 ## Critical Rules (MUST follow)
@@ -74,8 +92,33 @@ Clients call `WaitForChild` on remote instances. The server **must** eagerly cre
 ### 4. Server Bootstrap Order Matters
 Systems are initialised sequentially in `server/bootstrap.ts`. If a new system depends on another, it must be added **after** its dependency in the init chain.
 
-### 5. Config Files Are Data-Only
-`shared/config/weapons.ts`, `shared/config/poisons.ts`, `shared/config/elixirs.ts` are pure data maps. To add a new item, just add an entry to the `WEAPONS`, `POISONS`, or `ELIXIRS` record — `shared/inventory.ts` builds `ITEMS` / `ITEM_LIST` automatically from them.
+### 5. Config Files Are Data-Only — EVERYTHING Must Be Config-Driven
+All game data, balance values, IDs, and tuning constants MUST live in `shared/config/` files. **Never hardcode** item stats, Roblox product/pass IDs, player defaults, cooldowns, prices, or any tunable value directly in logic files.
+
+**Config file index** (add new items/features here, not in logic):
+| File | Contents | Key exports |
+|------|----------|-------------|
+| `weapons.ts` | Weapon definitions | `WEAPONS`, `WEAPON_LIST` |
+| `poisons.ts` | Poison definitions | `POISONS`, `POISON_LIST` |
+| `elixirs.ts` | Elixir definitions | `ELIXIRS`, `ELIXIR_LIST` |
+| `game-passes.ts` | All Roblox Game Pass IDs | `GAME_PASSES`, `ALL_GAME_PASS_IDS` |
+| `dev-products.ts` | All Developer Product IDs | `DEV_PRODUCTS` |
+| `premium-offers.ts` | World-object Robux offers | `PREMIUM_OFFERS` |
+| `player.ts` | Player defaults & balance | `STARTING_COINS`, `MAX_BOUNTY_SLOTS`, `DEFAULT_WALK_SPEED`, etc. |
+| `npcs.ts` | Full NPC registry | `NPC_REGISTRY`, `NPC_NAMES` |
+| `factions.ts` | Faction definitions & XP | `FACTIONS`, `FACTION_IDS` |
+| `titles.ts` | Player titles | `TITLES`, `TITLE_LIST` |
+| `delivery.ts` | Weapon delivery types | `DELIVERY_TYPES` |
+| `shop-types.ts` | Dynamic shop item pools | `SHOP_TYPE_POOLS` |
+
+**Cross-reference rules:**
+- Roblox product IDs are defined ONCE: Game Passes in `game-passes.ts`, Dev Products in `dev-products.ts`.
+- Other configs (weapons, premium-offers, poisons) NEVER store a pass or product ID directly.
+- Game Passes link to items via `unlocksItemId` on the `GamePassDef`. Use `getGamePassForItem(itemId)` to check if an item requires a pass.
+- Dev Products link to items via `grantItemId` on the `DevProductDef`.
+- If an item is both a Dev Product and a poison/elixir, the item definition stays in `poisons.ts`/`elixirs.ts`, and `dev-products.ts` references it by item ID via `grantItemId`.
+- `shared/inventory.ts` auto-builds `ITEMS` / `ITEM_LIST` from weapon/poison/elixir configs — never add items there directly.
+- `player-state.ts` imports defaults from `config/player.ts` — never hardcode starting values in state logic.
 
 ### 6. No `require()` for Circular Deps
 Use the lazy `require(script.Parent!.FindFirstChild(...))` pattern only when absolutely necessary to break circular dependencies (see `inventory-handler.ts`). Prefer restructuring imports.

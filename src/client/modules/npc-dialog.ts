@@ -1440,15 +1440,20 @@ function openPremiumOfferDialog(payload: PremiumOfferPayload, sourceModel?: Mode
 	// Title
 	if (npcNameLabel) {
 		npcNameLabel.Text = payload.title;
-		npcNameLabel.TextColor3 = UI_THEME.gold;
+		npcNameLabel.TextColor3 = payload.alreadyOwned ? Color3.fromRGB(108, 105, 98) : UI_THEME.gold;
 	}
 
 	// Subtitle
 	const statusSub = dialogRoot?.FindFirstChild("TopRow")?.FindFirstChild("NPCStatus") as TextLabel | undefined;
 	if (statusSub) {
-		statusSub.Text = payload.purchaseTypeLabel;
-		statusSub.TextColor3 =
-			payload.offerType === "gamepass" ? Color3.fromRGB(88, 160, 220) : Color3.fromRGB(195, 155, 50);
+		if (payload.alreadyOwned) {
+			statusSub.Text = "Owned";
+			statusSub.TextColor3 = Color3.fromRGB(108, 105, 98);
+		} else {
+			statusSub.Text = payload.purchaseTypeLabel;
+			statusSub.TextColor3 =
+				payload.offerType === "gamepass" ? Color3.fromRGB(88, 160, 220) : Color3.fromRGB(195, 155, 50);
+		}
 	}
 
 	// Hide trade, show dialog text with rich description
@@ -1461,28 +1466,24 @@ function openPremiumOfferDialog(payload: PremiumOfferPayload, sourceModel?: Mode
 		dialogTextLabel.Text = payload.description + "\n\n" + '"' + payload.flavorText + '"';
 	}
 
-	// Headshot — try to render the world model in the viewport
+	// Headshot — render the world model (contains the display clone) in the viewport
 	if (premiumOfferModelRef) {
 		setupInspectViewport(premiumOfferModelRef.Name);
 	} else {
 		clearHeadshot();
 	}
 
-	// Options: Buy + Leave (or Owned + Leave)
+	// Options: inspect-only Leave for owned, Buy + Leave for unowned
 	clearOptions();
 	if (optionsFrame) {
-		if (payload.alreadyOwned) {
-			addDialogOption(optionsFrame, 1, "Already Owned", UI_THEME.textMuted, () => {
-				// No-op — already owned
-			});
-		} else {
+		if (!payload.alreadyOwned) {
 			const buyColor = payload.offerType === "gamepass" ? Color3.fromRGB(88, 160, 220) : UI_THEME.gold;
 			addDialogOption(optionsFrame, 1, "Buy", buyColor, () => {
 				handlePremiumBuy();
 			});
 		}
 
-		addDialogOption(optionsFrame, 2, "Leave", UI_THEME.textMuted, () => {
+		addDialogOption(optionsFrame, payload.alreadyOwned ? 1 : 2, "Leave", UI_THEME.textMuted, () => {
 			closeDialog();
 		});
 	}
@@ -1626,17 +1627,27 @@ export function initializeDialogUI(screenGui: ScreenGui): void {
 		const pid = passId as number;
 		const owned = owns as boolean;
 
-		// If the player just bought a pass while viewing a premium offer, refresh
+		// If the player just bought a pass while viewing a premium offer, refresh to inspect-only
 		if (premiumOfferMode && currentPremiumOffer && currentPremiumOffer.offerType === "gamepass" && owned) {
 			if (currentPremiumOffer.productId === pid) {
 				currentPremiumOffer.alreadyOwned = true;
-				// Refresh options to show "Already Owned"
+				// Refresh to inspect-only style: remove Buy, just Leave
 				clearOptions();
 				if (optionsFrame) {
-					addDialogOption(optionsFrame, 1, "Already Owned", UI_THEME.textMuted, () => {});
-					addDialogOption(optionsFrame, 2, "Leave", UI_THEME.textMuted, () => {
+					addDialogOption(optionsFrame, 1, "Leave", UI_THEME.textMuted, () => {
 						closeDialog();
 					});
+				}
+				// Update title colour and subtitle to owned green
+				if (npcNameLabel) {
+					npcNameLabel.TextColor3 = Color3.fromRGB(108, 105, 98);
+				}
+				const statusSub = dialogRoot?.FindFirstChild("TopRow")?.FindFirstChild("NPCStatus") as
+					| TextLabel
+					| undefined;
+				if (statusSub) {
+					statusSub.Text = "Owned";
+					statusSub.TextColor3 = Color3.fromRGB(108, 105, 98);
 				}
 				if (dialogTextLabel) {
 					dialogTextLabel.Text = "Unlocked! " + currentPremiumOffer.description;

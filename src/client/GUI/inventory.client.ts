@@ -66,10 +66,27 @@ const filterButtons: Map<InventoryFilter, TextButton> = new Map();
 let activeWeaponLabel: TextLabel | undefined;
 let activePoisonLabel: TextLabel | undefined;
 let activeElixirLabel: TextLabel | undefined;
+let inventoryBackdrop: TextButton | undefined;
 
 // ── Build the UI ──────────────────────────────────────────────────────────────
 
 function buildInventoryUI(screenGui: ScreenGui): void {
+	// Full-screen backdrop — click to close
+	const backdrop = new Instance("TextButton");
+	backdrop.Name = "InventoryBackdrop";
+	backdrop.Size = new UDim2(1, 0, 1, 0);
+	backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+	backdrop.BackgroundTransparency = 0.5;
+	backdrop.Text = "";
+	backdrop.BorderSizePixel = 0;
+	backdrop.ZIndex = 29;
+	backdrop.Visible = false;
+	backdrop.Parent = screenGui;
+	backdrop.MouseButton1Click.Connect(() => {
+		if (inventoryOpen) toggleInventory();
+	});
+	inventoryBackdrop = backdrop;
+
 	const root = new Instance("Frame");
 	root.Name = "InventoryPanel";
 	root.Size = new UDim2(0, sc(420), 0, sc(520));
@@ -819,6 +836,7 @@ function toggleInventory(): void {
 		refreshActiveStatusBar();
 		refreshItemGrid();
 
+		if (inventoryBackdrop) inventoryBackdrop.Visible = true;
 		rootFrame.Visible = true;
 		rootFrame.Size = new UDim2(0, sc(200), 0, sc(220));
 		rootFrame.BackgroundTransparency = 0.6;
@@ -827,6 +845,7 @@ function toggleInventory(): void {
 			BackgroundTransparency: UI_THEME.bgTransparency,
 		}).Play();
 	} else {
+		if (inventoryBackdrop) inventoryBackdrop.Visible = false;
 		const tween = TweenService.Create(
 			rootFrame,
 			new TweenInfo(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In),

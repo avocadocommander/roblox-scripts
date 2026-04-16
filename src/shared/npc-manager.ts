@@ -650,69 +650,80 @@ export function setupWatcherGaze(npc: NPC, routeData: RouteConfig | undefined) {
 	const defaultDetectionRadius = 60;
 	const guardDetectionRadius = defaultDetectionRadius * 2;
 	const detectionRadius = routeData?.position === "Guard" ? guardDetectionRadius : defaultDetectionRadius;
+	const detectionRadiusSq = (detectionRadius / 2) * (detectionRadius / 2);
 
-	const viewAngle = 180;
+	const halfViewAngle = 90; // 180 / 2
 
 	const humanoidRootPart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
 	if (!humanoidRootPart) return;
 
 	const visibilityMap = new Map<Player, boolean>();
 
+	// Pre-build raycast params once — just swap the filter list each tick
+	const rayParams = new RaycastParams();
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude;
+	rayParams.IgnoreWater = true;
+
 	task.spawn(() => {
+		// Stagger start so not all NPC vision loops fire on the same frame
+		task.wait(math.random() * 0.4);
+
 		while (npc.model.Parent && npc.model.IsDescendantOf(Workspace)) {
-			const npcLookDir = humanoidRootPart.CFrame.LookVector;
+			const npcCF = humanoidRootPart.CFrame;
+			const npcPosition = npcCF.Position;
+			const npcLookDir = npcCF.LookVector;
+
+			// Rebuild filter list once per tick
+			const ignoreList: Instance[] = [npc.model];
+			for (const inst of INSTANCES_FOR_NPC_VISION_TO_IGNORE) {
+				ignoreList.push(inst);
+			}
+			rayParams.FilterDescendantsInstances = ignoreList;
 
 			for (const player of Players.GetPlayers()) {
+				const character = player.Character;
+				const primaryPart = character?.PrimaryPart;
+				if (!primaryPart) continue;
+
+				const playerPosition = primaryPart.Position;
+				const offset = playerPosition.sub(npcPosition);
+				const distanceSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z;
+
 				const currentPlayerIsAlreadyVisible: boolean = visibilityMap.get(player) ?? false;
 
-				if (player.Character?.PrimaryPart?.Position) {
-					const playerPart = player.Character?.PrimaryPart;
-
-					let attachment1 = playerPart.FindFirstChild("VisionAttachment") as Attachment;
-					if (!attachment1) {
-						attachment1 = new Instance("Attachment");
-						attachment1.Name = "VisionAttachment";
-						attachment1.Parent = playerPart;
+				// Early distance cull (squared to avoid sqrt)
+				if (distanceSq > detectionRadiusSq) {
+					if (currentPlayerIsAlreadyVisible) {
+						requestRemoveView(player, npc.model.Name);
+						visibilityMap.set(player, false);
 					}
-					let attachment0 = humanoidRootPart.FindFirstChild("VisionAttachment") as Attachment;
-					if (!attachment0) {
-						attachment0 = new Instance("Attachment");
-						attachment0.Name = "VisionAttachment";
-						attachment0.Parent = humanoidRootPart;
-					}
+					continue;
+				}
 
-					const npcPosition = humanoidRootPart.Position;
-					const playerPosition = player.Character?.PrimaryPart?.Position;
+				const distance = math.sqrt(distanceSq);
+				const directionToPlayer = offset.div(distance);
+				const angle = math.acos(directionToPlayer.Dot(npcLookDir)) * (180 / math.pi);
 
-					const dirrectionToPlayer = playerPosition.sub(npcPosition).Unit;
-					const distance = npcPosition.sub(playerPosition).Magnitude;
-					const angle = math.acos(dirrectionToPlayer.Dot(npcLookDir)) * (180 / math.pi);
-
-					const inRadius = distance <= detectionRadius / 2;
-					const inView = angle <= viewAngle / 2;
-
-					if (inRadius && inView) {
-						const ray = createRaycast(npc.model, npcPosition, dirrectionToPlayer, distance);
-						if (ray && ray.Instance) {
-							const hitModel = ray.Instance.FindFirstAncestorOfClass("Model");
-							const isPlayerHit = hitModel === player.Character;
-
-							if (isPlayerHit) {
-								if (!currentPlayerIsAlreadyVisible) {
-									requestAddView(player, npc.model.Name);
-								}
-								//DEBUG
-								// createVisionBeam(attachment0, attachment1);
-								visibilityMap.set(player, true);
-							} else {
+				if (angle <= halfViewAngle) {
+					const ray = Workspace.Raycast(npcPosition, directionToPlayer.mul(distance), rayParams);
+					if (ray && ray.Instance) {
+						const hitModel = ray.Instance.FindFirstAncestorOfClass("Model");
+						if (hitModel === character) {
+							if (!currentPlayerIsAlreadyVisible) {
+								requestAddView(player, npc.model.Name);
+							}
+							visibilityMap.set(player, true);
+						} else {
+							if (currentPlayerIsAlreadyVisible) {
 								requestRemoveView(player, npc.model.Name);
+								visibilityMap.set(player, false);
 							}
 						}
-					} else {
-						if (currentPlayerIsAlreadyVisible) {
-							requestRemoveView(player, npc.model.Name);
-							visibilityMap.set(player, false);
-						}
+					}
+				} else {
+					if (currentPlayerIsAlreadyVisible) {
+						requestRemoveView(player, npc.model.Name);
+						visibilityMap.set(player, false);
 					}
 				}
 			}

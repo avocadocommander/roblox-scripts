@@ -17,10 +17,12 @@
 import { WEAPONS, WEAPON_LIST, WeaponDef } from "shared/config/weapons";
 import { POISONS, POISON_LIST, PoisonDef } from "shared/config/poisons";
 import { ELIXIRS, ELIXIR_LIST, ElixirDef } from "shared/config/elixirs";
+import { MAX_BOUNTY_SLOTS } from "shared/config/player";
 
 // Re-export config types so consumers can import from one place
 export type { WeaponDef, PoisonDef, ElixirDef };
 export { WEAPONS, WEAPON_LIST, POISONS, POISON_LIST, ELIXIRS, ELIXIR_LIST };
+export { MAX_BOUNTY_SLOTS };
 
 // ── Item categories ───────────────────────────────────────────────────────────
 
@@ -48,8 +50,6 @@ export interface ItemDef {
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
 	/** Whether this item is consumed on use (poisons, elixirs). */
 	consumable: boolean;
-	/** If set, this item requires the given Roblox Game Pass to own/equip. */
-	gamePassId?: number;
 }
 
 // ── Build ITEMS + ITEM_LIST from config maps ──────────────────────────────────
@@ -69,7 +69,6 @@ for (const [, w] of pairs(WEAPONS)) {
 		icon: w.icon,
 		rarity: w.rarity,
 		consumable: false,
-		gamePassId: w.gamePassId,
 	};
 }
 
@@ -145,9 +144,6 @@ export const RARITY_BG_COLORS: Record<string, Color3> = {
 };
 
 // ── Bounty scrolls ────────────────────────────────────────────────────────────
-
-/** Maximum bounty scroll slots a player can hold. */
-export const MAX_BOUNTY_SLOTS = 10;
 
 /** Rarity tiers that a bounty scroll can inherit from NPC status (or PvP kill). */
 export type BountyScrollRarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "player";

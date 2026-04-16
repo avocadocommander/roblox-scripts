@@ -2,7 +2,13 @@ import { Players, SoundService, UserInputService } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import { markPlayerInitialized } from "./modules/client-init";
 import { initializeMovementSystem } from "./modules/movement";
-import { initializeNPCProximity } from "./modules/npc-proximity";
+import {
+	initializeNPCProximity,
+	fireCurrentAction,
+	fireAssassinateAction,
+	getAssassinateContext,
+} from "./modules/npc-proximity";
+import { toggleInventory, toggleKillBook, fireCampfireAction } from "./modules/ui-toggles";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
@@ -36,6 +42,27 @@ lifecycle.OnClientEvent.Connect(async (message: string, data: unknown) => {
 
 		// Setup NPC proximity system for custom assassination UI
 		initializeNPCProximity();
+
+		// ── Keyboard hotkeys (PC players) ────────────────────────────────
+		UserInputService.InputBegan.Connect((input, gameProcessed) => {
+			if (gameProcessed) return;
+
+			if (input.KeyCode === Enum.KeyCode.Tab) {
+				toggleInventory();
+			} else if (input.KeyCode === Enum.KeyCode.V) {
+				toggleKillBook();
+			} else if (input.KeyCode === Enum.KeyCode.E) {
+				fireCurrentAction();
+			} else if (input.KeyCode === Enum.KeyCode.Q) {
+				if (getAssassinateContext() !== "none") {
+					fireAssassinateAction();
+				}
+			} else if (input.KeyCode === Enum.KeyCode.Z) {
+				fireCampfireAction();
+			} else if (input.KeyCode === Enum.KeyCode.Space) {
+				fireCurrentAction();
+			}
+		});
 
 		print("(PLAYER INIT) Player Initalized");
 		lifecycle.FireServer("ClientReady");
