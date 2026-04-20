@@ -37,13 +37,13 @@ const MAX_WANTED_DISPLAY = 5;
 // ── Builder ───────────────────────────────────────────────────────────────────
 
 function buildBountyCard(screenGui: ScreenGui): void {
-	const W = sc(240);
+	const W = sc(320);
 
 	// ── Outer wrapper ────────────────────────────────────────────────────────
 	const wrapper = new Instance("Frame");
 	wrapper.Name = "BountyHUD";
 	wrapper.Size = new UDim2(0, W, 0, 0);
-	wrapper.Position = new UDim2(1, sc(-10) - W, 0, sc(10));
+	wrapper.Position = new UDim2(1, sc(-20) - W, 0, sc(40));
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
 	wrapper.BackgroundTransparency = 1;
 	wrapper.Parent = screenGui;
@@ -76,26 +76,26 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	cardStroke.Parent = card;
 
 	const cardPad = new Instance("UIPadding");
-	cardPad.PaddingTop = new UDim(0, sc(7));
-	cardPad.PaddingBottom = new UDim(0, sc(7));
-	cardPad.PaddingLeft = new UDim(0, sc(10));
-	cardPad.PaddingRight = new UDim(0, sc(10));
+	cardPad.PaddingTop = new UDim(0, sc(10));
+	cardPad.PaddingBottom = new UDim(0, sc(10));
+	cardPad.PaddingLeft = new UDim(0, sc(12));
+	cardPad.PaddingRight = new UDim(0, sc(12));
 	cardPad.Parent = card;
 
 	const cardLayout = new Instance("UIListLayout");
 	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder;
-	cardLayout.Padding = new UDim(0, sc(2));
+	cardLayout.Padding = new UDim(0, sc(3));
 	cardLayout.Parent = card;
 
 	// ── Section label ─────────────────────────────────────────────────────
 	const sectionLabel = new Instance("TextLabel");
 	sectionLabel.LayoutOrder = 0;
-	sectionLabel.Size = new UDim2(1, 0, 0, sc(13));
+	sectionLabel.Size = new UDim2(1, 0, 0, sc(16));
 	sectionLabel.BackgroundTransparency = 1;
 	sectionLabel.Text = "YOUR MARK";
 	sectionLabel.TextColor3 = UI_THEME.textSection;
 	sectionLabel.Font = UI_THEME.fontBold;
-	sectionLabel.TextSize = sc(10);
+	sectionLabel.TextSize = sc(13);
 	sectionLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	sectionLabel.Parent = card;
 
@@ -103,7 +103,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	const row1 = new Instance("Frame");
 	row1.Name = "NameRow";
 	row1.LayoutOrder = 1;
-	row1.Size = new UDim2(1, 0, 0, sc(20));
+	row1.Size = new UDim2(1, 0, 0, sc(26));
 	row1.BackgroundTransparency = 1;
 	row1.Parent = card;
 
@@ -114,7 +114,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markNameLabel.Text = "Awaiting orders...";
 	markNameLabel.TextColor3 = UI_THEME.textPrimary;
 	markNameLabel.Font = UI_THEME.fontDisplay;
-	markNameLabel.TextSize = sc(16);
+	markNameLabel.TextSize = sc(22);
 	markNameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	markNameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	markNameLabel.Parent = row1;
@@ -127,7 +127,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markGoldLabel.Text = "";
 	markGoldLabel.TextColor3 = UI_THEME.gold;
 	markGoldLabel.Font = UI_THEME.fontBold;
-	markGoldLabel.TextSize = sc(14);
+	markGoldLabel.TextSize = sc(18);
 	markGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	markGoldLabel.Parent = row1;
 
@@ -135,12 +135,12 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markClassLabel = new Instance("TextLabel");
 	markClassLabel.Name = "MarkClass";
 	markClassLabel.LayoutOrder = 2;
-	markClassLabel.Size = new UDim2(1, 0, 0, sc(13));
+	markClassLabel.Size = new UDim2(1, 0, 0, sc(18));
 	markClassLabel.BackgroundTransparency = 1;
 	markClassLabel.Text = "";
 	markClassLabel.TextColor3 = UI_THEME.textMuted;
 	markClassLabel.Font = UI_THEME.fontBold;
-	markClassLabel.TextSize = sc(10);
+	markClassLabel.TextSize = sc(14);
 	markClassLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	markClassLabel.Parent = card;
 
@@ -148,12 +148,12 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markOffenceLabel = new Instance("TextLabel");
 	markOffenceLabel.Name = "MarkOffence";
 	markOffenceLabel.LayoutOrder = 3;
-	markOffenceLabel.Size = new UDim2(1, 0, 0, sc(13));
+	markOffenceLabel.Size = new UDim2(1, 0, 0, sc(18));
 	markOffenceLabel.BackgroundTransparency = 1;
 	markOffenceLabel.Text = "";
 	markOffenceLabel.TextColor3 = UI_THEME.textMuted;
 	markOffenceLabel.Font = UI_THEME.fontBody;
-	markOffenceLabel.TextSize = sc(10);
+	markOffenceLabel.TextSize = sc(13);
 	markOffenceLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	markOffenceLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	markOffenceLabel.Parent = card;
@@ -164,7 +164,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	const wantedBtn = new Instance("TextButton");
 	wantedBtn.Name = "WantedSummary";
 	wantedBtn.LayoutOrder = 1;
-	wantedBtn.Size = new UDim2(1, 0, 0, sc(22));
+	wantedBtn.Size = new UDim2(1, 0, 0, sc(28));
 	wantedBtn.BackgroundColor3 = UI_THEME.bg;
 	wantedBtn.BackgroundTransparency = UI_THEME.bgTransparency;
 	wantedBtn.BorderSizePixel = 0;
@@ -188,7 +188,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	wantedSummaryLabel.Text = "No known criminals";
 	wantedSummaryLabel.TextColor3 = UI_THEME.textMuted;
 	wantedSummaryLabel.Font = UI_THEME.fontBold;
-	wantedSummaryLabel.TextSize = sc(11);
+	wantedSummaryLabel.TextSize = sc(14);
 	wantedSummaryLabel.Parent = wantedBtn;
 
 	wantedBtn.MouseButton1Click.Connect(() => {

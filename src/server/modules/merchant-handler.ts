@@ -31,7 +31,7 @@ import { ShopItem } from "shared/config/npcs";
 import { getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
-import { RouteConfig, getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
+import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 
@@ -187,41 +187,46 @@ function applySignText(signPart: BasePart, shopType: ShopType, npcName: string):
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /**
- * Find the BasePart tagged "Sign" that belongs to this ShopSite.
- * Searches all CollectionService-tagged "Sign" instances and returns the first
- * one that is a descendant of the given shopSite model.
+ * Find all BaseParts tagged "Sign" that belong to this ShopSite.
+ * Searches CollectionService tags, exact name matches, Sign models,
+ * and case-insensitive fallbacks. Returns all unique matches.
  */
-function resolveSignPart(shopSite: Model): BasePart | undefined {
-	// 1. Prefer CollectionService "Sign" tag on a descendant
-	const tagged = CollectionService.GetTagged("Sign").filter(
-		(inst): inst is BasePart => inst.IsA("BasePart") && inst.IsDescendantOf(shopSite),
-	);
-	if (tagged.size() > 0) return tagged[0];
+function resolveSignParts(shopSite: Model): BasePart[] {
+	const found = new Set<BasePart>();
 
-	// 2. Exact name match "Sign" anywhere in the hierarchy (any Instance type)
-	for (const inst of shopSite.GetDescendants()) {
-		if (inst.Name === "Sign" && inst.IsA("BasePart")) {
-			return inst;
+	// 1. CollectionService "Sign" tag on descendant BaseParts
+	for (const inst of CollectionService.GetTagged("Sign")) {
+		if (inst.IsA("BasePart") && inst.IsDescendantOf(shopSite)) {
+			found.add(inst);
 		}
 	}
 
-	// 3. Any descendant named "Sign" that is a Model — use its PrimaryPart or first BasePart
+	// 2. Exact name match "Sign" anywhere in the hierarchy
+	for (const inst of shopSite.GetDescendants()) {
+		if (inst.Name === "Sign" && inst.IsA("BasePart")) {
+			found.add(inst);
+		}
+	}
+
+	// 3. Any descendant named "Sign" that is a Model -> use PrimaryPart or first BasePart
 	for (const inst of shopSite.GetDescendants()) {
 		if (inst.Name === "Sign" && inst.IsA("Model")) {
 			const m = inst as Model;
 			const part = m.PrimaryPart ?? (m.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
-			if (part) return part;
+			if (part) found.add(part);
 		}
 	}
 
 	// 4. Any BasePart whose name contains "sign" (case-insensitive fallback)
 	for (const inst of shopSite.GetDescendants()) {
 		if (inst.IsA("BasePart") && inst.Name.lower().find("sign", 1, true)[0] !== undefined) {
-			return inst;
+			found.add(inst);
 		}
 	}
 
-	return undefined;
+	const results: BasePart[] = [];
+	found.forEach((part) => results.push(part));
+	return results;
 }
 
 // ── Offer Slot Spawning ───────────────────────────────────────────────────────
@@ -368,15 +373,15 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Assign to the site's route
 	assignNpcToRoute(npc, routePoints, routeConfig, setState);
-	setupWatcherGaze(npc, routeConfig);
 
 	// Record shop items
 	merchantShops.set(npcName, shopItems);
 	reservedNames.add(npcName);
 
 	// Apply sign from the same ShopSite
-	const signPart = resolveSignPart(shopSite);
-	if (signPart) {
+	// Apply sign to all sign parts in the ShopSite
+	const signParts = resolveSignParts(shopSite);
+	for (const signPart of signParts) {
 		applySignText(signPart, shopType, npcName);
 	}
 

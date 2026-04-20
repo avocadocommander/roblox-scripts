@@ -28,6 +28,7 @@ import { transferBountyScrolls, addPlayerBountyScroll, addBountyScrollFromKill }
 import { MEDIEVAL_NPCS, Status } from "shared/module";
 import { awardAchievement } from "./achievement-handler";
 import { isNPCKillable } from "shared/config/npcs";
+import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 
@@ -57,6 +58,9 @@ const DECREE_BY_STATUS: Record<Status, string> = {
 function initializeAssassinationHandler() {
 	log("[ASSASSINATION] Initializing assassination handler");
 
+	// Eagerly create the feedback remote so clients don't infinite-yield on WaitForChild
+	getAssassinationFeedbackRemote();
+
 	assassinationRemote.OnServerEvent.Connect((player: Player, npcModel: unknown) => {
 		const model = npcModel as Model;
 		if (!model || !model.Parent) {
@@ -81,6 +85,7 @@ function initializeAssassinationHandler() {
 		// Require a real weapon — fists cannot assassinate
 		if (getPlayerEquippedWeapon(player) === "fists") {
 			log(`[ASSASSINATION] ${player.Name} has no weapon equipped, assassination denied`, "WARN");
+			getAssassinationFeedbackRemote().FireClient(player, "no_weapon");
 			return;
 		}
 
@@ -251,6 +256,7 @@ function initializeAssassinationHandler() {
 		// Require a real weapon — fists cannot assassinate
 		if (getPlayerEquippedWeapon(killer) === "fists") {
 			log("[ASSASSINATION] " + killer.Name + " has no weapon equipped, player assassination denied", "WARN");
+			getAssassinationFeedbackRemote().FireClient(killer, "no_weapon");
 			return;
 		}
 

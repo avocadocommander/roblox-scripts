@@ -131,6 +131,13 @@ const RequestAddCoins = ((): RemoteFunction => {
 	return rf;
 })();
 
+const GetFactionXP = ((): RemoteFunction => {
+	const rf = (playerStateFolder.FindFirstChild("GetFactionXP") as RemoteFunction) ?? new Instance("RemoteFunction");
+	rf.Name = "GetFactionXP";
+	rf.Parent = playerStateFolder;
+	return rf;
+})();
+
 const FactionXPUpdated = ((): RemoteEvent => {
 	const re = (playerStateFolder.FindFirstChild("FactionXPUpdated") as RemoteEvent) ?? new Instance("RemoteEvent");
 	re.Name = "FactionXPUpdated";
@@ -352,6 +359,10 @@ GetBountyTarget.OnServerInvoke = (player: Player): string | undefined => {
 
 GetScore.OnServerInvoke = (player: Player): number => {
 	return PLAYER_STATES.get(player)?.score ?? DEFAULT_STATE.score;
+};
+
+GetFactionXP.OnServerInvoke = (player: Player): FactionXP => {
+	return PLAYER_STATES.get(player)?.factionXP ?? { ...DEFAULT_FACTION_XP };
 };
 
 /** Read the current score for `player` (server-side). */

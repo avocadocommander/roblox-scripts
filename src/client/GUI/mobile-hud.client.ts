@@ -1,4 +1,4 @@
-import { Players, RunService, StarterGui, TweenService } from "@rbxts/services";
+import { Players, RunService, StarterGui, TweenService, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import {
@@ -481,13 +481,18 @@ function pulseButton(btn: TextButton): void {
 	});
 }
 
+const IS_MOBILE = UserInputService.TouchEnabled && !UserInputService.KeyboardEnabled;
+
 // -- Init ---------------------------------------------------------------------
 
 onPlayerInitialized(() => {
 	const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
-	buildMobileHUD(screenGui);
+	// Only build the mobile button HUD on touch devices
+	if (IS_MOBILE) {
+		buildMobileHUD(screenGui);
+	}
 
 	// Register campfire action for keyboard hotkey
 	registerCampfireAction(() => {

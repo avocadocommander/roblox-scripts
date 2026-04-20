@@ -8,7 +8,7 @@
  */
 
 import { Workspace, TweenService, RunService } from "@rbxts/services";
-import { UI_THEME } from "shared/ui-theme";
+import { UI_THEME, scaleUI } from "shared/ui-theme";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ const FADE_START = 1.4; // seconds before fade begins
 const DRIFT_SPEED = 0.6; // base upward studs/sec
 const SWAY_AMPLITUDE = 0.4; // horizontal sway in studs
 const SWAY_FREQUENCY = 1.8; // oscillations per second
-const FONT_SIZE = 14;
+const FONT_SIZE = scaleUI(18);
 const MAX_SIMULTANEOUS = 3; // per NPC, avoid spam stacking
 
 // Track active floaters per NPC to cap spam

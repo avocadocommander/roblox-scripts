@@ -11,7 +11,7 @@
 
 import { ShopItem } from "./npcs";
 
-export type ShopType = "weapon" | "elixir" | "poison" | "rare";
+export type ShopType = "weapon" | "elixir" | "poison" | "rare" | "tavern";
 
 /** Shop types guaranteed to be present every server session (if enough tagged positions exist). */
 export const REQUIRED_SHOP_TYPES: ShopType[] = ["weapon", "elixir", "poison"];
@@ -41,6 +41,11 @@ export const SHOP_TYPE_POOLS: Record<ShopType, ShopItem[]> = {
 		{ itemId: "fleetfoot_elixir", price: 260 },
 		{ itemId: "featherfall_draught", price: 370 },
 		{ itemId: "veil_of_silence", price: 540 },
+	],
+	tavern: [
+		{ itemId: "fleetfoot_elixir", price: 150 },
+		{ itemId: "featherfall_draught", price: 200 },
+		{ itemId: "veil_of_silence", price: 280 },
 	],
 };
 

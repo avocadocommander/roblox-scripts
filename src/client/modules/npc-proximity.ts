@@ -1,8 +1,7 @@
 import { Players, RunService, TweenService, Workspace, CollectionService, UserInputService } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
-import { getOrCreateStealthRemote } from "shared/remotes/stealth-remote";
-import { UI_THEME, STATUS_RARITY } from "shared/ui-theme";
+import { UI_THEME, STATUS_RARITY, scaleUI } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { isNPCKillable, getNPCInteraction, hasNPCDialog } from "shared/config/npcs";
 import { getInspectDef } from "shared/config/inspectables";
@@ -35,7 +34,6 @@ function getNPCStatus(npcName: string): string {
 }
 
 const assassinationRemote = getOrCreateAssassinationRemote();
-const stealthRemote = getOrCreateStealthRemote();
 const IS_MOBILE = UserInputService.TouchEnabled && !UserInputService.KeyboardEnabled;
 const PROXIMITY_RANGE = 5; // Only show when very close to NPC
 const MERCHANT_PROXIMITY_RANGE = 10; // Merchants show talk prompt from further away
@@ -50,9 +48,8 @@ let cachedOfferModels: Model[] = [];
 let lastWorldScanTick = 0;
 const WORLD_SCAN_INTERVAL = 2; // seconds between full GetDescendants rescans
 
-// Assassinate button colors — green when safe, red when spotted
-const BTN_SAFE = Color3.fromRGB(68, 138, 82);
-const BTN_SPOTTED = UI_THEME.danger;
+// Assassinate button color
+const BTN_COLOR = Color3.fromRGB(190, 50, 50);
 
 let closestNPCInRange: Model | undefined = undefined;
 let closestInspectableInRange: Model | undefined = undefined;
@@ -120,7 +117,7 @@ function createPlayerBillboard(character: Model, playerName: string, titleId?: s
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = textColor;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 14;
+	nameLabel.TextSize = scaleUI(24);
 	nameLabel.Text = displayText;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
@@ -222,7 +219,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = Color3.fromRGB(245, 238, 220);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 14;
+	nameLabel.TextSize = scaleUI(24);
 	nameLabel.Text = displayName;
 	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	nameLabel.TextStrokeTransparency = 0.35;
@@ -267,19 +264,17 @@ function fadeOutAndDestroy(button: TextButton): void {
 }
 
 function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButton {
-	const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
-	const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
-
 	const button = new Instance("TextButton");
-	button.Size = new UDim2(1, 0, 0.17, 0);
-	button.Position = new UDim2(0, 0, 0.78, 0);
+	button.Size = new UDim2(0.48, 0, 0.17, 0);
+	button.Position = new UDim2(0.52, 0, 0.6, 0);
 	button.BackgroundColor3 = Color3.fromRGB(28, 8, 8);
 	button.BackgroundTransparency = 1;
-	button.TextColor3 = btnColor;
+	button.TextColor3 = BTN_COLOR;
 	button.TextTransparency = 1;
 	button.Font = UI_THEME.fontBold;
-	button.TextSize = 11;
-	button.Text = IS_MOBILE ? "KILL" : "[Q] KILL";
+	button.TextSize = scaleUI(16);
+	button.Text = IS_MOBILE ? "Kill" : "Kill [Q]";
+	button.TextXAlignment = Enum.TextXAlignment.Right;
 	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	button.TextStrokeTransparency = 0.5;
 	button.BorderSizePixel = 0;
@@ -290,7 +285,7 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 	btnCorner.Parent = button;
 
 	const btnStroke = new Instance("UIStroke");
-	btnStroke.Color = btnColor;
+	btnStroke.Color = BTN_COLOR;
 	btnStroke.Thickness = 0.8;
 	btnStroke.Parent = button;
 
@@ -305,15 +300,16 @@ function createAssassinateButton(billboard: BillboardGui, npc: Model): TextButto
 
 function createTalkButton(billboard: BillboardGui, npc: Model): TextButton {
 	const button = new Instance("TextButton");
-	button.Size = new UDim2(1, 0, 0.17, 0);
-	button.Position = new UDim2(0, 0, 0.58, 0);
+	button.Size = new UDim2(0.48, 0, 0.17, 0);
+	button.Position = new UDim2(0, 0, 0.6, 0);
 	button.BackgroundColor3 = UI_THEME.bgInset;
 	button.BackgroundTransparency = 1;
 	button.TextColor3 = UI_THEME.textPrimary;
 	button.TextTransparency = 1;
 	button.Font = UI_THEME.fontBold;
-	button.TextSize = 11;
-	button.Text = IS_MOBILE ? "TALK" : "TALK  [E]";
+	button.TextSize = scaleUI(16);
+	button.Text = IS_MOBILE ? "Talk" : "Talk [E]";
+	button.TextXAlignment = Enum.TextXAlignment.Left;
 	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	button.TextStrokeTransparency = 0.55;
 	button.BorderSizePixel = 0;
@@ -399,7 +395,7 @@ function createInspectBillboard(model: Model): BillboardGui {
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = Color3.fromRGB(230, 200, 120);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 14;
+	nameLabel.TextSize = scaleUI(24);
 	nameLabel.Text = displayName;
 	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	nameLabel.TextStrokeTransparency = 0.35;
@@ -418,7 +414,7 @@ function createInspectPrompt(billboard: BillboardGui, model: Model): TextButton 
 	button.TextColor3 = UI_THEME.textHeader;
 	button.TextTransparency = 0.15;
 	button.Font = UI_THEME.fontBold;
-	button.TextSize = 11;
+	button.TextSize = scaleUI(14);
 	button.Text = IS_MOBILE ? "INSPECT" : "INSPECT  [E]";
 	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	button.TextStrokeTransparency = 0.55;
@@ -578,7 +574,7 @@ function createPremiumOfferBillboard(model: Model): BillboardGui {
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = accentColor;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 14;
+	nameLabel.TextSize = scaleUI(24);
 	nameLabel.Text = displayName;
 	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	nameLabel.TextStrokeTransparency = 0.35;
@@ -608,7 +604,7 @@ function createPremiumOfferPrompt(billboard: BillboardGui, model: Model): TextBu
 	button.TextColor3 = accentColor;
 	button.TextTransparency = 0.15;
 	button.Font = UI_THEME.fontBold;
-	button.TextSize = 11;
+	button.TextSize = scaleUI(14);
 	button.Text = labelText;
 	button.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	button.TextStrokeTransparency = 0.55;
@@ -766,7 +762,7 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	wantedTag.BackgroundTransparency = 1;
 	wantedTag.TextColor3 = Color3.fromRGB(190, 50, 40);
 	wantedTag.Font = UI_THEME.fontBold;
-	wantedTag.TextSize = 9;
+	wantedTag.TextSize = scaleUI(12);
 	wantedTag.Text = "WANTED";
 	wantedTag.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	wantedTag.TextStrokeTransparency = 0.4;
@@ -780,7 +776,7 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = Color3.fromRGB(210, 55, 45);
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = 15;
+	nameLabel.TextSize = scaleUI(24);
 	nameLabel.Text = playerName;
 	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	nameLabel.TextStrokeTransparency = 0.3;
@@ -794,7 +790,7 @@ function createWantedBillboard(character: Model, playerName: string, gold: numbe
 	goldLabel.BackgroundTransparency = 1;
 	goldLabel.TextColor3 = Color3.fromRGB(215, 175, 60);
 	goldLabel.Font = UI_THEME.fontBold;
-	goldLabel.TextSize = 11;
+	goldLabel.TextSize = scaleUI(14);
 	goldLabel.Text = gold + " Gold";
 	goldLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
 	goldLabel.TextStrokeTransparency = 0.45;
@@ -1129,20 +1125,17 @@ function updateNPCProximityUI() {
 		const existingBtn = billboard.FindFirstChild("AssassinateBtn") as TextButton | undefined;
 
 		if (shouldShow && !existingBtn) {
-			const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
-			const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
-
 			const btn = new Instance("TextButton");
 			btn.Name = "AssassinateBtn";
 			btn.Size = new UDim2(1, 0, 0.17, 0);
 			btn.Position = new UDim2(0, 0, 0.78, 0);
 			btn.BackgroundColor3 = Color3.fromRGB(28, 8, 8);
 			btn.BackgroundTransparency = 1;
-			btn.TextColor3 = btnColor;
+			btn.TextColor3 = BTN_COLOR;
 			btn.TextTransparency = 1;
 			btn.Font = UI_THEME.fontBold;
-			btn.TextSize = 11;
-			btn.Text = IS_MOBILE ? "KILL" : "[Q] KILL";
+			btn.TextSize = scaleUI(14);
+			btn.Text = IS_MOBILE ? "Kill" : "Kill [Q]";
 			btn.BorderSizePixel = 0;
 			btn.Parent = billboard;
 
@@ -1151,7 +1144,7 @@ function updateNPCProximityUI() {
 			btnCorner.Parent = btn;
 
 			const btnStroke = new Instance("UIStroke");
-			btnStroke.Color = btnColor;
+			btnStroke.Color = BTN_COLOR;
 			btnStroke.Thickness = 0.8;
 			btnStroke.Parent = btn;
 
@@ -1164,29 +1157,6 @@ function updateNPCProximityUI() {
 			fadeInButton(btn);
 		} else if (!shouldShow && existingBtn) {
 			fadeOutAndDestroy(existingBtn);
-		}
-	}
-
-	// ── Fourth pass: recolor all visible assassinate buttons by spotted state ──
-	const spotted = Players.LocalPlayer.GetAttribute("IsSpotted") === true;
-	const btnColor = spotted ? BTN_SPOTTED : BTN_SAFE;
-
-	for (const [, ui] of npcUIMap) {
-		if (ui.assassinateButton) {
-			ui.assassinateButton.TextColor3 = btnColor;
-			const stroke = ui.assassinateButton.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-			if (stroke) stroke.Color = btnColor;
-		}
-	}
-
-	for (const [wantedName] of wantedPlayerInfo) {
-		const bb = wantedBillboards.get(wantedName);
-		if (!bb) continue;
-		const btn = bb.FindFirstChild("AssassinateBtn") as TextButton | undefined;
-		if (btn) {
-			btn.TextColor3 = btnColor;
-			const stroke = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
-			if (stroke) stroke.Color = btnColor;
 		}
 	}
 }
@@ -1293,10 +1263,6 @@ function initializeNPCProximity() {
 	});
 }
 
-function setStealthing(stealthing: boolean) {
-	stealthRemote.FireServer(stealthing);
-}
-
 /**
  * Returns the current action context for the mobile HUD primary button.
  * Priority: assassinate (wanted player) > assassinate (NPC) > talk > none.
@@ -1361,4 +1327,4 @@ export function fireCurrentAction(): void {
 	}
 }
 
-export { initializeNPCProximity, setStealthing };
+export { initializeNPCProximity };

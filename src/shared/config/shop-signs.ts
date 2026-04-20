@@ -20,6 +20,7 @@ export const SHOP_TYPE_MARKERS: Record<ShopType, string> = {
 	elixir: "BREWS",
 	poison: "TOXINS",
 	rare: "WARES",
+	tavern: "TAVERN",
 };
 
 // ── Sign color schemes ────────────────────────────────────────────────────────
@@ -70,6 +71,15 @@ export const SIGN_COLORS: Record<ShopType, SignColorScheme> = {
 		border: Color3.fromRGB(56, 42, 16), // aged gilt trim
 		flavorLine: "Rare Finds.",
 	},
+	// Tavern — warm amber ale tones, candlelit wood
+	tavern: {
+		marker: Color3.fromRGB(165, 120, 50), // warm amber
+		name: Color3.fromRGB(225, 195, 130), // candlelit parchment
+		subtext: Color3.fromRGB(120, 85, 35), // dim mead
+		background: Color3.fromRGB(28, 18, 8), // dark ale wood
+		border: Color3.fromRGB(62, 38, 14), // barrel stave
+		flavorLine: "Cheap Drinks.",
+	},
 };
 
 // ── Name template pools ───────────────────────────────────────────────────────
@@ -116,11 +126,22 @@ const RARE_TEMPLATES: string[] = [
 	"The $first Collection",
 ];
 
+const TAVERN_TEMPLATES: string[] = [
+	"The $surname Flagon",
+	"$first's Tavern",
+	"The $surname Arms",
+	"$first's Alehouse",
+	"The $surname Cask",
+	"$initials Taproom",
+	"The Rusty $surname",
+];
+
 const TEMPLATES: Record<ShopType, string[]> = {
 	weapon: WEAPON_TEMPLATES,
 	elixir: ELIXIR_TEMPLATES,
 	poison: POISON_TEMPLATES,
 	rare: RARE_TEMPLATES,
+	tavern: TAVERN_TEMPLATES,
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

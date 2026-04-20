@@ -9,6 +9,9 @@ import {
 	getAssassinateContext,
 } from "./modules/npc-proximity";
 import { toggleInventory, toggleKillBook, fireCampfireAction } from "./modules/ui-toggles";
+import { showPlayerQuip } from "./modules/player-quips";
+import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
+import { QuipCategory } from "shared/config/player-quips";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
@@ -47,7 +50,7 @@ lifecycle.OnClientEvent.Connect(async (message: string, data: unknown) => {
 		UserInputService.InputBegan.Connect((input, gameProcessed) => {
 			if (gameProcessed) return;
 
-			if (input.KeyCode === Enum.KeyCode.Tab) {
+			if (input.KeyCode === Enum.KeyCode.I) {
 				toggleInventory();
 			} else if (input.KeyCode === Enum.KeyCode.V) {
 				toggleKillBook();
@@ -59,9 +62,12 @@ lifecycle.OnClientEvent.Connect(async (message: string, data: unknown) => {
 				}
 			} else if (input.KeyCode === Enum.KeyCode.Z) {
 				fireCampfireAction();
-			} else if (input.KeyCode === Enum.KeyCode.Space) {
-				fireCurrentAction();
 			}
+		});
+
+		// ── Assassination feedback quips ─────────────────────────────────
+		getAssassinationFeedbackRemote().OnClientEvent.Connect((reason: unknown) => {
+			showPlayerQuip(reason as QuipCategory);
 		});
 
 		print("(PLAYER INIT) Player Initalized");

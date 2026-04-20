@@ -3,7 +3,7 @@ import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
 import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "shared/config/npcs";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
-import { getConfigFromRoute, setupWatcherGaze } from "shared/npc-manager";
+import { getConfigFromRoute } from "shared/npc-manager";
 import { serverIsReady } from "./server-status";
 import { getReservedMerchantNames } from "./modules/merchant-handler";
 import "shared/player-state"; // Ensure DataStore listeners are registered at server start
@@ -121,7 +121,6 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>) {
 			npc.model.PivotTo(new CFrame(npcSpawnPoint));
 
 			assignNpcToRoute(npc, routePoints, routeConfig, setState);
-			setupWatcherGaze(npc, routeConfig);
 
 			assigned.set(npcRoute.Name, { npc, route: npcRoute });
 			log(`${npc.name} assigned to ${npcRoute.Name} spawned at ${closestSpawnPointRelativeToRoute.Name}`);
@@ -171,7 +170,6 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		npc.model.PivotTo(new CFrame(firstRoutePoint.Position));
 
 		assignNpcToRoute(npc, routePoints, routeConfig, setState);
-		setupWatcherGaze(npc, routeConfig);
 
 		assigned.set(npcRoute.Name, { npc, route: npcRoute });
 		log(`[FIXED] ${npc.name} spawned at route ${npcRoute.Name} (killable=${npcDef.killable})`);

@@ -2,7 +2,7 @@ import { initializePlayerNetworkMessage } from "./network-lifecycles";
 import { setReadyPlayerStatus } from "./player-state";
 import { serverIsReady, setServerStatus } from "./server-status";
 import { initializeMovementSystem } from "./modules/movement";
-import { initializeStealthTracker } from "./modules/stealth-tracker";
+
 import { initializeAssassinationHandler } from "./modules/assassination-handler";
 import { initializeBountyManager } from "./modules/bounty-manager";
 import { initializeKillBookRemotes } from "./modules/kill-book-server";
@@ -26,7 +26,7 @@ export async function bootstrapServer() {
 	// load assets / systems
 	//task.wait(5);
 	initializeMovementSystem();
-	initializeStealthTracker();
+
 	initializeAssassinationHandler();
 	initializeBountyManager();
 	initializeKillBookRemotes();

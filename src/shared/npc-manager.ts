@@ -1,9 +1,9 @@
-import { CollectionService, Players, Workspace } from "@rbxts/services";
+import { CollectionService, Workspace } from "@rbxts/services";
 import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
 import { NPC, createNPCModelAndGenerateHumanoid } from "./npc/main";
-import { requestAddView, requestRemoveView } from "./player-visiualization";
+
 import { getBountyTarget } from "./player-state";
 
 /** A function that plays a visual animation at the moment an NPC dies. */
@@ -606,8 +606,6 @@ export function addKillPrompt(npc: NPC) {
 	return;
 }
 
-const INSTANCES_FOR_NPC_VISION_TO_IGNORE = new Set<Instance>();
-
 export type Pace = "Stationary" | "Slow" | "Medium" | "Fast";
 export type Position = "Guard" | "Preacher";
 export type Tempo = "Chill" | "Hurry" | "Gas";
@@ -646,119 +644,4 @@ export function getConfigFromRoute(routeConfigParent: Folder): RouteConfig | und
 	return routeConfig;
 }
 
-export function setupWatcherGaze(npc: NPC, routeData: RouteConfig | undefined) {
-	const defaultDetectionRadius = 60;
-	const guardDetectionRadius = defaultDetectionRadius * 2;
-	const detectionRadius = routeData?.position === "Guard" ? guardDetectionRadius : defaultDetectionRadius;
-	const detectionRadiusSq = (detectionRadius / 2) * (detectionRadius / 2);
 
-	const halfViewAngle = 90; // 180 / 2
-
-	const humanoidRootPart = npc.model.FindFirstChild("HumanoidRootPart") as BasePart;
-	if (!humanoidRootPart) return;
-
-	const visibilityMap = new Map<Player, boolean>();
-
-	// Pre-build raycast params once — just swap the filter list each tick
-	const rayParams = new RaycastParams();
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude;
-	rayParams.IgnoreWater = true;
-
-	task.spawn(() => {
-		// Stagger start so not all NPC vision loops fire on the same frame
-		task.wait(math.random() * 0.4);
-
-		while (npc.model.Parent && npc.model.IsDescendantOf(Workspace)) {
-			const npcCF = humanoidRootPart.CFrame;
-			const npcPosition = npcCF.Position;
-			const npcLookDir = npcCF.LookVector;
-
-			// Rebuild filter list once per tick
-			const ignoreList: Instance[] = [npc.model];
-			for (const inst of INSTANCES_FOR_NPC_VISION_TO_IGNORE) {
-				ignoreList.push(inst);
-			}
-			rayParams.FilterDescendantsInstances = ignoreList;
-
-			for (const player of Players.GetPlayers()) {
-				const character = player.Character;
-				const primaryPart = character?.PrimaryPart;
-				if (!primaryPart) continue;
-
-				const playerPosition = primaryPart.Position;
-				const offset = playerPosition.sub(npcPosition);
-				const distanceSq = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z;
-
-				const currentPlayerIsAlreadyVisible: boolean = visibilityMap.get(player) ?? false;
-
-				// Early distance cull (squared to avoid sqrt)
-				if (distanceSq > detectionRadiusSq) {
-					if (currentPlayerIsAlreadyVisible) {
-						requestRemoveView(player, npc.model.Name);
-						visibilityMap.set(player, false);
-					}
-					continue;
-				}
-
-				const distance = math.sqrt(distanceSq);
-				const directionToPlayer = offset.div(distance);
-				const angle = math.acos(directionToPlayer.Dot(npcLookDir)) * (180 / math.pi);
-
-				if (angle <= halfViewAngle) {
-					const ray = Workspace.Raycast(npcPosition, directionToPlayer.mul(distance), rayParams);
-					if (ray && ray.Instance) {
-						const hitModel = ray.Instance.FindFirstAncestorOfClass("Model");
-						if (hitModel === character) {
-							if (!currentPlayerIsAlreadyVisible) {
-								requestAddView(player, npc.model.Name);
-							}
-							visibilityMap.set(player, true);
-						} else {
-							if (currentPlayerIsAlreadyVisible) {
-								requestRemoveView(player, npc.model.Name);
-								visibilityMap.set(player, false);
-							}
-						}
-					}
-				} else {
-					if (currentPlayerIsAlreadyVisible) {
-						requestRemoveView(player, npc.model.Name);
-						visibilityMap.set(player, false);
-					}
-				}
-			}
-			task.wait(0.4);
-		}
-	});
-}
-
-function createRaycast(npc: Model, npcPosition: Vector3, directionToPlayer: Vector3, distance: number) {
-	const rayParams = new RaycastParams();
-	rayParams.FilterType = Enum.RaycastFilterType.Exclude;
-	const ignoreList: (Model | Instance)[] = [npc];
-	for (const instanceToIgnore of INSTANCES_FOR_NPC_VISION_TO_IGNORE) {
-		ignoreList.push(instanceToIgnore);
-	}
-
-	rayParams.FilterDescendantsInstances = ignoreList;
-	rayParams.IgnoreWater = true;
-
-	return Workspace.Raycast(npcPosition, directionToPlayer.mul(distance), rayParams);
-}
-
-function createVisionBeam(attachment0: Attachment, attachment1: Attachment): void {
-	const beam = new Instance("Beam");
-	beam.Name = `VisionBeam_${attachment0.Parent?.Name}_to_${attachment1.Parent?.Name}_${math.random()}`;
-
-	beam.Attachment0 = attachment0;
-	beam.Attachment1 = attachment1;
-	beam.Color = new ColorSequence(Color3.fromHSV(math.random(), 1, 1));
-	beam.Width0 = 0.1;
-	beam.Width1 = 0.1;
-	beam.FaceCamera = true;
-	beam.LightInfluence = 0;
-
-	beam.Parent = Workspace;
-
-	task.delay(0.5, () => beam.Destroy());
-}
