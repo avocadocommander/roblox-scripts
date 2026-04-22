@@ -12,6 +12,15 @@ import {
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { RARITY_COLORS } from "shared/inventory";
+import {
+	BoardBodyContent,
+	BoardMessage,
+	BoardMessageType,
+	registerBoardRenderer,
+} from "../modules/board-state";
+import { initializeTutorialController } from "../modules/tutorial-controller";
+import { initializeTutorialHighlight } from "../modules/tutorial-highlight";
+import { initializeTutorialUIPulse } from "../modules/tutorial-ui-pulse";
 
 // ── Scaling ───────────────────────────────────────────────────────────────────
 
@@ -21,10 +30,33 @@ function sc(base: number): number {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
+// Mission card — dynamic header + two swappable bodies + footer
+let cardHeaderLabel: TextLabel | undefined;
+let contractBody: Frame | undefined;
+let guidanceBody: Frame | undefined;
+
+// Contract-mode refs (filled when contract body is built)
 let markNameLabel: TextLabel | undefined;
 let markClassLabel: TextLabel | undefined;
 let markGoldLabel: TextLabel | undefined;
 let markOffenceLabel: TextLabel | undefined;
+
+// Guidance-mode refs
+let guidanceObjectiveLabel: TextLabel | undefined;
+let guidanceFooterLabel: TextLabel | undefined;
+
+// Message stack (rising FIFO above card)
+let messageStackContainer: Frame | undefined;
+const MESSAGE_MAX_VISIBLE = 3;
+const MESSAGE_LIFETIME = 6; // seconds before a message fades out on its own
+const MESSAGE_ROW_HEIGHT = 22;
+const MESSAGE_ROW_GAP = 4;
+let messageLayoutCounter = 0;
+interface MessageEntry {
+	frame: Frame;
+	layoutOrder: number;
+}
+const activeMessages: MessageEntry[] = [];
 
 let wantedSummaryLabel: TextLabel | undefined;
 let wantedExpandedFrame: Frame | undefined;
@@ -33,6 +65,17 @@ let isWantedExpanded = false;
 
 let wantedEntries: PlayerWantedPayload[] = [];
 const MAX_WANTED_DISPLAY = 5;
+
+// Cache latest bounty payload so mode toggles can re-render with real data
+let latestBounty: NPCBountyPayload | undefined;
+
+// ── Message strip palette ────────────────────────────────────────────────────
+const MESSAGE_COLORS: Record<BoardMessageType, { accent: Color3; text: Color3 }> = {
+	info: { accent: UI_THEME.border, text: UI_THEME.textPrimary },
+	warning: { accent: Color3.fromRGB(210, 60, 50), text: Color3.fromRGB(230, 140, 130) },
+	event: { accent: Color3.fromRGB(210, 60, 50), text: Color3.fromRGB(230, 140, 130) },
+	unlock: { accent: UI_THEME.gold, text: UI_THEME.textPrimary },
+};
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 
@@ -53,9 +96,46 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	wrapLayout.Padding = new UDim(0, sc(3));
 	wrapLayout.Parent = wrapper;
 
-	// ═════════════════════════════════════════════════════════════════════════
-	//  MISSION CARD  (always visible)
-	// ═════════════════════════════════════════════════════════════════════════
+	buildMessageStack(wrapper);
+	buildMissionCard(wrapper);
+	buildWantedSections(wrapper);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MESSAGE STACK  (small reverse-FIFO rising above the mission card)
+//  - up to 3 rows visible at once
+//  - newest enters at bottom, older rows rise and fade out at top
+//  - no glow / no pulse — static subtle color-coded text
+// ═════════════════════════════════════════════════════════════════════════════
+function buildMessageStack(wrapper: Frame): void {
+	const container = new Instance("Frame");
+	container.Name = "MessageStack";
+	container.LayoutOrder = -1; // always above mission card
+	const totalHeight = MESSAGE_MAX_VISIBLE * MESSAGE_ROW_HEIGHT + (MESSAGE_MAX_VISIBLE - 1) * MESSAGE_ROW_GAP;
+	container.Size = new UDim2(1, 0, 0, sc(totalHeight + 8));
+	container.BackgroundTransparency = 1;
+	container.ClipsDescendants = true;
+	container.Parent = wrapper;
+
+	const pad = new Instance("UIPadding");
+	pad.PaddingBottom = new UDim(0, sc(6)); // margin from the board
+	pad.Parent = container;
+
+	const layout = new Instance("UIListLayout");
+	layout.FillDirection = Enum.FillDirection.Vertical;
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom;
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+	layout.Padding = new UDim(0, sc(MESSAGE_ROW_GAP));
+	layout.Parent = container;
+
+	messageStackContainer = container;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MISSION CARD  (state-driven: contract or guidance)
+// ═════════════════════════════════════════════════════════════════════════════
+function buildMissionCard(wrapper: Frame): void {
 	const card = new Instance("Frame");
 	card.Name = "MissionCard";
 	card.LayoutOrder = 0;
@@ -87,25 +167,49 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	cardLayout.Padding = new UDim(0, sc(3));
 	cardLayout.Parent = card;
 
-	// ── Section label ─────────────────────────────────────────────────────
-	const sectionLabel = new Instance("TextLabel");
-	sectionLabel.LayoutOrder = 0;
-	sectionLabel.Size = new UDim2(1, 0, 0, sc(16));
-	sectionLabel.BackgroundTransparency = 1;
-	sectionLabel.Text = "YOUR MARK";
-	sectionLabel.TextColor3 = UI_THEME.textSection;
-	sectionLabel.Font = UI_THEME.fontBold;
-	sectionLabel.TextSize = sc(13);
-	sectionLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	sectionLabel.Parent = card;
+	// ── Dynamic header (title flips per mode) ─────────────────────────────
+	const header = new Instance("TextLabel");
+	header.Name = "Header";
+	header.LayoutOrder = 0;
+	header.Size = new UDim2(1, 0, 0, sc(16));
+	header.BackgroundTransparency = 1;
+	header.Text = "YOUR MARK";
+	header.TextColor3 = UI_THEME.textSection;
+	header.Font = UI_THEME.fontBold;
+	header.TextSize = sc(13);
+	header.TextXAlignment = Enum.TextXAlignment.Left;
+	header.Parent = card;
+	cardHeaderLabel = header;
 
-	// ── Row 1: Mark name + gold ───────────────────────────────────────────
+	// ── Contract body (existing mark layout) ──────────────────────────────
+	contractBody = buildContractBody(card);
+
+	// ── Guidance body (tutorial step layout) ──────────────────────────────
+	guidanceBody = buildGuidanceBody(card);
+}
+
+// ── Contract-mode body ───────────────────────────────────────────────────────
+function buildContractBody(card: Frame): Frame {
+	const body = new Instance("Frame");
+	body.Name = "ContractBody";
+	body.LayoutOrder = 1;
+	body.Size = new UDim2(1, 0, 0, 0);
+	body.AutomaticSize = Enum.AutomaticSize.Y;
+	body.BackgroundTransparency = 1;
+	body.Parent = card;
+
+	const layout = new Instance("UIListLayout");
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.Padding = new UDim(0, sc(3));
+	layout.Parent = body;
+
+	// Row 1: name + gold
 	const row1 = new Instance("Frame");
 	row1.Name = "NameRow";
 	row1.LayoutOrder = 1;
 	row1.Size = new UDim2(1, 0, 0, sc(26));
 	row1.BackgroundTransparency = 1;
-	row1.Parent = card;
+	row1.Parent = body;
 
 	markNameLabel = new Instance("TextLabel");
 	markNameLabel.Name = "MarkName";
@@ -131,7 +235,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markGoldLabel.TextXAlignment = Enum.TextXAlignment.Right;
 	markGoldLabel.Parent = row1;
 
-	// ── Row 2: Social class ───────────────────────────────────────────────
+	// Row 2: class
 	markClassLabel = new Instance("TextLabel");
 	markClassLabel.Name = "MarkClass";
 	markClassLabel.LayoutOrder = 2;
@@ -142,9 +246,9 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markClassLabel.Font = UI_THEME.fontBold;
 	markClassLabel.TextSize = sc(14);
 	markClassLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	markClassLabel.Parent = card;
+	markClassLabel.Parent = body;
 
-	// ── Row 3: Offence line ───────────────────────────────────────────────
+	// Row 3: offence
 	markOffenceLabel = new Instance("TextLabel");
 	markOffenceLabel.Name = "MarkOffence";
 	markOffenceLabel.LayoutOrder = 3;
@@ -156,8 +260,59 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	markOffenceLabel.TextSize = sc(13);
 	markOffenceLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	markOffenceLabel.TextTruncate = Enum.TextTruncate.AtEnd;
-	markOffenceLabel.Parent = card;
+	markOffenceLabel.Parent = body;
 
+	return body;
+}
+
+// ── Guidance-mode body ───────────────────────────────────────────────────────
+function buildGuidanceBody(card: Frame): Frame {
+	const body = new Instance("Frame");
+	body.Name = "GuidanceBody";
+	body.LayoutOrder = 2;
+	body.Size = new UDim2(1, 0, 0, 0);
+	body.AutomaticSize = Enum.AutomaticSize.Y;
+	body.BackgroundTransparency = 1;
+	body.Visible = false;
+	body.Parent = card;
+
+	const layout = new Instance("UIListLayout");
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.Padding = new UDim(0, sc(4));
+	layout.Parent = body;
+
+	// Objective line (body)
+	guidanceObjectiveLabel = new Instance("TextLabel");
+	guidanceObjectiveLabel.Name = "Objective";
+	guidanceObjectiveLabel.LayoutOrder = 1;
+	guidanceObjectiveLabel.Size = new UDim2(1, 0, 0, sc(26));
+	guidanceObjectiveLabel.BackgroundTransparency = 1;
+	guidanceObjectiveLabel.Text = "";
+	guidanceObjectiveLabel.TextColor3 = UI_THEME.textPrimary;
+	guidanceObjectiveLabel.Font = UI_THEME.fontDisplay;
+	guidanceObjectiveLabel.TextSize = sc(20);
+	guidanceObjectiveLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	guidanceObjectiveLabel.TextWrapped = true;
+	guidanceObjectiveLabel.AutomaticSize = Enum.AutomaticSize.Y;
+	guidanceObjectiveLabel.Parent = body;
+
+	// Footer — step indicator / hint
+	guidanceFooterLabel = new Instance("TextLabel");
+	guidanceFooterLabel.Name = "Footer";
+	guidanceFooterLabel.LayoutOrder = 2;
+	guidanceFooterLabel.Size = new UDim2(1, 0, 0, sc(16));
+	guidanceFooterLabel.BackgroundTransparency = 1;
+	guidanceFooterLabel.Text = "";
+	guidanceFooterLabel.TextColor3 = UI_THEME.textMuted;
+	guidanceFooterLabel.Font = UI_THEME.fontBold;
+	guidanceFooterLabel.TextSize = sc(12);
+	guidanceFooterLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	guidanceFooterLabel.Parent = body;
+
+	return body;
+}
+
+function buildWantedSections(wrapper: Frame): void {
 	// ═════════════════════════════════════════════════════════════════════════
 	//  WANTED SUMMARY  (tap to expand)
 	// ═════════════════════════════════════════════════════════════════════════
@@ -258,6 +413,25 @@ function buildBountyCard(screenGui: ScreenGui): void {
 // ── Mark updates ──────────────────────────────────────────────────────────────
 
 function applyNPCBounty(bounty: NPCBountyPayload): void {
+	latestBounty = bounty;
+	renderContractBody(bounty);
+}
+
+function renderContractBody(bounty: NPCBountyPayload | undefined): void {
+	if (!bounty) {
+		if (markNameLabel) {
+			markNameLabel.Text = "Awaiting new mark...";
+			markNameLabel.TextColor3 = UI_THEME.textPrimary;
+		}
+		if (markGoldLabel) markGoldLabel.Text = "";
+		if (markClassLabel) {
+			markClassLabel.Text = "";
+			markClassLabel.TextColor3 = UI_THEME.textMuted;
+		}
+		if (markOffenceLabel) markOffenceLabel.Text = "";
+		return;
+	}
+
 	const npcData = MEDIEVAL_NPCS[bounty.npcName] as NPCData | undefined;
 	const rarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
 
@@ -276,16 +450,120 @@ function applyNPCBounty(bounty: NPCBountyPayload): void {
 }
 
 function clearNPCBounty(): void {
-	if (markNameLabel) {
-		markNameLabel.Text = "Awaiting new mark...";
-		markNameLabel.TextColor3 = UI_THEME.textPrimary;
+	latestBounty = undefined;
+	renderContractBody(undefined);
+}
+
+// ── Board renderer (state-driven via board-state) ────────────────────────────
+
+function renderBody(content: BoardBodyContent): void {
+	if (content.mode === "contract") {
+		if (cardHeaderLabel) {
+			cardHeaderLabel.Text = "YOUR MARK";
+			cardHeaderLabel.TextColor3 = UI_THEME.textSection;
+		}
+		if (guidanceBody) guidanceBody.Visible = false;
+		if (contractBody) contractBody.Visible = true;
+		renderContractBody(latestBounty);
+		return;
 	}
-	if (markGoldLabel) markGoldLabel.Text = "";
-	if (markClassLabel) {
-		markClassLabel.Text = "";
-		markClassLabel.TextColor3 = UI_THEME.textMuted;
+
+	// Guidance mode
+	const showBountyCard = content.step.showBountyCard === true;
+
+	if (cardHeaderLabel) {
+		cardHeaderLabel.Text = showBountyCard ? "YOUR MARK" : content.step.title;
+		cardHeaderLabel.TextColor3 = showBountyCard ? UI_THEME.textSection : UI_THEME.textHeader;
 	}
-	if (markOffenceLabel) markOffenceLabel.Text = "";
+
+	if (contractBody) contractBody.Visible = showBountyCard;
+	if (showBountyCard) renderContractBody(latestBounty);
+
+	if (guidanceBody) guidanceBody.Visible = true;
+	// When the bounty card is already telling the player what to do, the
+	// objective line is redundant — hide it and let the footer carry the
+	// step indicator below the mark.
+	if (guidanceObjectiveLabel) {
+		guidanceObjectiveLabel.Visible = !showBountyCard;
+		guidanceObjectiveLabel.Text = content.step.objective;
+	}
+	if (guidanceFooterLabel) {
+		const stepText = "Step " + (content.stepIndex + 1) + " of " + content.totalSteps;
+		const baseText =
+			showBountyCard ? stepText + "  --  " + content.step.objective : stepText;
+		guidanceFooterLabel.Text =
+			content.step.hint !== undefined && !showBountyCard
+				? baseText + "  --  " + content.step.hint
+				: baseText;
+	}
+}
+
+// ── Message stack rendering ──────────────────────────────────────────────────
+
+const MESSAGE_FADE_IN = 0.25;
+const MESSAGE_FADE_OUT = 0.4;
+
+function removeMessageEntry(entry: MessageEntry): void {
+	const idx = activeMessages.indexOf(entry);
+	if (idx < 0) return;
+	activeMessages.remove(idx);
+
+	const label = entry.frame.FindFirstChild("Label") as TextLabel | undefined;
+	const fadeInfo = new TweenInfo(MESSAGE_FADE_OUT, Enum.EasingStyle.Sine, Enum.EasingDirection.Out);
+	if (label) TweenService.Create(label, fadeInfo, { TextTransparency: 1 }).Play();
+	TweenService.Create(entry.frame, fadeInfo, { BackgroundTransparency: 1 }).Play();
+	task.delay(MESSAGE_FADE_OUT + 0.05, () => {
+		if (entry.frame.Parent !== undefined) entry.frame.Destroy();
+	});
+}
+
+function pushMessage(message: BoardMessage): void {
+	if (!messageStackContainer) return;
+
+	const palette = MESSAGE_COLORS[message.messageType];
+	messageLayoutCounter += 1;
+	const order = messageLayoutCounter;
+
+	const row = new Instance("Frame");
+	row.Name = "Message" + order;
+	row.Size = new UDim2(1, 0, 0, sc(MESSAGE_ROW_HEIGHT));
+	row.BackgroundTransparency = 1;
+	row.LayoutOrder = order;
+	row.Parent = messageStackContainer;
+
+	const label = new Instance("TextLabel");
+	label.Name = "Label";
+	label.Size = new UDim2(1, 0, 1, 0);
+	label.BackgroundTransparency = 1;
+	label.Text = message.text;
+	label.TextColor3 = palette.text;
+	label.Font = UI_THEME.fontBold;
+	label.TextSize = sc(12);
+	label.TextXAlignment = Enum.TextXAlignment.Center;
+	label.TextTruncate = Enum.TextTruncate.AtEnd;
+	label.TextTransparency = 1;
+	label.Parent = row;
+
+	const entry: MessageEntry = { frame: row, layoutOrder: order };
+	activeMessages.push(entry);
+
+	// Fade in.
+	const fadeIn = new TweenInfo(MESSAGE_FADE_IN, Enum.EasingStyle.Sine, Enum.EasingDirection.Out);
+	TweenService.Create(label, fadeIn, { TextTransparency: 0 }).Play();
+
+	// Trim oldest (lowest LayoutOrder) if over cap.
+	while (activeMessages.size() > MESSAGE_MAX_VISIBLE) {
+		let oldestIdx = 0;
+		for (let i = 1; i < activeMessages.size(); i++) {
+			if (activeMessages[i].layoutOrder < activeMessages[oldestIdx].layoutOrder) oldestIdx = i;
+		}
+		removeMessageEntry(activeMessages[oldestIdx]);
+	}
+
+	// Auto-expire after lifetime.
+	task.delay(MESSAGE_LIFETIME, () => {
+		if (row.Parent !== undefined) removeMessageEntry(entry);
+	});
 }
 
 // ── Wanted list ───────────────────────────────────────────────────────────────
@@ -431,6 +709,23 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildBountyCard(screenGui);
+
+	// Wire the state-driven board to our renderer. All mode / message
+	// changes now go through board-state.
+	registerBoardRenderer({
+		renderBody,
+		pushMessage,
+	});
+
+	// Wire achievement sync/unlock events into the board state.
+	// Guidance mode is derived entirely from the unlocked achievement set.
+	initializeTutorialController();
+
+	// World-space yellow highlights on the active tutorial targets.
+	initializeTutorialHighlight();
+
+	// UI pulses (inventory button / dagger tile) for UI-driven tutorial steps.
+	initializeTutorialUIPulse();
 
 	// Personal NPC bounty assigned / renewed
 	getBountyAssignedRemote().OnClientEvent.Connect((data: unknown) => {

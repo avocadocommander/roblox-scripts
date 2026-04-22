@@ -1,4 +1,4 @@
-import { Players, TweenService } from "@rbxts/services";
+import { Players, TweenService, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
@@ -14,11 +14,9 @@ function sc(base: number): number {
 // -- State --------------------------------------------------------------------
 
 let feedbackLabel: TextLabel | undefined;
-let activeId: string | undefined;
-let clipFrame: Frame | undefined;
-const panelFrames = new Map<string, Frame>();
-const panelHeights = new Map<string, number>();
-const tabRefs = new Map<string, { btn: TextButton; stroke: UIStroke; color: Color3 }>();
+let panelRoot: Frame | undefined;
+let panelOpen = false;
+let hintLabel: TextLabel | undefined;
 
 // -- Admin check --------------------------------------------------------------
 
@@ -46,53 +44,20 @@ function showFeedback(msg: string): void {
 	}).Play();
 }
 
-// -- Dropdown toggle ----------------------------------------------------------
+// -- Panel toggle -------------------------------------------------------------
 
-function toggleDropdown(id: string): void {
-	if (!clipFrame) return;
-
-	const updateTabs = (currentId: string | undefined) => {
-		for (const [tid, data] of tabRefs) {
-			if (tid === currentId) {
-				data.stroke.Color = data.color;
-				data.btn.BackgroundTransparency = 0;
-			} else {
-				data.stroke.Color = UI_THEME.border;
-				data.btn.BackgroundTransparency = 0.15;
-			}
-		}
-	};
-
-	if (activeId === id) {
-		const closing = id;
-		activeId = undefined;
-		updateTabs(undefined);
-		TweenService.Create(clipFrame, new TweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Size: new UDim2(1, 0, 0, 0),
-		}).Play();
-		task.delay(0.2, () => {
-			if (activeId === undefined) {
-				const f = panelFrames.get(closing);
-				if (f) f.Visible = false;
-			}
-		});
-		return;
+function setPanelOpen(open: boolean): void {
+	if (!panelRoot) return;
+	if (open === panelOpen) return;
+	panelOpen = open;
+	panelRoot.Visible = open;
+	if (hintLabel) {
+		hintLabel.Text = open ? "[ `  close debug ]" : "[ `  debug ]";
 	}
+}
 
-	if (activeId !== undefined) {
-		const prev = panelFrames.get(activeId);
-		if (prev) prev.Visible = false;
-	}
-
-	const openPanel = panelFrames.get(id);
-	if (openPanel) openPanel.Visible = true;
-	activeId = id;
-	updateTabs(id);
-
-	const h = panelHeights.get(id) ?? 0;
-	TweenService.Create(clipFrame, new TweenInfo(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size: new UDim2(1, 0, 0, h),
-	}).Play();
+function togglePanel(): void {
+	setPanelOpen(!panelOpen);
 }
 
 // -- Dropdown definitions -----------------------------------------------------
@@ -167,6 +132,11 @@ function getDropdowns(): DropdownDef[] {
 					},
 				},
 				{ label: "Reset All", color: UI_THEME.danger, action: () => runCommand("resetAll") },
+				{
+					label: "Trigger Special Event",
+					color: Color3.fromRGB(200, 140, 60),
+					action: () => runCommand("triggerSpecialEvent", "Royal Decree: A Special Event Has Begun"),
+				},
 			],
 		},
 		{
@@ -196,135 +166,193 @@ function getDropdowns(): DropdownDef[] {
 
 function buildAdminHUD(screenGui: ScreenGui): void {
 	const dropdowns = getDropdowns();
-	const barHeight = sc(28);
-	const tabWidth = sc(86);
-	const tabGap = sc(3);
+
+	// ── Small bottom-right hint so admins know the key ─────────────────────
+	hintLabel = new Instance("TextLabel");
+	hintLabel.Name = "AdminHint";
+	hintLabel.Size = new UDim2(0, sc(140), 0, sc(20));
+	hintLabel.AnchorPoint = new Vector2(1, 1);
+	hintLabel.Position = new UDim2(1, sc(-8), 1, sc(-8));
+	hintLabel.BackgroundTransparency = 1;
+	hintLabel.Text = "[ `  debug ]";
+	hintLabel.TextColor3 = UI_THEME.textMuted;
+	hintLabel.Font = UI_THEME.fontBody;
+	hintLabel.TextSize = sc(11);
+	hintLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	hintLabel.TextTransparency = 0.35;
+	hintLabel.ZIndex = 60;
+	hintLabel.Parent = screenGui;
+
+	// ── Root popup (hidden by default) ─────────────────────────────────────
+	const root = new Instance("Frame");
+	root.Name = "AdminPanel";
+	root.Size = new UDim2(0.8, 0, 0.78, 0);
+	root.Position = new UDim2(0.5, 0, 0.5, 0);
+	root.AnchorPoint = new Vector2(0.5, 0.5);
+	root.BackgroundColor3 = UI_THEME.bg;
+	root.BackgroundTransparency = 0.45; // quite transparent — control-panel feel
+	root.BorderSizePixel = 0;
+	root.Visible = false;
+	root.ZIndex = 60;
+	root.Parent = screenGui;
+	panelRoot = root;
+
+	const rootCorner = new Instance("UICorner");
+	rootCorner.CornerRadius = new UDim(0, sc(6));
+	rootCorner.Parent = root;
+
+	const rootStroke = new Instance("UIStroke");
+	rootStroke.Color = UI_THEME.border;
+	rootStroke.Thickness = sc(1.2);
+	rootStroke.Transparency = 0.2;
+	rootStroke.Parent = root;
+
+	const rootPad = new Instance("UIPadding");
+	rootPad.PaddingTop = new UDim(0, sc(14));
+	rootPad.PaddingBottom = new UDim(0, sc(14));
+	rootPad.PaddingLeft = new UDim(0, sc(16));
+	rootPad.PaddingRight = new UDim(0, sc(16));
+	rootPad.Parent = root;
+
+	// ── Header row (title + close hint) ────────────────────────────────────
+	const headerRow = new Instance("Frame");
+	headerRow.Name = "Header";
+	headerRow.Size = new UDim2(1, 0, 0, sc(28));
+	headerRow.BackgroundTransparency = 1;
+	headerRow.ZIndex = 61;
+	headerRow.Parent = root;
+
+	const title = new Instance("TextLabel");
+	title.Size = new UDim2(0.7, 0, 1, 0);
+	title.BackgroundTransparency = 1;
+	title.Text = "DEBUG CONTROL PANEL";
+	title.TextColor3 = UI_THEME.textHeader;
+	title.Font = UI_THEME.fontDisplay;
+	title.TextSize = sc(20);
+	title.TextXAlignment = Enum.TextXAlignment.Left;
+	title.ZIndex = 61;
+	title.Parent = headerRow;
+
+	const closeHint = new Instance("TextLabel");
+	closeHint.Size = new UDim2(0.3, 0, 1, 0);
+	closeHint.Position = new UDim2(0.7, 0, 0, 0);
+	closeHint.BackgroundTransparency = 1;
+	closeHint.Text = "press ` to close";
+	closeHint.TextColor3 = UI_THEME.textMuted;
+	closeHint.Font = UI_THEME.fontBody;
+	closeHint.TextSize = sc(12);
+	closeHint.TextXAlignment = Enum.TextXAlignment.Right;
+	closeHint.ZIndex = 61;
+	closeHint.Parent = headerRow;
+
+	// ── Feedback line under header ─────────────────────────────────────────
+	feedbackLabel = new Instance("TextLabel");
+	feedbackLabel.Name = "Feedback";
+	feedbackLabel.Size = new UDim2(1, 0, 0, sc(16));
+	feedbackLabel.Position = new UDim2(0, 0, 0, sc(30));
+	feedbackLabel.BackgroundTransparency = 1;
+	feedbackLabel.Text = "";
+	feedbackLabel.TextColor3 = UI_THEME.textPrimary;
+	feedbackLabel.Font = UI_THEME.fontBody;
+	feedbackLabel.TextSize = sc(12);
+	feedbackLabel.TextTransparency = 1;
+	feedbackLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	feedbackLabel.ZIndex = 61;
+	feedbackLabel.Parent = root;
+
+	// ── Scrollable body holding one column per section ─────────────────────
+	const body = new Instance("ScrollingFrame");
+	body.Name = "Body";
+	body.Size = new UDim2(1, 0, 1, sc(-52));
+	body.Position = new UDim2(0, 0, 0, sc(52));
+	body.BackgroundTransparency = 1;
+	body.BorderSizePixel = 0;
+	body.CanvasSize = new UDim2(0, 0, 0, 0);
+	body.AutomaticCanvasSize = Enum.AutomaticSize.Y;
+	body.ScrollBarThickness = sc(6);
+	body.ScrollBarImageColor3 = UI_THEME.border;
+	body.ScrollBarImageTransparency = 0.4;
+	body.ScrollingDirection = Enum.ScrollingDirection.Y;
+	body.ZIndex = 61;
+	body.Parent = root;
+
+	const columns = new Instance("Frame");
+	columns.Size = new UDim2(1, 0, 0, 0);
+	columns.AutomaticSize = Enum.AutomaticSize.Y;
+	columns.BackgroundTransparency = 1;
+	columns.ZIndex = 61;
+	columns.Parent = body;
+
+	const columnsLayout = new Instance("UIListLayout");
+	columnsLayout.FillDirection = Enum.FillDirection.Horizontal;
+	columnsLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	columnsLayout.Padding = new UDim(0, sc(12));
+	columnsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
+	columnsLayout.VerticalAlignment = Enum.VerticalAlignment.Top;
+	columnsLayout.Parent = columns;
+
 	const btnHeight = sc(26);
-	const btnGap = sc(3);
-	const panelPad = sc(6);
-	const totalBarWidth = dropdowns.size() * tabWidth + (dropdowns.size() - 1) * tabGap;
-	const containerWidth = math.max(totalBarWidth, sc(220));
+	const btnGap = sc(4);
 
-	// Main container at top-center
-	const container = new Instance("Frame");
-	container.Name = "AdminHUD";
-	container.Size = new UDim2(0, containerWidth, 0, barHeight);
-	container.Position = new UDim2(0.5, 0, 0, sc(4));
-	container.AnchorPoint = new Vector2(0.5, 0);
-	container.BackgroundTransparency = 1;
-	container.ZIndex = 40;
-	container.Parent = screenGui;
-
-	// -- Tab bar
-	const bar = new Instance("Frame");
-	bar.Name = "TabBar";
-	bar.Size = new UDim2(1, 0, 0, barHeight);
-	bar.BackgroundTransparency = 1;
-	bar.ZIndex = 40;
-	bar.Parent = container;
-
-	const barLayout = new Instance("UIListLayout");
-	barLayout.FillDirection = Enum.FillDirection.Horizontal;
-	barLayout.SortOrder = Enum.SortOrder.LayoutOrder;
-	barLayout.Padding = new UDim(0, tabGap);
-	barLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
-	barLayout.Parent = bar;
-
-	// -- Clip frame for dropdown panels
-	clipFrame = new Instance("Frame");
-	clipFrame.Name = "DropdownClip";
-	clipFrame.Size = new UDim2(1, 0, 0, 0);
-	clipFrame.Position = new UDim2(0, 0, 0, barHeight);
-	clipFrame.BackgroundTransparency = 1;
-	clipFrame.ClipsDescendants = true;
-	clipFrame.ZIndex = 41;
-	clipFrame.Parent = container;
-
-	// -- Build each dropdown
+	// ── Build each section as a column ─────────────────────────────────────
 	for (let i = 0; i < dropdowns.size(); i++) {
 		const dd = dropdowns[i];
 
-		// Tab button
-		const tab = new Instance("TextButton");
-		tab.Name = "Tab_" + dd.id;
-		tab.LayoutOrder = i;
-		tab.Size = new UDim2(0, tabWidth, 1, 0);
-		tab.BackgroundColor3 = UI_THEME.bg;
-		tab.BackgroundTransparency = 0.15;
-		tab.BorderSizePixel = 0;
-		tab.Text = dd.label;
-		tab.TextColor3 = dd.color;
-		tab.Font = UI_THEME.fontBold;
-		tab.TextSize = sc(13);
-		tab.AutoButtonColor = false;
-		tab.ZIndex = 40;
-		tab.Parent = bar;
+		const col = new Instance("Frame");
+		col.Name = "Col_" + dd.id;
+		col.LayoutOrder = i;
+		col.Size = new UDim2(0, sc(220), 0, 0);
+		col.AutomaticSize = Enum.AutomaticSize.Y;
+		col.BackgroundTransparency = 1;
+		col.ZIndex = 61;
+		col.Parent = columns;
 
-		const tabCorner = new Instance("UICorner");
-		tabCorner.CornerRadius = new UDim(0, sc(4));
-		tabCorner.Parent = tab;
+		const colLayout = new Instance("UIListLayout");
+		colLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+		colLayout.Padding = new UDim(0, btnGap);
+		colLayout.Parent = col;
 
-		const tabStroke = new Instance("UIStroke");
-		tabStroke.Color = UI_THEME.border;
-		tabStroke.Thickness = sc(1);
-		tabStroke.Parent = tab;
+		// Section header
+		const sectionLabel = new Instance("TextLabel");
+		sectionLabel.Name = "SectionHeader";
+		sectionLabel.LayoutOrder = 0;
+		sectionLabel.Size = new UDim2(1, 0, 0, sc(22));
+		sectionLabel.BackgroundTransparency = 1;
+		sectionLabel.Text = dd.label.upper();
+		sectionLabel.TextColor3 = dd.color;
+		sectionLabel.Font = UI_THEME.fontBold;
+		sectionLabel.TextSize = sc(13);
+		sectionLabel.TextXAlignment = Enum.TextXAlignment.Left;
+		sectionLabel.ZIndex = 61;
+		sectionLabel.Parent = col;
 
-		tabRefs.set(dd.id, { btn: tab, stroke: tabStroke, color: dd.color });
-		tab.Activated.Connect(() => toggleDropdown(dd.id));
+		const divider = new Instance("Frame");
+		divider.Name = "Divider";
+		divider.LayoutOrder = 1;
+		divider.Size = new UDim2(1, 0, 0, 1);
+		divider.BackgroundColor3 = dd.color;
+		divider.BackgroundTransparency = 0.5;
+		divider.BorderSizePixel = 0;
+		divider.ZIndex = 61;
+		divider.Parent = col;
 
-		// Panel (inside clip frame)
-		const contentHeight = panelPad * 2 + dd.buttons.size() * (btnHeight + btnGap) - btnGap;
-		panelHeights.set(dd.id, contentHeight);
-
-		const ddPanel = new Instance("Frame");
-		ddPanel.Name = "Panel_" + dd.id;
-		ddPanel.Size = new UDim2(1, 0, 0, contentHeight);
-		ddPanel.Position = UDim2.fromScale(0, 0);
-		ddPanel.BackgroundColor3 = UI_THEME.bg;
-		ddPanel.BackgroundTransparency = 0.06;
-		ddPanel.BorderSizePixel = 0;
-		ddPanel.Visible = false;
-		ddPanel.ZIndex = 41;
-		ddPanel.Parent = clipFrame;
-		panelFrames.set(dd.id, ddPanel);
-
-		const panelCorner = new Instance("UICorner");
-		panelCorner.CornerRadius = UI_THEME.cornerRadius;
-		panelCorner.Parent = ddPanel;
-
-		const panelStroke = new Instance("UIStroke");
-		panelStroke.Color = UI_THEME.border;
-		panelStroke.Thickness = sc(1);
-		panelStroke.Parent = ddPanel;
-
-		const pad = new Instance("UIPadding");
-		pad.PaddingTop = new UDim(0, panelPad);
-		pad.PaddingBottom = new UDim(0, panelPad);
-		pad.PaddingLeft = new UDim(0, panelPad);
-		pad.PaddingRight = new UDim(0, panelPad);
-		pad.Parent = ddPanel;
-
-		const layout = new Instance("UIListLayout");
-		layout.SortOrder = Enum.SortOrder.LayoutOrder;
-		layout.Padding = new UDim(0, btnGap);
-		layout.Parent = ddPanel;
-
-		// Command buttons
+		// Buttons
 		for (let j = 0; j < dd.buttons.size(); j++) {
 			const def = dd.buttons[j];
 			const btn = new Instance("TextButton");
-			btn.LayoutOrder = j;
+			btn.LayoutOrder = 2 + j;
 			btn.Size = new UDim2(1, 0, 0, btnHeight);
 			btn.BackgroundColor3 = UI_THEME.bgInset;
-			btn.BackgroundTransparency = 0.1;
+			btn.BackgroundTransparency = 0.35;
 			btn.BorderSizePixel = 0;
 			btn.Text = def.label;
 			btn.TextColor3 = def.color;
 			btn.Font = UI_THEME.fontBold;
 			btn.TextSize = sc(12);
+			btn.TextXAlignment = Enum.TextXAlignment.Left;
 			btn.AutoButtonColor = false;
-			btn.ZIndex = 42;
-			btn.Parent = ddPanel;
+			btn.ZIndex = 62;
+			btn.Parent = col;
 
 			const btnCorner = new Instance("UICorner");
 			btnCorner.CornerRadius = new UDim(0, sc(4));
@@ -333,35 +361,31 @@ function buildAdminHUD(screenGui: ScreenGui): void {
 			const btnStroke = new Instance("UIStroke");
 			btnStroke.Color = UI_THEME.divider;
 			btnStroke.Thickness = sc(0.8);
+			btnStroke.Transparency = 0.3;
 			btnStroke.Parent = btn;
 
+			const btnPad = new Instance("UIPadding");
+			btnPad.PaddingLeft = new UDim(0, sc(8));
+			btnPad.PaddingRight = new UDim(0, sc(8));
+			btnPad.Parent = btn;
+
+			btn.MouseEnter.Connect(() => {
+				btn.BackgroundTransparency = 0.15;
+			});
+			btn.MouseLeave.Connect(() => {
+				btn.BackgroundTransparency = 0.35;
+			});
 			btn.Activated.Connect(() => {
 				def.action();
 				btn.BackgroundColor3 = def.color;
-				btn.BackgroundTransparency = 0.4;
+				btn.BackgroundTransparency = 0.5;
 				task.delay(0.15, () => {
 					btn.BackgroundColor3 = UI_THEME.bgInset;
-					btn.BackgroundTransparency = 0.1;
+					btn.BackgroundTransparency = 0.35;
 				});
 			});
 		}
 	}
-
-	// -- Feedback label (to the right of the bar)
-	feedbackLabel = new Instance("TextLabel");
-	feedbackLabel.Name = "Feedback";
-	feedbackLabel.Size = new UDim2(0, sc(200), 0, barHeight);
-	feedbackLabel.Position = new UDim2(1, sc(8), 0, 0);
-	feedbackLabel.BackgroundTransparency = 1;
-	feedbackLabel.Text = "";
-	feedbackLabel.TextColor3 = UI_THEME.textPrimary;
-	feedbackLabel.Font = UI_THEME.fontBody;
-	feedbackLabel.TextSize = sc(11);
-	feedbackLabel.TextWrapped = true;
-	feedbackLabel.TextTransparency = 1;
-	feedbackLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	feedbackLabel.ZIndex = 50;
-	feedbackLabel.Parent = container;
 }
 
 // -- Init ---------------------------------------------------------------------
@@ -373,4 +397,12 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildAdminHUD(screenGui);
+
+	// Toggle with backtick (`) — same key on US layouts for the console feel.
+	UserInputService.InputBegan.Connect((input, processed) => {
+		if (processed) return;
+		if (input.KeyCode === Enum.KeyCode.Backquote) {
+			togglePanel();
+		}
+	});
 });

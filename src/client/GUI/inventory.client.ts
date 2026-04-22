@@ -20,6 +20,7 @@ import {
 	BountyScrollPayload,
 } from "shared/inventory";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { isNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
 
 const activateRemote = getActivateItemRemote();
 const syncRemote = getInventorySyncRemote();
@@ -447,6 +448,9 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	tileStroke.Transparency = isActive ? 0 : 0.4;
 	tileStroke.Parent = tile;
 
+	// New-since-last-view dot
+	setDotVisible(tile, isNew(sectionForCategory(item.category), item.id));
+
 	const icon = new Instance("TextLabel");
 	icon.Size = new UDim2(1, 0, 0, sc(28));
 	icon.Position = new UDim2(0, 0, 0, sc(4));
@@ -531,6 +535,20 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	});
 }
 
+// ── "New" indicator section keys ──────────────────────────────────────────────
+
+const INV_WEAPONS = "inventory:weapons";
+const INV_POISONS = "inventory:poisons";
+const INV_ELIXIRS = "inventory:elixirs";
+const INV_SCROLLS = "inventory:scrolls";
+
+function sectionForCategory(category: string): string {
+	if (category === "weapon") return INV_WEAPONS;
+	if (category === "poison") return INV_POISONS;
+	if (category === "elixir") return INV_ELIXIRS;
+	return INV_SCROLLS;
+}
+
 // ── Bounty scroll tile ────────────────────────────────────────────────────────
 
 function buildScrollTile(parent: ScrollingFrame, scroll: BountyScroll, order: number): void {
@@ -558,6 +576,9 @@ function buildScrollTile(parent: ScrollingFrame, scroll: BountyScroll, order: nu
 	tileStroke.Thickness = 1;
 	tileStroke.Transparency = 0;
 	tileStroke.Parent = tile;
+
+	// New-since-last-view dot
+	setDotVisible(tile, isNew(INV_SCROLLS, scroll.targetName));
 
 	const icon = new Instance("TextLabel");
 	icon.Size = new UDim2(1, 0, 0, sc(28));
@@ -845,6 +866,12 @@ function toggleInventory(): void {
 			BackgroundTransparency: UI_THEME.bgTransparency,
 		}).Play();
 	} else {
+		// Clear "new" indicators for everything the player just saw.
+		markSeen(INV_WEAPONS);
+		markSeen(INV_POISONS);
+		markSeen(INV_ELIXIRS);
+		markSeen(INV_SCROLLS);
+
 		if (inventoryBackdrop) inventoryBackdrop.Visible = false;
 		const tween = TweenService.Create(
 			rootFrame,
@@ -871,6 +898,25 @@ function applyInventorySync(payload: InventoryPayload): void {
 	currentBountyScrolls = payload.bountyScrolls ?? [];
 	// Let other client scripts detect the active weapon via attribute
 	Players.LocalPlayer.SetAttribute("EquippedWeapon", currentEquippedWeapon ?? "fists");
+
+	// Track "new since last viewed" per category.
+	const weaponIds: string[] = [];
+	const poisonIds: string[] = [];
+	const elixirIds: string[] = [];
+	for (const item of ITEM_LIST) {
+		const count = currentOwned[item.id] ?? 0;
+		if (count <= 0) continue;
+		if (item.category === "weapon") weaponIds.push(item.id);
+		else if (item.category === "poison") poisonIds.push(item.id);
+		else if (item.category === "elixir") elixirIds.push(item.id);
+	}
+	trackPresent(INV_WEAPONS, weaponIds);
+	trackPresent(INV_POISONS, poisonIds);
+	trackPresent(INV_ELIXIRS, elixirIds);
+	const scrollIds: string[] = [];
+	for (const s of currentBountyScrolls) scrollIds.push(s.targetName);
+	trackPresent(INV_SCROLLS, scrollIds);
+
 	refreshActiveStatusBar();
 	if (inventoryOpen) {
 		refreshItemGrid();

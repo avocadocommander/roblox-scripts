@@ -228,6 +228,12 @@ export function initializeDialogHandler(): void {
 		activeDialog.set(player, npcName);
 		dialogPayloadRemote.FireClient(player, payload);
 		log("[DIALOG] " + player.Name + " opened dialog with " + npcName);
+
+		// Tutorial: first conversation with any Guildmaster unlocks MET_GUILD_LEADER.
+		const registryDef = NPC_REGISTRY[npcName];
+		if (registryDef !== undefined && registryDef.occupation === "Guildmaster") {
+			awardAchievement(player, "MET_GUILD_LEADER");
+		}
 	});
 
 	// Player requests a purchase

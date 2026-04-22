@@ -181,7 +181,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
 	billboard.Size = new UDim2(5, 0, 2.0, 0);
 	billboard.MaxDistance = math.huge;
-	billboard.StudsOffset = new Vector3(0, 6.5, 0);
+	billboard.StudsOffset = new Vector3(0, 5.4, 0);
 	billboard.AlwaysOnTop = false;
 	billboard.Parent = npc;
 
@@ -365,7 +365,7 @@ function createInspectBillboard(model: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
 	billboard.Size = new UDim2(5, 0, 1.4, 0);
 	billboard.MaxDistance = math.huge;
-	billboard.StudsOffset = new Vector3(0, 4, 0);
+	billboard.StudsOffset = new Vector3(0, 3.2, 0);
 	billboard.AlwaysOnTop = false;
 	billboard.Parent = model;
 
@@ -544,7 +544,7 @@ function createPremiumOfferBillboard(model: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
 	billboard.Size = new UDim2(5, 0, 1.4, 0);
 	billboard.MaxDistance = math.huge;
-	billboard.StudsOffset = new Vector3(0, 4, 0);
+	billboard.StudsOffset = new Vector3(0, 3.2, 0);
 	billboard.AlwaysOnTop = false;
 	billboard.Parent = model;
 

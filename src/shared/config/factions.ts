@@ -86,3 +86,10 @@ export function factionForNPC(npcName: string): FactionId | undefined {
 	}
 	return undefined;
 }
+
+/** Names of every guild-leader NPC across all factions. */
+export function getGuildLeaderNames(): string[] {
+	const names: string[] = [];
+	for (const fid of FACTION_IDS) names.push(FACTIONS[fid].leaderNPC);
+	return names;
+}

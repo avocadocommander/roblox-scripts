@@ -21,6 +21,10 @@ export interface AchievementReward {
 	xp?: number;
 	/** Title ID unlocked (from titles config). */
 	titleId?: string;
+	/** Inventory item granted (id from shared/inventory). */
+	itemId?: string;
+	/** How many of the item to grant. Defaults to 1 when itemId is set. */
+	itemCount?: number;
 }
 
 export interface AchievementDef {
@@ -52,6 +56,31 @@ export interface AchievementDef {
 // ── The Registry ──────────────────────────────────────────────────────────────
 
 export const ACHIEVEMENTS: Record<string, AchievementDef> = {
+	MET_GUILD_LEADER: {
+		id: "MET_GUILD_LEADER",
+		title: "Introductions",
+		description: "Speak to the Guild Leader.",
+		icon: ">",
+		category: "social",
+		sortOrder: 0,
+		reward: { itemId: "dagger", itemCount: 1 },
+	},
+	EQUIPPED_DAGGER: {
+		id: "EQUIPPED_DAGGER",
+		title: "Drawn Steel",
+		description: "Equip your first blade.",
+		icon: "/",
+		category: "combat",
+		sortOrder: 0,
+	},
+	REVIEWED_BOARD: {
+		id: "REVIEWED_BOARD",
+		title: "The Board",
+		description: "Review the bounty board.",
+		icon: "B",
+		category: "general",
+		sortOrder: 0,
+	},
 	FIRST_ASSASSINATION: {
 		id: "FIRST_ASSASSINATION",
 		title: "First Blood",
@@ -60,6 +89,14 @@ export const ACHIEVEMENTS: Record<string, AchievementDef> = {
 		category: "combat",
 		sortOrder: 1,
 		reward: { titleId: "first_blood" },
+	},
+	FIRST_TURN_IN: {
+		id: "FIRST_TURN_IN",
+		title: "Paid in Full",
+		description: "Turn in your first completed bounty scroll.",
+		icon: "$",
+		category: "general",
+		sortOrder: 1,
 	},
 	BOUNTY_HUNTER: {
 		id: "BOUNTY_HUNTER",

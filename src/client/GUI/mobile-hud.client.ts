@@ -10,6 +10,7 @@ import {
 } from "../modules/npc-proximity";
 import { toggleInventory, toggleKillBook, registerCampfireAction, registerActionPulse, registerKillPulse } from "../modules/ui-toggles";
 import { getPlaceCampfireRemote } from "shared/remotes/campfire-remote";
+import { hasAnyNewWithPrefix, onChange, setDotVisible } from "../modules/new-indicator";
 
 // -- Scaling ------------------------------------------------------------------
 
@@ -312,6 +313,14 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 		toggleInventory();
 		pulseButton(invParts.button);
 	});
+
+	// NEW-INDICATOR DOTS — bubble up from inventory/kill-book sections
+	const refreshHudDots = () => {
+		setDotVisible(invParts.button, hasAnyNewWithPrefix("inventory:"));
+		setDotVisible(codexParts.button, hasAnyNewWithPrefix("killbook:"));
+	};
+	onChange(refreshHudDots);
+	refreshHudDots();
 
 	// =========================================================================
 	// SMALL KILL BUTTON — 1-o-clock position relative to primary button

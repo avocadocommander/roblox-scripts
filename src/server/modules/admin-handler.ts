@@ -1,4 +1,5 @@
 import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
+import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import {
 	addCoins,
 	addExperience,
@@ -22,6 +23,9 @@ function isAdmin(player: Player): boolean {
 }
 
 export function initializeAdminHandler(): void {
+	// Eagerly create the broadcast remote so clients don't infinite-yield on WaitForChild
+	getBoardBroadcastRemote();
+
 	adminRemote.OnServerInvoke = (player: Player, ...args: unknown[]): string => {
 		if (!isAdmin(player)) return "Not authorized";
 
@@ -97,6 +101,12 @@ export function initializeAdminHandler(): void {
 			if (!ELIXIRS[strValue]) return "Unknown elixir: " + strValue;
 			givePlayerItem(player, strValue, 1);
 			return "Gave 1x " + ELIXIRS[strValue].name;
+		}
+
+		if (command === "triggerSpecialEvent") {
+			const text = strValue !== "" ? strValue : "A Special Event Has Begun";
+			getBoardBroadcastRemote().FireAllClients("event", text);
+			return "Broadcast event: " + text;
 		}
 
 		if (command === "resetAll") {

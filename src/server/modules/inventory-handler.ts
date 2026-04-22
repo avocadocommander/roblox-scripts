@@ -45,6 +45,19 @@ function checkPlayerOwnsPass(player: Player, passId: number): boolean {
 	return _playerOwnsPass(player, passId);
 }
 
+// Lazy import to avoid circular dependency with achievement-handler.
+let _awardAchievement: ((player: Player, id: string) => boolean) | undefined;
+function awardAchievementLazy(player: Player, achievementId: string): void {
+	if (!_awardAchievement) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const ah = require(script.Parent!.FindFirstChild("achievement-handler") as ModuleScript) as {
+			awardAchievement: (player: Player, id: string) => boolean;
+		};
+		_awardAchievement = ah.awardAchievement;
+	}
+	_awardAchievement(player, achievementId);
+}
+
 // ── Per-player inventory state ────────────────────────────────────────────────
 
 interface PlayerInventory {
@@ -155,6 +168,8 @@ function handleActivateItem(player: Player, itemId: string): void {
 		} else {
 			inv.equippedWeapon = itemId;
 			log(`[INVENTORY] ${player.Name} equipped weapon: ${itemDef.name}`);
+			// Tutorial: first time equipping any real weapon.
+			awardAchievementLazy(player, "EQUIPPED_DAGGER");
 		}
 	} else if (itemDef.category === "poison") {
 		// Consumable cooldown check
@@ -285,6 +300,8 @@ export function turnInBountyScrolls(player: Player): { totalGold: number; totalX
 
 	pushSync(player);
 	notifyWantedScrollChange(player);
+
+	awardAchievementLazy(player, "FIRST_TURN_IN");
 
 	log(
 		"[BOUNTY-SCROLL] " +

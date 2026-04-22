@@ -13,6 +13,7 @@ import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { FACTIONS, FACTION_IDS, FactionId, levelFromXP, totalXPFromFactions, overallLevelFromFactions } from "shared/config/factions";
+import { hasAnyNew, isNew, markNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
 
 let bookGui: ScreenGui | undefined;
 let bookFrame: Frame | undefined;
@@ -22,6 +23,7 @@ let isReady = false;
 
 // Tab buttons
 const TAB_NAMES = ["BOUNTIES", "BESTIARY", "PVP", "ACHIEVEMENTS"];
+const TAB_SECTIONS: Array<string | undefined> = [undefined, "killbook:bestiary", undefined, "killbook:achievements"];
 let activeTab = 0;
 let tabButtons: TextButton[] = [];
 let titleDropdownOpen = false;
@@ -137,6 +139,11 @@ function renderBestiaryTab(data: KillBookData): void {
 	if (!contentFrame) return;
 	let order = 0;
 
+	// Track bestiary discovery for "new" dot.
+	const discoveredNames: string[] = [];
+	for (const [npcName] of pairs(data.killLog)) discoveredNames.push(npcName as string);
+	trackPresent("killbook:bestiary", discoveredNames);
+
 	makeSectionHeader(contentFrame, "NPC BESTIARY", order++);
 	makeLabel(contentFrame, "Total kills: " + data.totalNPCKills, order++, {
 		color: UI_THEME.textMuted,
@@ -188,6 +195,9 @@ function renderBestiaryTab(data: KillBookData): void {
 				cardStroke.Thickness = 0.8;
 				cardStroke.Parent = card;
 			}
+
+			// New-since-last-view dot
+			setDotVisible(card, isNew("killbook:bestiary", name));
 
 			// Rarity accent bar (left edge)
 			if (rarity) {
@@ -543,6 +553,7 @@ function renderAchievementsTab(data: KillBookData): void {
 	// ── Achievements list — Card Layout ─────────────────────────────────────
 	const unlocked = data.unlockedAchievementIds.size();
 	const total = ACHIEVEMENT_LIST.size();
+	trackPresent("killbook:achievements", data.unlockedAchievementIds);
 	makeSectionHeader(contentFrame, "ACHIEVEMENTS  " + unlocked + "/" + total, order++);
 	makeDivider(contentFrame, order++);
 
@@ -578,6 +589,9 @@ function renderAchievementsTab(data: KillBookData): void {
 			cardStroke.Thickness = 0.8;
 			cardStroke.Parent = card;
 		}
+
+		// New-since-last-view dot
+		setDotVisible(card, isNew("killbook:achievements", achievement.id));
 
 		// ── Left accent bar ─────────────────────────────────────────────
 		const accent = new Instance("Frame");
@@ -700,6 +714,10 @@ function renderAchievementsTab(data: KillBookData): void {
 function fetchAndRender(tabIndex: number): void {
 	// Reset expanded state when switching to a different tab
 	if (tabIndex !== activeTab) {
+		// Mark the tab we're leaving as seen.
+		const prevSection = TAB_SECTIONS[activeTab];
+		if (prevSection !== undefined) markSeen(prevSection);
+
 		bestiaryExpanded = new Set<string>();
 		achievementExpanded = new Set<string>();
 	}
@@ -725,6 +743,11 @@ function updateTabHighlights(): void {
 
 		const stroke = btn.FindFirstChildOfClass("UIStroke") as UIStroke | undefined;
 		if (stroke) stroke.Color = isActive ? UI_THEME.border : UI_THEME.divider;
+
+		// New-indicator dot on each tab button.
+		const section = TAB_SECTIONS[i];
+		const showDot = section !== undefined && !isActive && hasAnyNew(section);
+		setDotVisible(btn, showDot);
 	}
 }
 
@@ -876,6 +899,10 @@ function toggleBook(): void {
 	bookGui.Enabled = isOpen;
 	if (isOpen) {
 		fetchAndRender(activeTab);
+	} else {
+		// Clear "new" indicators across all tabs when the book closes.
+		markSeen("killbook:bestiary");
+		markSeen("killbook:achievements");
 	}
 }
 
@@ -891,10 +918,16 @@ onPlayerInitialized(() => {
 
 	// Listen for achievement unlocks
 	getAchievementUnlockedRemote().OnClientEvent.Connect((achievementId: unknown) => {
-		print("[ACHIEVEMENT] Unlocked: " + (achievementId as string));
+		const id = achievementId as string;
+		print("[ACHIEVEMENT] Unlocked: " + id);
+		// Track as new so the HUD codex button + achievements tab show a dot.
+		markNew("killbook:achievements", id);
 		// If book is open on achievements tab, refresh
 		if (isOpen && activeTab === 3) {
 			fetchAndRender(3);
+		} else if (isOpen) {
+			// Refresh tab dots on any other tab.
+			updateTabHighlights();
 		}
 	});
 

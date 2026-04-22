@@ -29,6 +29,20 @@ import {
 } from "shared/player-state";
 import { unlockTitle } from "shared/player-state";
 
+// Lazy import to avoid circular dependency:
+//   inventory-handler -> effect-handler -> achievement-handler -> inventory-handler
+let _givePlayerItem: ((player: Player, itemId: string, count: number) => boolean) | undefined;
+function givePlayerItemLazy(player: Player, itemId: string, count: number): boolean {
+	if (!_givePlayerItem) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const ih = require(script.Parent!.FindFirstChild("inventory-handler") as ModuleScript) as {
+			givePlayerItem: (player: Player, itemId: string, count: number) => boolean;
+		};
+		_givePlayerItem = ih.givePlayerItem;
+	}
+	return _givePlayerItem(player, itemId, count);
+}
+
 const TAG = "[ACHIEVEMENT]";
 
 let gameId = 0;
@@ -65,6 +79,15 @@ function grantReward(player: Player, def: AchievementDef): void {
 	if (reward.titleId !== undefined) {
 		unlockTitle(player, reward.titleId);
 		log(`${TAG} Granted title '${reward.titleId}' to ${player.Name} for ${def.id}`);
+	}
+	if (reward.itemId !== undefined) {
+		const count = reward.itemCount ?? 1;
+		const ok = givePlayerItemLazy(player, reward.itemId, count);
+		if (ok) {
+			log(`${TAG} Granted item '${reward.itemId}' x${count} to ${player.Name} for ${def.id}`);
+		} else {
+			warn(`${TAG} Failed to grant item '${reward.itemId}' to ${player.Name} for ${def.id}`);
+		}
 	}
 }
 
