@@ -190,3 +190,75 @@ export function getSomeRemote(): RemoteEvent {
 - Constants: UPPER_SNAKE or camelCase records (`ITEMS`, `RARITY_COLORS`, `UI_THEME`)
 - Exported init functions: `initializeXxxSystem()` / `initializeXxxHandler()`
 - Log prefix: `[SYSTEM_NAME]` (e.g. `[INVENTORY]`, `[ASSASSINATION]`, `[BOUNTY-SCROLL]`)
+
+
+Follow these rules when generating suggestions in this repository.
+
+## Source of Truth
+Read and defer to:
+
+1. KINGS_BOUNTY_CANON.md
+2. KINGS_BOUNTY_DOMAIN_LANGUAGE.md
+
+If conflicts exist:
+
+Those files win.
+
+Do not invent mechanics that contradict them.
+
+---
+
+## Domain Language
+Use canonical names from KINGS_BOUNTY_DOMAIN_LANGUAGE.md.
+
+Examples:
+Use:
+- The Board
+
+Do not use:
+- quest panel
+- objective panel
+
+Use:
+- Codex
+
+Do not use:
+- journal
+- kill log
+
+---
+
+## Design Rules
+- Reuse existing systems before proposing new systems.
+- Favor MVP-safe additions.
+- Preserve Protected Realm principles.
+- Never propose pay-to-win.
+- Never propose pay-for-convenience.
+- Never propose gambling mechanics.
+
+---
+
+## Scope Discipline
+Avoid inventing:
+- large infrastructure
+- unnecessary subsystems
+- major event frameworks near launch
+
+Prefer:
+small additions using current systems.
+
+---
+
+## Technical Context
+This project uses:
+- Roblox-TS
+- Rojo
+
+Respect existing project structure and conventions.
+
+Do not assume Lua.
+
+---
+
+## If unclear
+Ask for clarification instead of inventing behavior.

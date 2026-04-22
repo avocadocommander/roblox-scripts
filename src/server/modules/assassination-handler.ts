@@ -200,6 +200,10 @@ function initializeAssassinationHandler() {
 			addBountyScrollFromKill(player, model.Name, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
 			awardAchievement(player, "FIRST_CONTRACT");
+			// Only a legal bounty kill produces a scroll -- award the onboarding
+			// achievement here so the tutorial's "turn in" step is always
+			// reachable (illegal kills don't grant scrolls).
+			awardAchievement(player, "FIRST_ASSASSINATION");
 			log(
 				"[ASSASSINATION] " +
 					player.Name +
@@ -225,7 +229,6 @@ function initializeAssassinationHandler() {
 		}
 
 		// ── Achievement checks ─────────────────────────────────────────────────
-		awardAchievement(player, "FIRST_ASSASSINATION");
 		if (poisonDef) {
 			awardAchievement(player, "COATED_STEEL");
 		}

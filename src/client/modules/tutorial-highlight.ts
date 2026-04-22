@@ -154,9 +154,14 @@ export function initializeTutorialHighlight(): void {
 	});
 
 	// Track new NPCs that spawn after init, and clean up on removal.
+	// NPC rigs can be parented as empty Models first and have their parts /
+	// Humanoid added later, or be renamed after parenting, so we also
+	// listen for name changes on existing Models we may have missed.
 	Workspace.DescendantAdded.Connect((inst) => {
-		if (!inst.IsA("Model")) return;
-		refreshHighlights();
+		if (inst.IsA("Model")) {
+			inst.GetPropertyChangedSignal("Name").Connect(() => refreshHighlights());
+			refreshHighlights();
+		}
 	});
 	Workspace.DescendantRemoving.Connect((inst) => {
 		if (!inst.IsA("Model")) return;
@@ -166,6 +171,14 @@ export function initializeTutorialHighlight(): void {
 			activeHighlights.delete(inst);
 		}
 	});
+
+	// Hook name changes on already-existing Models too, so if server renames
+	// an NPC after parenting (common pattern) we catch it.
+	for (const inst of Workspace.GetDescendants()) {
+		if (inst.IsA("Model")) {
+			inst.GetPropertyChangedSignal("Name").Connect(() => refreshHighlights());
+		}
+	}
 
 	refreshHighlights();
 	log("[TUTORIAL-HIGHLIGHT] initialized");

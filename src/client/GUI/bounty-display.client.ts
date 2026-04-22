@@ -86,7 +86,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	const wrapper = new Instance("Frame");
 	wrapper.Name = "BountyHUD";
 	wrapper.Size = new UDim2(0, W, 0, 0);
-	wrapper.Position = new UDim2(1, sc(-20) - W, 0, sc(40));
+	wrapper.Position = new UDim2(1, sc(-20) - W, 0, sc(8));
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
 	wrapper.BackgroundTransparency = 1;
 	wrapper.Parent = screenGui;
@@ -111,15 +111,12 @@ function buildMessageStack(wrapper: Frame): void {
 	const container = new Instance("Frame");
 	container.Name = "MessageStack";
 	container.LayoutOrder = -1; // always above mission card
-	const totalHeight = MESSAGE_MAX_VISIBLE * MESSAGE_ROW_HEIGHT + (MESSAGE_MAX_VISIBLE - 1) * MESSAGE_ROW_GAP;
-	container.Size = new UDim2(1, 0, 0, sc(totalHeight + 8));
+	// Height is driven by child rows — container takes zero space when empty
+	// so the mission card sits flush at the top of the wrapper.
+	container.Size = new UDim2(1, 0, 0, 0);
+	container.AutomaticSize = Enum.AutomaticSize.Y;
 	container.BackgroundTransparency = 1;
-	container.ClipsDescendants = true;
 	container.Parent = wrapper;
-
-	const pad = new Instance("UIPadding");
-	pad.PaddingBottom = new UDim(0, sc(6)); // margin from the board
-	pad.Parent = container;
 
 	const layout = new Instance("UIListLayout");
 	layout.FillDirection = Enum.FillDirection.Vertical;

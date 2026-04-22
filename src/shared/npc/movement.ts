@@ -114,6 +114,12 @@ async function assignNpcToRoute(
 
 	while (npc && npc.model.Parent) {
 		const activeRoutePoint = routePoints[routeActiveIndex];
+		if (!activeRoutePoint) {
+			// Route was emptied or index drifted — reset and wait a beat.
+			routeActiveIndex = 0;
+			await Promise.delay(1);
+			continue;
+		}
 		const lookAtDirection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
 
 		if (isStationary) {
@@ -179,7 +185,15 @@ async function navigate(
 			Cobblestone: 0,
 		},
 	});
-	path.ComputeAsync(npc.humanoid.RootPart!.Position, moveToPosition);
+
+	// RootPart can be nil transiently while the rig is still assembling or
+	// during tear-down — bail early rather than throwing.
+	const rootPart = npc.humanoid.RootPart;
+	if (!rootPart || !npc.model.Parent) {
+		setState("IDLE", npc);
+		return;
+	}
+	path.ComputeAsync(rootPart.Position, moveToPosition);
 	if (path.Status === Enum.PathStatus.Success) {
 		const waypoints = path.GetWaypoints();
 		let current = 0;
