@@ -5,6 +5,7 @@ import { RouteConfig } from "../npc-manager";
 import { getHumanoidPace, assignNpcToRoute, navigate } from "./movement";
 import { getGenericSeededAppearance, setHumanoidDefaults } from "./appearance";
 import { makeSeededRandom, getSeedFromName } from "./utils";
+import { isNPCKillable } from "../config/npcs";
 
 export interface NPC {
 	name: string;
@@ -26,7 +27,8 @@ export function createNPCModelAndGenerateHumanoid(
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
 	modelClone.Name = name;
-
+	modelClone.SetAttribute("NPCName", name);
+	modelClone.SetAttribute("Killable", isNPCKillable(name));
 	modelClone.Parent = Workspace;
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");

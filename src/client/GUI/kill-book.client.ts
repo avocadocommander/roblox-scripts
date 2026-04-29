@@ -390,7 +390,7 @@ function renderAchievementsTab(data: KillBookData): void {
 	const equippedTitleDef = TITLES[equippedTitleId];
 
 	const currentTitleRow = new Instance("Frame");
-	currentTitleRow.Size = new UDim2(1, 0, 0, 36);
+	currentTitleRow.Size = new UDim2(1, 0, 0, 46);
 	currentTitleRow.BackgroundColor3 = UI_THEME.bgInset;
 	currentTitleRow.BackgroundTransparency = 0.3;
 	currentTitleRow.BorderSizePixel = 0;
@@ -409,24 +409,24 @@ function renderAchievementsTab(data: KillBookData): void {
 	}
 
 	const currentLbl = new Instance("TextLabel");
-	currentLbl.Size = new UDim2(1, -62, 1, 0);
-	currentLbl.Position = new UDim2(0, 8, 0, 0);
+	currentLbl.Size = new UDim2(1, -72, 1, 0);
+	currentLbl.Position = new UDim2(0, 10, 0, 0);
 	currentLbl.BackgroundTransparency = 1;
 	currentLbl.TextColor3 = equippedTitleDef !== undefined ? equippedTitleDef.color : UI_THEME.textMuted;
 	currentLbl.Font = UI_THEME.fontDisplay;
-	currentLbl.TextSize = 13;
+	currentLbl.TextSize = 16;
 	currentLbl.Text = equippedTitleDef !== undefined ? equippedTitleDef.symbol + " " + equippedTitleDef.name : "None";
 	currentLbl.TextXAlignment = Enum.TextXAlignment.Left;
 	currentLbl.Parent = currentTitleRow;
 
 	const changeBtn = new Instance("TextButton");
-	changeBtn.Size = new UDim2(0, 52, 0, 24);
-	changeBtn.Position = new UDim2(1, -58, 0.5, -12);
+	changeBtn.Size = new UDim2(0, 58, 0, 28);
+	changeBtn.Position = new UDim2(1, -66, 0.5, -14);
 	changeBtn.BackgroundColor3 = UI_THEME.headerBg;
 	changeBtn.BackgroundTransparency = 0.2;
 	changeBtn.TextColor3 = UI_THEME.textSection;
 	changeBtn.Font = UI_THEME.fontBold;
-	changeBtn.TextSize = 10;
+	changeBtn.TextSize = 11;
 	changeBtn.Text = titleDropdownOpen ? "CLOSE" : "CHANGE";
 	changeBtn.BorderSizePixel = 0;
 	changeBtn.Parent = currentTitleRow;
@@ -447,7 +447,7 @@ function renderAchievementsTab(data: KillBookData): void {
 			const isEquipped = td.id === equippedTitleId;
 
 			const optBtn = new Instance("TextButton");
-			optBtn.Size = new UDim2(1, 0, 0, 30);
+			optBtn.Size = new UDim2(1, 0, 0, 36);
 			optBtn.BackgroundColor3 = isEquipped ? UI_THEME.bgInset : UI_THEME.bg;
 			optBtn.BackgroundTransparency = isEquipped ? 0.2 : 0.5;
 			optBtn.BorderSizePixel = 0;
@@ -470,7 +470,7 @@ function renderAchievementsTab(data: KillBookData): void {
 			optLbl.BackgroundTransparency = 1;
 			optLbl.TextColor3 = td.color;
 			optLbl.Font = UI_THEME.fontDisplay;
-			optLbl.TextSize = 12;
+			optLbl.TextSize = 15;
 			optLbl.Text = td.symbol + " " + td.name + (isEquipped ? "  [active]" : "");
 			optLbl.TextXAlignment = Enum.TextXAlignment.Left;
 			optLbl.Parent = optBtn;

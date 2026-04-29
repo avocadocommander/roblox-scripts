@@ -1,4 +1,4 @@
-import { CollectionService, Workspace } from "@rbxts/services";
+import { CollectionService, Debris, Workspace } from "@rbxts/services";
 import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
@@ -387,6 +387,9 @@ export const DEATH_EFFECTS: Record<string, DeathEffectFn> = {
 		beamPart.Color = Color3.fromRGB(255, 230, 150);
 		beamPart.Transparency = 0.88;
 		beamPart.Parent = Workspace;
+		// Hard guarantee: even if the death-effect coroutine errors out, the
+		// beam cannot orphan in the world for longer than its full lifespan.
+		Debris.AddItem(beamPart, 10);
 
 		// Golden sparkle particles on the beam
 		const beamEmitter = new Instance("ParticleEmitter");

@@ -100,6 +100,34 @@ function idleFidget(npc: NPC, waitTime: number): void {
 	// else: just stand still — variety by doing nothing
 }
 
+// ── Linger (per-waypoint wait) ────────────────────────────────────────────────
+
+/**
+ * `linger` is a string attribute on each Route Part controlling how long an NPC
+ * pauses at that waypoint before moving on.
+ *   none   = 0s
+ *   short  = 2-3s   (default when unset / unrecognised)
+ *   medium = 5-7s
+ *   long   = 10-14s
+ */
+type Linger = "none" | "short" | "medium" | "long";
+
+function getLingerSeconds(routePoint: BasePart): number {
+	const raw = routePoint.GetAttribute("linger");
+	const key = (typeOf(raw) === "string" ? (raw as string).lower() : "short") as Linger;
+	switch (key) {
+		case "none":
+			return 0;
+		case "medium":
+			return math.random(5, 7);
+		case "long":
+			return math.random(10, 14);
+		case "short":
+		default:
+			return math.random(2, 3);
+	}
+}
+
 // ── Route loop ────────────────────────────────────────────────────────────────
 
 async function assignNpcToRoute(
@@ -151,13 +179,13 @@ async function assignNpcToRoute(
 		// Idle fidget while waiting
 		setState("IDLE", npc);
 
-		// Vary wait time at each stop instead of fixed tempo
-		const baseTempo = routeConfig?.tempo ?? math.random(3, 10);
-		const tempoVariation = baseTempo * 0.3;
-		const waitTime = math.max(1, baseTempo + (math.random() * 2 - 1) * tempoVariation);
+		// Per-waypoint linger — read from the Route Part's `linger` attribute.
+		const waitTime = getLingerSeconds(activeRoutePoint);
 
-		idleFidget(npc, waitTime);
-		await Promise.delay(waitTime);
+		if (waitTime > 0) {
+			idleFidget(npc, waitTime);
+			await Promise.delay(waitTime);
+		}
 
 		if (routeActiveIndex >= routePoints.size() - 1) {
 			routeActiveIndex = 0;

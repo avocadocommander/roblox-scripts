@@ -1,4 +1,4 @@
-import { Players, Workspace } from "@rbxts/services";
+import { Players, SoundService, TweenService, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
@@ -15,6 +15,46 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 import { getPlayerScrollRarities } from "./inventory-handler";
+
+// ─── Wanted alert sound ──────────────────────────────────────────────────────
+
+/** Played server-side (heard by everyone) at the moment a player first becomes Wanted. */
+const WANTED_ALERT_SOUND_ID = "rbxassetid://139799034861520";
+const WANTED_ALERT_VOLUME = 1;
+const WANTED_ALERT_PLAYBACK_SPEED = 0.65;
+
+function playWantedAlertSound(): void {
+	const sound = new Instance("Sound");
+	sound.SoundId = WANTED_ALERT_SOUND_ID;
+	sound.Volume = WANTED_ALERT_VOLUME;
+	sound.PlaybackSpeed = WANTED_ALERT_PLAYBACK_SPEED;
+	sound.Parent = SoundService;
+	sound.Play();
+
+	// Fade volume from full -> 0 across the sound's actual playback length so
+	// it tapers out smoothly instead of cutting off.
+	const startFade = () => {
+		const length = sound.TimeLength > 0 ? sound.TimeLength / WANTED_ALERT_PLAYBACK_SPEED : 4;
+		const tween = TweenService.Create(
+			sound,
+			new TweenInfo(length, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+			{ Volume: 0 },
+		);
+		tween.Play();
+	};
+
+	if (sound.IsLoaded) {
+		startFade();
+	} else {
+		sound.Loaded.Once(() => startFade());
+	}
+
+	sound.Ended.Connect(() => sound.Destroy());
+	// Safety cleanup if Ended never fires
+	task.delay(20, () => {
+		if (sound.Parent) sound.Destroy();
+	});
+}
 
 // ─── Reward scaling by NPC social status ─────────────────────────────────────
 
@@ -167,6 +207,7 @@ export function setPlayerWanted(player: Player, gold: number, reason: string): v
 		log("[BOUNTY] " + player.DisplayName + " bounty increased to " + newGold + "g (+" + gold + "g)");
 	} else {
 		awardAchievement(player, "MARKED_BY_THE_REALM");
+		playWantedAlertSound();
 		log("[BOUNTY] " + player.DisplayName + " is WANTED -- " + newGold + 'g -- "' + newReason + '"');
 	}
 }

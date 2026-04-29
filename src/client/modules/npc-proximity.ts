@@ -177,6 +177,17 @@ interface NPCProximityUI {
 
 const npcUIMap = new Map<Model, NPCProximityUI>();
 
+function getNPCModelName(npc: Model): string {
+	const npcNameAttr = npc.GetAttribute("NPCName");
+	return typeOf(npcNameAttr) === "string" ? (npcNameAttr as string) : npc.Name;
+}
+
+function isNPCModelKillable(npc: Model): boolean {
+	const killableAttr = npc.GetAttribute("Killable");
+	if (typeOf(killableAttr) === "boolean") return killableAttr as boolean;
+	return isNPCKillable(getNPCModelName(npc));
+}
+
 function createNPCBillboard(npc: Model): BillboardGui {
 	const billboard = new Instance("BillboardGui");
 	billboard.Size = new UDim2(5, 0, 2.0, 0);
@@ -185,8 +196,9 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	billboard.AlwaysOnTop = false;
 	billboard.Parent = npc;
 
-	const statusColor = getNPCStatusColor(npc.Name);
-	const statusText = getNPCStatus(npc.Name);
+	const npcName = getNPCModelName(npc);
+	const statusColor = getNPCStatusColor(npcName);
+	const statusText = getNPCStatus(npcName);
 
 	// Outer card frame
 	const card = new Instance("Frame");
@@ -209,8 +221,8 @@ function createNPCBillboard(npc: Model): BillboardGui {
 
 	// NPC name — bright warm white, rarity colour is shown via the card border
 	const npcInteractionAttr = npc.GetAttribute("Interaction") as string | undefined;
-	const hasShopInteraction = (npcInteractionAttr ?? getNPCInteraction(npc.Name)) === "Shop";
-	const displayName = hasShopInteraction ? "(G) " + npc.Name : npc.Name;
+	const hasShopInteraction = (npcInteractionAttr ?? getNPCInteraction(npcName)) === "Shop";
+	const displayName = hasShopInteraction ? "(G) " + npcName : npcName;
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
@@ -649,48 +661,6 @@ function setupPremiumOfferProximity(model: Model): void {
 		part.Anchored = true;
 	}
 
-	// Determine colour based on offer type + ownership
-	const offerId = model.GetAttribute("offerId") as string;
-	const colors = getOfferColors(offerId);
-	const fillColor = colors.fill;
-	const accentColor = colors.accent;
-
-	// Highlight — subtle fill + outline over the entire model
-	const highlight = new Instance("Highlight");
-	highlight.FillColor = fillColor;
-	highlight.FillTransparency = 0.75;
-	highlight.OutlineColor = accentColor;
-	highlight.OutlineTransparency = 0.4;
-	highlight.DepthMode = Enum.HighlightDepthMode.Occluded;
-	highlight.Parent = model;
-
-	// Point light on first part
-	const firstPart = allParts[0];
-	if (firstPart) {
-		const glow = new Instance("PointLight");
-		glow.Name = "PremiumGlow";
-		glow.Color = accentColor;
-		glow.Brightness = 0.8;
-		glow.Range = 8;
-		glow.Parent = firstPart;
-
-		// Sparkle particles
-		const emitter = new Instance("ParticleEmitter");
-		emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds";
-		emitter.Color = new ColorSequence(accentColor);
-		emitter.Size = new NumberSequence(0.2, 0);
-		emitter.Lifetime = new NumberRange(0.4, 0.9);
-		emitter.Rate = 10;
-		emitter.Speed = new NumberRange(0.5, 1.5);
-		emitter.SpreadAngle = new Vector2(180, 180);
-		emitter.Transparency = new NumberSequence([
-			new NumberSequenceKeypoint(0, 0.5),
-			new NumberSequenceKeypoint(1, 1),
-		]);
-		emitter.LightEmission = 0.6;
-		emitter.Parent = firstPart;
-	}
-
 	// Continuous bob + rotate via Heartbeat
 	let elapsed = 0;
 	RunService.Heartbeat.Connect((dt) => {
@@ -913,7 +883,7 @@ function updateNPCProximityUI() {
 
 		// Track closest NPC in range (camera frame check optional for tracking)
 		const npcMaxRange =
-			hasNPCDialog(npc.Name) || npc.GetAttribute("Interaction") !== undefined
+			hasNPCDialog(getNPCModelName(npc)) || npc.GetAttribute("Interaction") !== undefined
 				? MERCHANT_PROXIMITY_RANGE
 				: PROXIMITY_RANGE;
 		if (distance <= npcMaxRange) {
@@ -1051,8 +1021,8 @@ function updateNPCProximityUI() {
 
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
 	for (const [npc, ui] of npcUIMap) {
-		const npcIsKillable = isNPCKillable(npc.Name);
-		const npcHasDialog = hasNPCDialog(npc.Name) || npc.GetAttribute("Interaction") !== undefined;
+		const npcIsKillable = isNPCModelKillable(npc);
+		const npcHasDialog = hasNPCDialog(getNPCModelName(npc)) || npc.GetAttribute("Interaction") !== undefined;
 		const talkRange = npcHasDialog ? MERCHANT_PROXIMITY_RANGE : PROXIMITY_RANGE;
 		const inTalkRange = npc === closestNPC && closestDistance <= talkRange;
 		const shouldShowAssassinate = npc === closestNPC && npcIsKillable && closestDistance <= PROXIMITY_RANGE;
@@ -1295,7 +1265,7 @@ export function getActionContext(): ActionContext {
 /** Returns whether an assassination target is currently in range. */
 export function getAssassinateContext(): "assassinate_player" | "assassinate_npc" | "none" {
 	if (closestWantedPlayerInRange) return "assassinate_player";
-	if (closestNPCInRange && isNPCKillable(closestNPCInRange.Name)) return "assassinate_npc";
+	if (closestNPCInRange && isNPCModelKillable(closestNPCInRange)) return "assassinate_npc";
 	return "none";
 }
 

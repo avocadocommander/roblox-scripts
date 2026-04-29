@@ -55,6 +55,17 @@ const DECREE_BY_STATUS: Record<Status, string> = {
 	Royalty: "Committed regicide — by decree of the crown",
 };
 
+function getNPCModelName(model: Model): string {
+	const npcNameAttr = model.GetAttribute("NPCName");
+	return typeOf(npcNameAttr) === "string" ? (npcNameAttr as string) : model.Name;
+}
+
+function isNPCModelKillable(model: Model): boolean {
+	const killableAttr = model.GetAttribute("Killable");
+	if (typeOf(killableAttr) === "boolean") return killableAttr as boolean;
+	return isNPCKillable(getNPCModelName(model));
+}
+
 function initializeAssassinationHandler() {
 	log("[ASSASSINATION] Initializing assassination handler");
 
@@ -68,19 +79,21 @@ function initializeAssassinationHandler() {
 			return;
 		}
 
+		const npcName = getNPCModelName(model);
+
 		// Reject if this NPC cannot be killed
-		if (!isNPCKillable(model.Name)) {
-			log(`[ASSASSINATION] ${player.Name} tried to kill unkillable NPC ${model.Name} -- blocked`, "WARN");
+		if (!isNPCModelKillable(model)) {
+			log(`[ASSASSINATION] ${player.Name} tried to kill unkillable NPC ${npcName} -- blocked`, "WARN");
 			return;
 		}
 
 		// Reject if the NPC is already dying or has a status effect running
 		if (isNPCActive(model) === false) {
-			log(`[ASSASSINATION] ${player.Name} targeted ${model.Name} but it is already dying`, "WARN");
+			log(`[ASSASSINATION] ${player.Name} targeted ${npcName} but it is already dying`, "WARN");
 			return;
 		}
 
-		log(`[ASSASSINATION] ${player.Name} attempting to assassinate ${model.Name}`);
+		log(`[ASSASSINATION] ${player.Name} attempting to assassinate ${npcName}`);
 
 		// Require a real weapon — fists cannot assassinate
 		if (getPlayerEquippedWeapon(player) === "fists") {
@@ -126,14 +139,14 @@ function initializeAssassinationHandler() {
 
 		if (distance > MAX_ASSASSINATION_DISTANCE) {
 			log(
-				`[ASSASSINATION] ${player.Name} too far away to assassinate ${model.Name} (distance: ${math.floor(distance * 10) / 10} studs)`,
+				`[ASSASSINATION] ${player.Name} too far away to assassinate ${npcName} (distance: ${math.floor(distance * 10) / 10} studs)`,
 				"WARN",
 			);
 			return;
 		}
 
 		// Perform the assassination
-		log(`[ASSASSINATION] ${player.Name} assassinated ${model.Name}!`);
+		log(`[ASSASSINATION] ${player.Name} assassinated ${npcName}!`);
 
 		// Resolve kill: poison ALWAYS does the killing blow.
 		// No poison = weapon handles everything.
@@ -154,7 +167,7 @@ function initializeAssassinationHandler() {
 			} else {
 				poisonDeathStyle = "DISMEMBER";
 			}
-			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + model.Name);
+			log("[ASSASSINATION] " + player.Name + " used " + poisonDef.name + " on " + npcName);
 			executeDelivery(
 				model,
 				equippedWeapon,
@@ -173,13 +186,13 @@ function initializeAssassinationHandler() {
 		// Check if this NPC was the player's personal bounty mark BEFORE calling
 		// onNPCKilled (which removes the bounty entry from the map)
 		const personalBounty = getPlayerNPCBounty(player);
-		const wasLegalKill = personalBounty !== undefined && personalBounty.npcName === model.Name;
+		const wasLegalKill = personalBounty !== undefined && personalBounty.npcName === npcName;
 
 		print(
 			"[WANTED CHECK] " +
 				player.Name +
 				" killed " +
-				model.Name +
+				npcName +
 				" | mark=" +
 				(personalBounty ? personalBounty.npcName : "none") +
 				" | legal=" +
@@ -188,16 +201,16 @@ function initializeAssassinationHandler() {
 
 		// Notify all players who had this NPC as their mark (fires BountyCompleted
 		// to them and schedules a new assignment after 3 s)
-		onNPCKilled(player, model.Name);
+		onNPCKilled(player, npcName);
 
 		if (wasLegalKill) {
 			// Legal bounty kill — award scroll to inventory for later turn-in at a guild leader
-			const npcData3 = MEDIEVAL_NPCS[model.Name];
+			const npcData3 = MEDIEVAL_NPCS[npcName];
 			const npcStat = (npcData3?.status ?? "Commoner") as string;
 			const scrollGold = BASE_COINS + personalBounty.gold;
 			const scrollXP = BASE_XP + personalBounty.xp;
 
-			addBountyScrollFromKill(player, model.Name, npcStat, scrollGold, scrollXP);
+			addBountyScrollFromKill(player, npcName, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
 			awardAchievement(player, "FIRST_CONTRACT");
 			// Only a legal bounty kill produces a scroll -- award the onboarding
@@ -208,12 +221,12 @@ function initializeAssassinationHandler() {
 				"[ASSASSINATION] " +
 					player.Name +
 					" completed bounty on " +
-					model.Name +
+					npcName +
 					" (scroll added to inventory)",
 			);
 		} else {
 			// Illegal kill — no reward, become wanted
-			const npcData2 = MEDIEVAL_NPCS[model.Name];
+			const npcData2 = MEDIEVAL_NPCS[npcName];
 			const npcStatus = (npcData2?.status ?? "Commoner") as Status;
 			const wantedGold = WANTED_GOLD_BY_STATUS[npcStatus] ?? 300;
 			const decree = DECREE_BY_STATUS[npcStatus] ?? "Committed murder — by royal decree";
@@ -223,9 +236,9 @@ function initializeAssassinationHandler() {
 		}
 
 		// Record the kill in the player's per-NPC kill log regardless of legality
-		const npcData = MEDIEVAL_NPCS[model.Name];
+		const npcData = MEDIEVAL_NPCS[npcName];
 		if (npcData !== undefined) {
-			addKill(player, model.Name, { status: npcData.status, race: npcData.race }, wasLegalKill);
+			addKill(player, npcName, { status: npcData.status, race: npcData.race }, wasLegalKill);
 		}
 
 		// ── Achievement checks ─────────────────────────────────────────────────

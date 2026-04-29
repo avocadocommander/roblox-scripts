@@ -120,6 +120,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		...std("Bertram de Mere", "M", "Human", "Nobility", "Guildmaster"),
 		interaction: "TurnIn",
 		fixedRouteId: "Templar",
+		killable: false,
 		dialog: {
 			greetings: [
 				"Ah, a customer. Browse, but do not touch what you cannot afford.",
