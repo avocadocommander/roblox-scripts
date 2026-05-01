@@ -22,8 +22,8 @@ let isOpen = false;
 let isReady = false;
 
 // Tab buttons
-const TAB_NAMES = ["BOUNTIES", "BESTIARY", "PVP", "ACHIEVEMENTS"];
-const TAB_SECTIONS: Array<string | undefined> = [undefined, "killbook:bestiary", undefined, "killbook:achievements"];
+const TAB_NAMES = ["PLAYER", "BESTIARY", "ACHIEVEMENTS", "PVP"];
+const TAB_SECTIONS: Array<string | undefined> = [undefined, "killbook:bestiary", "killbook:achievements", undefined];
 let activeTab = 0;
 let tabButtons: TextButton[] = [];
 let titleDropdownOpen = false;
@@ -84,52 +84,177 @@ function makeSectionHeader(parent: Instance, text: string, order: number): TextL
 	});
 }
 
-// ─── Tab: Bounties ────────────────────────────────────────────────────────────
+// ─── Tab: Player (Active Title + Guilds) ─────────────────────────────────────
 
-function renderBountiesTab(data: KillBookData): void {
+function renderPlayerTab(data: KillBookData): void {
 	clearContent();
 	if (!contentFrame) return;
-
 	let order = 0;
 
-	// ── Active bounty ───────────────────────────────────────────────────────
-	makeSectionHeader(contentFrame, "ACTIVE BOUNTY", order++);
+	// ── Title selector ────────────────────────────────────────────────────────
+	makeSectionHeader(contentFrame, "ACTIVE TITLE", order++);
 
-	if (data.activeBountyName !== undefined) {
-		const activeNpc = MEDIEVAL_NPCS[data.activeBountyName] as NPCData | undefined;
-		const activeRarity = activeNpc ? STATUS_RARITY[activeNpc.status] : undefined;
+	const equippedTitleId = data.equippedTitle;
+	const equippedTitleDef = TITLES[equippedTitleId];
 
-		makeLabel(contentFrame, data.activeBountyName, order++, {
-			color: activeRarity?.color ?? UI_THEME.textHeader,
-			font: UI_THEME.fontDisplay,
-			size: 15,
-			height: 22,
-		});
+	const currentTitleRow = new Instance("Frame");
+	currentTitleRow.Size = new UDim2(1, 0, 0, 46);
+	currentTitleRow.BackgroundColor3 = UI_THEME.bgInset;
+	currentTitleRow.BackgroundTransparency = 0.3;
+	currentTitleRow.BorderSizePixel = 0;
+	currentTitleRow.LayoutOrder = order++;
+	currentTitleRow.Parent = contentFrame;
 
-		if (activeNpc) {
-			const infoLine =
-				activeNpc.race + "  |  " + activeNpc.status + (activeRarity ? "  |  " + activeRarity.label : "");
-			makeLabel(contentFrame, infoLine, order++, {
-				color: activeRarity?.color ?? UI_THEME.textMuted,
-				size: 11,
-				height: 14,
-			});
+	const ctCorner = new Instance("UICorner");
+	ctCorner.CornerRadius = new UDim(0, 4);
+	ctCorner.Parent = currentTitleRow;
+
+	if (equippedTitleDef !== undefined) {
+		const ctStroke = new Instance("UIStroke");
+		ctStroke.Color = equippedTitleDef.color;
+		ctStroke.Thickness = 0.8;
+		ctStroke.Parent = currentTitleRow;
+	}
+
+	const currentLbl = new Instance("TextLabel");
+	currentLbl.Size = new UDim2(1, -72, 1, 0);
+	currentLbl.Position = new UDim2(0, 10, 0, 0);
+	currentLbl.BackgroundTransparency = 1;
+	currentLbl.TextColor3 = equippedTitleDef !== undefined ? equippedTitleDef.color : UI_THEME.textMuted;
+	currentLbl.Font = UI_THEME.fontDisplay;
+	currentLbl.TextSize = 16;
+	currentLbl.Text = equippedTitleDef !== undefined ? equippedTitleDef.symbol + " " + equippedTitleDef.name : "None";
+	currentLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	currentLbl.Parent = currentTitleRow;
+
+	const changeBtn = new Instance("TextButton");
+	changeBtn.Size = new UDim2(0, 58, 0, 28);
+	changeBtn.Position = new UDim2(1, -66, 0.5, -14);
+	changeBtn.BackgroundColor3 = UI_THEME.headerBg;
+	changeBtn.BackgroundTransparency = 0.2;
+	changeBtn.TextColor3 = UI_THEME.textSection;
+	changeBtn.Font = UI_THEME.fontBold;
+	changeBtn.TextSize = 11;
+	changeBtn.Text = titleDropdownOpen ? "CLOSE" : "CHANGE";
+	changeBtn.BorderSizePixel = 0;
+	changeBtn.Parent = currentTitleRow;
+
+	const changeBtnCorner = new Instance("UICorner");
+	changeBtnCorner.CornerRadius = new UDim(0, 3);
+	changeBtnCorner.Parent = changeBtn;
+
+	changeBtn.MouseButton1Click.Connect(() => {
+		titleDropdownOpen = !titleDropdownOpen;
+		fetchAndRender(0);
+	});
+
+	// Dropdown list of owned titles
+	if (titleDropdownOpen) {
+		for (const td of TITLE_LIST) {
+			if (!data.ownedTitles.includes(td.id)) continue;
+			const isEquipped = td.id === equippedTitleId;
+
+			const optBtn = new Instance("TextButton");
+			optBtn.Size = new UDim2(1, 0, 0, 36);
+			optBtn.BackgroundColor3 = isEquipped ? UI_THEME.bgInset : UI_THEME.bg;
+			optBtn.BackgroundTransparency = isEquipped ? 0.2 : 0.5;
+			optBtn.BorderSizePixel = 0;
+			optBtn.Text = "";
+			optBtn.LayoutOrder = order++;
+			optBtn.Parent = contentFrame;
+
+			const optCorner = new Instance("UICorner");
+			optCorner.CornerRadius = new UDim(0, 3);
+			optCorner.Parent = optBtn;
+
+			const optStroke = new Instance("UIStroke");
+			optStroke.Color = td.color;
+			optStroke.Thickness = isEquipped ? 1.2 : 0.5;
+			optStroke.Parent = optBtn;
+
+			const optLbl = new Instance("TextLabel");
+			optLbl.Size = new UDim2(1, -8, 1, 0);
+			optLbl.Position = new UDim2(0, 8, 0, 0);
+			optLbl.BackgroundTransparency = 1;
+			optLbl.TextColor3 = td.color;
+			optLbl.Font = UI_THEME.fontDisplay;
+			optLbl.TextSize = 15;
+			optLbl.Text = td.symbol + " " + td.name + (isEquipped ? "  [active]" : "");
+			optLbl.TextXAlignment = Enum.TextXAlignment.Left;
+			optLbl.Parent = optBtn;
+
+			if (!isEquipped) {
+				optBtn.MouseButton1Click.Connect(() => {
+					getEquipTitleRemote().FireServer(td.id);
+					titleDropdownOpen = false;
+					fetchAndRender(0);
+				});
+			}
 		}
-	} else {
-		makeLabel(contentFrame, "No active bounty", order++, {
-			color: UI_THEME.textMuted,
-			size: 13,
-		});
 	}
 
 	makeDivider(contentFrame, order++);
 
-	// ── Hint ────────────────────────────────────────────────────────────────
-	makeLabel(contentFrame, "Assassinate your mark, collect the scroll, and turn it in at a guild leader.", order++, {
-		color: UI_THEME.textMuted,
-		size: 10,
-		height: 18,
-	});
+	// ── Guilds / Faction XP ─────────────────────────────────────────────────────
+	const fxp = data.factionXP;
+	const combinedLevel = overallLevelFromFactions(fxp);
+	makeSectionHeader(contentFrame, "GUILDS  (Level " + combinedLevel + ")", order++);
+
+	for (const fid of FACTION_IDS) {
+		const def = FACTIONS[fid];
+		const xp = fxp[fid] ?? 0;
+		const lvl = levelFromXP(xp);
+
+		const guildRow = new Instance("Frame");
+		guildRow.Size = new UDim2(1, 0, 0, 42);
+		guildRow.BackgroundColor3 = UI_THEME.bgInset;
+		guildRow.BackgroundTransparency = 0.3;
+		guildRow.BorderSizePixel = 0;
+		guildRow.LayoutOrder = order++;
+		guildRow.Parent = contentFrame;
+
+		const gCorner = new Instance("UICorner");
+		gCorner.CornerRadius = new UDim(0, 4);
+		gCorner.Parent = guildRow;
+
+		const gStroke = new Instance("UIStroke");
+		gStroke.Color = def.color;
+		gStroke.Thickness = 0.8;
+		gStroke.Parent = guildRow;
+
+		const nameLbl = new Instance("TextLabel");
+		nameLbl.Size = new UDim2(0.6, -8, 0, 18);
+		nameLbl.Position = new UDim2(0, 8, 0, 4);
+		nameLbl.BackgroundTransparency = 1;
+		nameLbl.TextColor3 = def.color;
+		nameLbl.Font = UI_THEME.fontBold;
+		nameLbl.TextSize = 13;
+		nameLbl.Text = def.name;
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.Parent = guildRow;
+
+		const lvlLbl = new Instance("TextLabel");
+		lvlLbl.Size = new UDim2(0.4, -8, 0, 18);
+		lvlLbl.Position = new UDim2(0.6, 0, 0, 4);
+		lvlLbl.BackgroundTransparency = 1;
+		lvlLbl.TextColor3 = UI_THEME.textHeader;
+		lvlLbl.Font = UI_THEME.fontDisplay;
+		lvlLbl.TextSize = 13;
+		lvlLbl.Text = "Lvl " + lvl;
+		lvlLbl.TextXAlignment = Enum.TextXAlignment.Right;
+		lvlLbl.Parent = guildRow;
+
+		const xpLbl = new Instance("TextLabel");
+		xpLbl.Size = new UDim2(1, -16, 0, 14);
+		xpLbl.Position = new UDim2(0, 8, 0, 24);
+		xpLbl.BackgroundTransparency = 1;
+		xpLbl.TextColor3 = UI_THEME.textMuted;
+		xpLbl.Font = UI_THEME.fontBody;
+		xpLbl.TextSize = 11;
+		xpLbl.Text = xp + " XP";
+		xpLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		xpLbl.Parent = guildRow;
+	}
 }
 
 // ─── Tab: Bestiary (NPC Pokédex) — Card Layout ──────────────────────────────
@@ -383,173 +508,6 @@ function renderAchievementsTab(data: KillBookData): void {
 	if (!contentFrame) return;
 	let order = 0;
 
-	// ── Title selector ────────────────────────────────────────────────────────
-	makeSectionHeader(contentFrame, "ACTIVE TITLE", order++);
-
-	const equippedTitleId = data.equippedTitle;
-	const equippedTitleDef = TITLES[equippedTitleId];
-
-	const currentTitleRow = new Instance("Frame");
-	currentTitleRow.Size = new UDim2(1, 0, 0, 46);
-	currentTitleRow.BackgroundColor3 = UI_THEME.bgInset;
-	currentTitleRow.BackgroundTransparency = 0.3;
-	currentTitleRow.BorderSizePixel = 0;
-	currentTitleRow.LayoutOrder = order++;
-	currentTitleRow.Parent = contentFrame;
-
-	const ctCorner = new Instance("UICorner");
-	ctCorner.CornerRadius = new UDim(0, 4);
-	ctCorner.Parent = currentTitleRow;
-
-	if (equippedTitleDef !== undefined) {
-		const ctStroke = new Instance("UIStroke");
-		ctStroke.Color = equippedTitleDef.color;
-		ctStroke.Thickness = 0.8;
-		ctStroke.Parent = currentTitleRow;
-	}
-
-	const currentLbl = new Instance("TextLabel");
-	currentLbl.Size = new UDim2(1, -72, 1, 0);
-	currentLbl.Position = new UDim2(0, 10, 0, 0);
-	currentLbl.BackgroundTransparency = 1;
-	currentLbl.TextColor3 = equippedTitleDef !== undefined ? equippedTitleDef.color : UI_THEME.textMuted;
-	currentLbl.Font = UI_THEME.fontDisplay;
-	currentLbl.TextSize = 16;
-	currentLbl.Text = equippedTitleDef !== undefined ? equippedTitleDef.symbol + " " + equippedTitleDef.name : "None";
-	currentLbl.TextXAlignment = Enum.TextXAlignment.Left;
-	currentLbl.Parent = currentTitleRow;
-
-	const changeBtn = new Instance("TextButton");
-	changeBtn.Size = new UDim2(0, 58, 0, 28);
-	changeBtn.Position = new UDim2(1, -66, 0.5, -14);
-	changeBtn.BackgroundColor3 = UI_THEME.headerBg;
-	changeBtn.BackgroundTransparency = 0.2;
-	changeBtn.TextColor3 = UI_THEME.textSection;
-	changeBtn.Font = UI_THEME.fontBold;
-	changeBtn.TextSize = 11;
-	changeBtn.Text = titleDropdownOpen ? "CLOSE" : "CHANGE";
-	changeBtn.BorderSizePixel = 0;
-	changeBtn.Parent = currentTitleRow;
-
-	const changeBtnCorner = new Instance("UICorner");
-	changeBtnCorner.CornerRadius = new UDim(0, 3);
-	changeBtnCorner.Parent = changeBtn;
-
-	changeBtn.MouseButton1Click.Connect(() => {
-		titleDropdownOpen = !titleDropdownOpen;
-		fetchAndRender(3);
-	});
-
-	// Dropdown list of owned titles
-	if (titleDropdownOpen) {
-		for (const td of TITLE_LIST) {
-			if (!data.ownedTitles.includes(td.id)) continue;
-			const isEquipped = td.id === equippedTitleId;
-
-			const optBtn = new Instance("TextButton");
-			optBtn.Size = new UDim2(1, 0, 0, 36);
-			optBtn.BackgroundColor3 = isEquipped ? UI_THEME.bgInset : UI_THEME.bg;
-			optBtn.BackgroundTransparency = isEquipped ? 0.2 : 0.5;
-			optBtn.BorderSizePixel = 0;
-			optBtn.Text = "";
-			optBtn.LayoutOrder = order++;
-			optBtn.Parent = contentFrame;
-
-			const optCorner = new Instance("UICorner");
-			optCorner.CornerRadius = new UDim(0, 3);
-			optCorner.Parent = optBtn;
-
-			const optStroke = new Instance("UIStroke");
-			optStroke.Color = td.color;
-			optStroke.Thickness = isEquipped ? 1.2 : 0.5;
-			optStroke.Parent = optBtn;
-
-			const optLbl = new Instance("TextLabel");
-			optLbl.Size = new UDim2(1, -8, 1, 0);
-			optLbl.Position = new UDim2(0, 8, 0, 0);
-			optLbl.BackgroundTransparency = 1;
-			optLbl.TextColor3 = td.color;
-			optLbl.Font = UI_THEME.fontDisplay;
-			optLbl.TextSize = 15;
-			optLbl.Text = td.symbol + " " + td.name + (isEquipped ? "  [active]" : "");
-			optLbl.TextXAlignment = Enum.TextXAlignment.Left;
-			optLbl.Parent = optBtn;
-
-			if (!isEquipped) {
-				optBtn.MouseButton1Click.Connect(() => {
-					getEquipTitleRemote().FireServer(td.id);
-					titleDropdownOpen = false;
-					fetchAndRender(3);
-				});
-			}
-		}
-	}
-
-	makeDivider(contentFrame, order++);
-
-	// ── Guilds / Faction XP ─────────────────────────────────────────────────────
-	const fxp = data.factionXP;
-	const combinedLevel = overallLevelFromFactions(fxp);
-	makeSectionHeader(contentFrame, "GUILDS  (Level " + combinedLevel + ")", order++);
-
-	for (const fid of FACTION_IDS) {
-		const def = FACTIONS[fid];
-		const xp = fxp[fid] ?? 0;
-		const lvl = levelFromXP(xp);
-
-		const guildRow = new Instance("Frame");
-		guildRow.Size = new UDim2(1, 0, 0, 42);
-		guildRow.BackgroundColor3 = UI_THEME.bgInset;
-		guildRow.BackgroundTransparency = 0.3;
-		guildRow.BorderSizePixel = 0;
-		guildRow.LayoutOrder = order++;
-		guildRow.Parent = contentFrame;
-
-		const gCorner = new Instance("UICorner");
-		gCorner.CornerRadius = new UDim(0, 4);
-		gCorner.Parent = guildRow;
-
-		const gStroke = new Instance("UIStroke");
-		gStroke.Color = def.color;
-		gStroke.Thickness = 0.8;
-		gStroke.Parent = guildRow;
-
-		const nameLbl = new Instance("TextLabel");
-		nameLbl.Size = new UDim2(0.6, -8, 0, 18);
-		nameLbl.Position = new UDim2(0, 8, 0, 4);
-		nameLbl.BackgroundTransparency = 1;
-		nameLbl.TextColor3 = def.color;
-		nameLbl.Font = UI_THEME.fontBold;
-		nameLbl.TextSize = 13;
-		nameLbl.Text = def.name;
-		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
-		nameLbl.Parent = guildRow;
-
-		const lvlLbl = new Instance("TextLabel");
-		lvlLbl.Size = new UDim2(0.4, -8, 0, 18);
-		lvlLbl.Position = new UDim2(0.6, 0, 0, 4);
-		lvlLbl.BackgroundTransparency = 1;
-		lvlLbl.TextColor3 = UI_THEME.textHeader;
-		lvlLbl.Font = UI_THEME.fontDisplay;
-		lvlLbl.TextSize = 13;
-		lvlLbl.Text = "Lvl " + lvl;
-		lvlLbl.TextXAlignment = Enum.TextXAlignment.Right;
-		lvlLbl.Parent = guildRow;
-
-		const xpLbl = new Instance("TextLabel");
-		xpLbl.Size = new UDim2(1, -16, 0, 14);
-		xpLbl.Position = new UDim2(0, 8, 0, 24);
-		xpLbl.BackgroundTransparency = 1;
-		xpLbl.TextColor3 = UI_THEME.textMuted;
-		xpLbl.Font = UI_THEME.fontBody;
-		xpLbl.TextSize = 11;
-		xpLbl.Text = xp + " XP";
-		xpLbl.TextXAlignment = Enum.TextXAlignment.Left;
-		xpLbl.Parent = guildRow;
-	}
-
-	makeDivider(contentFrame, order++);
-
 	// ── Achievements list — Card Layout ─────────────────────────────────────
 	const unlocked = data.unlockedAchievementIds.size();
 	const total = ACHIEVEMENT_LIST.size();
@@ -728,10 +686,10 @@ function fetchAndRender(tabIndex: number): void {
 	const data = getKillBookDataRemote().InvokeServer() as KillBookData | undefined;
 	if (!data) return;
 
-	if (tabIndex === 0) renderBountiesTab(data);
+	if (tabIndex === 0) renderPlayerTab(data);
 	else if (tabIndex === 1) renderBestiaryTab(data);
-	else if (tabIndex === 2) renderPvPTab(data);
-	else if (tabIndex === 3) renderAchievementsTab(data);
+	else if (tabIndex === 2) renderAchievementsTab(data);
+	else if (tabIndex === 3) renderPvPTab(data);
 }
 
 function updateTabHighlights(): void {

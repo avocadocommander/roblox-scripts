@@ -17,9 +17,10 @@
  *    CodexButton, killbook tab buttons) subscribe via `onChange(cb)`
  *    and call `hasAnyNew(sectionOrPrefix)` to toggle their own dot.
  *
- * Persistence is in-memory only — a fresh join registers every
- * currently-owned id as new, which is the intended behaviour so the
- * player notices unreviewed items after a long break.
+ * Persistence is in-memory only and session-scoped: the first
+ * `trackPresent` call for a section establishes a baseline of
+ * already-owned ids (none are marked new). Only ids that arrive on
+ * subsequent syncs — or via `markNew` for live events — are flagged.
  */
 
 const DOT_NAME = "NewIndicatorDot";
@@ -33,6 +34,8 @@ const DOT_SIZE = 10;
 const knownIds = new Map<string, Set<string>>();
 /** Subset of knownIds that the user has NOT yet viewed. */
 const unseenIds = new Map<string, Set<string>>();
+/** Sections that have received at least one trackPresent call this session. */
+const initializedSections = new Set<string>();
 const changeSubscribers = new Array<() => void>();
 
 function ensureSection(section: string): void {
@@ -61,14 +64,19 @@ export function trackPresent(section: string, ids: ReadonlyArray<string>): void 
 	const incoming = new Set<string>();
 	for (const id of ids) incoming.add(id);
 
+	const isFirstSync = !initializedSections.has(section);
 	let changed = false;
 
-	// New ids become unseen.
+	// New ids become unseen — except on the very first sync, which only
+	// establishes a baseline so existing items don't all show as "new"
+	// after a fresh join.
 	for (const id of ids) {
 		if (!known.has(id)) {
 			known.add(id);
-			unseen.add(id);
-			changed = true;
+			if (!isFirstSync) {
+				unseen.add(id);
+				changed = true;
+			}
 		}
 	}
 
@@ -79,6 +87,8 @@ export function trackPresent(section: string, ids: ReadonlyArray<string>): void 
 			if (unseen.delete(id)) changed = true;
 		}
 	}
+
+	if (isFirstSync) initializedSections.add(section);
 
 	if (changed) notifyChange();
 }
