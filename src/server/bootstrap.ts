@@ -18,6 +18,7 @@ import { initializeEffectHandler } from "./modules/effect-handler";
 import { initializePassHandler } from "./modules/pass-handler";
 import { initializeProductHandler } from "./modules/product-handler";
 import { initializePremiumOfferHandler } from "./modules/premium-offer-handler";
+import { initializeNpcSpawner } from "./modules/npc-spawner";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -42,6 +43,8 @@ export async function bootstrapServer() {
 	initializeAdminHandler();
 	initializeInspectHandler();
 	initializePremiumOfferHandler();
+	initializeNpcSpawner();
+
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");
 }

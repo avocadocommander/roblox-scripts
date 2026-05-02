@@ -229,10 +229,15 @@ export function initializeDialogHandler(): void {
 		dialogPayloadRemote.FireClient(player, payload);
 		log("[DIALOG] " + player.Name + " opened dialog with " + npcName);
 
-		// Tutorial: first conversation with any Guildmaster unlocks MET_GUILD_LEADER.
+		// Tutorial: first conversation with any Guildmaster unlocks MET_GUILD_LEADER
+		// and grants the Dagger (step 2 reward) so the inventory pulse fires.
 		const registryDef = NPC_REGISTRY[npcName];
 		if (registryDef !== undefined && registryDef.occupation === "Guildmaster") {
-			awardAchievement(player, "MET_GUILD_LEADER");
+			const justUnlocked = awardAchievement(player, "MET_GUILD_LEADER");
+			if (justUnlocked) {
+				givePlayerItem(player, "dagger", 1);
+				log("[DIALOG] Granted Dagger to " + player.Name + " for meeting Guild Leader");
+			}
 		}
 	});
 

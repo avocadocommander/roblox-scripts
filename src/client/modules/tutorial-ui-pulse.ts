@@ -27,12 +27,34 @@ const PULSE_THICK_MIN = 2;
 const PULSE_THICK_MAX = 5;
 const PULSE_PERIOD = 0.9; // seconds
 
+// ── Proximity state (fed by npc-proximity) ─────────────────────────────────
+
+let assassinInRange = false;
+
+/**
+ * Called by npc-proximity whenever a killable NPC enters or leaves assassination
+ * range. Triggers a refresh so the assassinate pulse activates/deactivates.
+ */
+export function setAssassinInRange(inRange: boolean): void {
+	if (assassinInRange === inRange) return;
+	assassinInRange = inRange;
+	refresh();
+}
+
 /** Names of GuiObjects that should pulse for the given step type. */
 function getPulseTargetNames(): string[] {
 	const step = getCurrentOnboardingStep();
 	if (!step || step.uiPulseTarget === undefined) return [];
 	if (step.uiPulseTarget === "equipDagger") {
-		return ["InventoryButton", "Item_dagger"];
+		// "InventoryButton" = mobile HUD circular button
+		// "Inventory" = PC utility-hotkeys row (utility-hotkeys.client.ts)
+		// "Item_dagger" = dagger tile inside the inventory grid
+		return ["InventoryButton", "Inventory", "Item_dagger"];
+	}
+	if (step.uiPulseTarget === "assassinate" && assassinInRange) {
+		// "ActionButton" = mobile HUD primary action button
+		// "Assassinate" = PC utility-hotkeys row label
+		return ["ActionButton", "Assassinate"];
 	}
 	return [];
 }

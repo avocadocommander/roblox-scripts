@@ -1091,11 +1091,9 @@ function showMainOptions(): void {
 		});
 	}
 
-	if (currentPayload.interaction === "TurnIn") {
+	if (currentPayload.interaction === "TurnIn" && currentPayload.pendingBounties > 0) {
 		const count = currentPayload.pendingBounties;
-		const label = count > 0 ? "Turn In Bounties (" + count + ")" : "Turn In Bounties";
-		const col = count > 0 ? UI_THEME.gold : UI_THEME.textMuted;
-		addDialogOption(optionsFrame, nextOrder++, label, col, () => {
+		addDialogOption(optionsFrame, nextOrder++, "Turn In Bounties (" + count + ")", UI_THEME.gold, () => {
 			handleTurnIn();
 		});
 	}

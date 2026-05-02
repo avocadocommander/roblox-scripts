@@ -27,11 +27,13 @@ export interface OnboardingStep {
 	highlightType?: "guildLeaders" | "bountyTarget";
 	/**
 	 * UI pulse target while this step is the active guidance step.
-	 *  - "equipDagger" — pulses the Inventory button and the dagger tile
-	 *                    inside the inventory panel.
+	 *  - "equipDagger"  — pulses the Inventory button and the dagger tile
+	 *                     inside the inventory panel.
+	 *  - "assassinate" — pulses the Assassinate button (mobile + PC hotkey row)
+	 *                     only while a killable NPC is in range.
 	 * Undefined = no UI pulse.
 	 */
-	uiPulseTarget?: "equipDagger";
+	uiPulseTarget?: "equipDagger" | "assassinate";
 	/**
 	 * When true, the bounty board also renders the active bounty card
 	 * (name, gold, class, offence) above the step footer. Useful for
@@ -60,6 +62,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
 		title: "FIRST CONTRACT",
 		objective: "Hunt Your First Mark",
 		highlightType: "bountyTarget",
+		uiPulseTarget: "assassinate",
 		showBountyCard: true,
 	},
 	{

@@ -11,6 +11,7 @@ import { requestOpenDialog, requestOpenInspect, requestOpenPremiumOffer, isDialo
 import { getPremiumOffer } from "shared/config/premium-offers";
 import { getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
 import { pulseActionButton, pulseKillButton } from "./ui-toggles";
+import { setAssassinInRange } from "./tutorial-ui-pulse";
 import {
 	getPlayerAssassinationRemote,
 	getPlayerWantedRemote,
@@ -1020,6 +1021,7 @@ function updateNPCProximityUI() {
 		closestPremiumOfferDist < closestInspectableDist;
 
 	// Second pass: update assassinate buttons and talk buttons (only on closest NPC)
+	let anyAssassinateInRange = false;
 	for (const [npc, ui] of npcUIMap) {
 		const npcIsKillable = isNPCModelKillable(npc);
 		const npcHasDialog = hasNPCDialog(getNPCModelName(npc)) || npc.GetAttribute("Interaction") !== undefined;
@@ -1029,6 +1031,7 @@ function updateNPCProximityUI() {
 		const shouldShowTalk = inTalkRange && npcIsNearest && !isDialogOpen();
 
 		if (shouldShowAssassinate) {
+			anyAssassinateInRange = true;
 			if (!ui.assassinateButton) {
 				ui.assassinateButton = createAssassinateButton(ui.billboard, npc);
 			}
@@ -1038,6 +1041,7 @@ function updateNPCProximityUI() {
 				ui.assassinateButton = undefined;
 			}
 		}
+		setAssassinInRange(anyAssassinateInRange);
 
 		if (shouldShowTalk) {
 			if (!ui.talkButton) {

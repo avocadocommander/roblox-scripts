@@ -18,6 +18,7 @@ import {
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, Status } from "shared/module";
 import { activatePoison as effectActivatePoison, activateElixir as effectActivateElixir } from "./effect-handler";
 import { getGamePassForItem } from "shared/config/game-passes";
+import { onPlayerStateLoaded, setInventoryState, getInventoryState } from "shared/player-state";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -103,6 +104,12 @@ function pushSync(player: Player): void {
 	const inv = PLAYER_INVENTORIES.get(player);
 	if (!inv) return;
 	syncRemote.FireClient(player, buildPayload(inv));
+	// Keep PlayerState in sync so inventory is persisted to DataStore on leave.
+	const ownedRecord: Record<string, number> = {};
+	for (const [id, count] of inv.owned) {
+		ownedRecord[id] = count;
+	}
+	setInventoryState(player, ownedRecord, inv.equippedWeapon);
 }
 
 /** Give a player starter items and default equips. */
@@ -112,8 +119,7 @@ function initPlayerInventory(player: Player): PlayerInventory {
 	// Default: just fists.
 	owned.set("fists", 1);
 
-	// TEST: Grant all weapons for testing
-	owned.set("dagger", 1);
+	// TEST: Grant warhammer for testing
 	owned.set("warhammer", 1);
 
 	const inv: PlayerInventory = {
@@ -478,15 +484,70 @@ export function initializeInventorySystem(): void {
 		return buildPayload(inv);
 	};
 
-	// Init inventory on player join
+	// Init inventory on player join then restore saved data once DataStore loads
 	Players.PlayerAdded.Connect((player) => {
 		initPlayerInventory(player);
+
+		// Wait for the DataStore load to complete, then overwrite with saved data.
+		onPlayerStateLoaded(player, () => {
+			const inv = PLAYER_INVENTORIES.get(player);
+			if (!inv || player.Parent === undefined) return;
+
+			const saved = getInventoryState(player);
+
+			// Detect whether the player has real saved data (non-empty ownedItems).
+			let hasSavedData = false;
+			for (const [_] of pairs(saved.ownedItems as unknown as Record<string, number>)) {
+				hasSavedData = true;
+				break;
+			}
+
+			if (hasSavedData) {
+				// Restore owned items from DataStore
+				const restoredOwned = new Map<string, number>();
+				for (const [id, count] of pairs(saved.ownedItems as unknown as Record<string, number>)) {
+					restoredOwned.set(id as string, count as number);
+				}
+				// Always ensure fists are present (can't be unequipped in current design)
+				if (!restoredOwned.has("fists")) restoredOwned.set("fists", 1);
+				inv.owned = restoredOwned;
+				inv.equippedWeapon = saved.equippedWeapon;
+				log(
+					`[INVENTORY] Restored ${player.Name}'s saved inventory (${restoredOwned.size()} items, equipped: ${inv.equippedWeapon})`,
+				);
+			} else {
+				log(`[INVENTORY] No saved inventory for ${player.Name}, using defaults`);
+			}
+
+			pushSync(player);
+		});
 	});
 
 	// Also init for players already in-game (in case bootstrap ran late)
+	// These players have already had their DataStore loaded — restore immediately.
 	for (const player of Players.GetPlayers()) {
 		if (!PLAYER_INVENTORIES.has(player)) {
 			initPlayerInventory(player);
+			onPlayerStateLoaded(player, () => {
+				const inv = PLAYER_INVENTORIES.get(player);
+				if (!inv || player.Parent === undefined) return;
+				const saved = getInventoryState(player);
+				let hasSavedData = false;
+				for (const [_] of pairs(saved.ownedItems as unknown as Record<string, number>)) {
+					hasSavedData = true;
+					break;
+				}
+				if (hasSavedData) {
+					const restoredOwned = new Map<string, number>();
+					for (const [id, count] of pairs(saved.ownedItems as unknown as Record<string, number>)) {
+						restoredOwned.set(id as string, count as number);
+					}
+					if (!restoredOwned.has("fists")) restoredOwned.set("fists", 1);
+					inv.owned = restoredOwned;
+					inv.equippedWeapon = saved.equippedWeapon;
+				}
+				pushSync(player);
+			});
 		}
 	}
 

@@ -194,6 +194,10 @@ export interface PlayerState {
 	activeElixirId: string | undefined;
 	/** Remaining gameplay seconds for the active elixir. */
 	activeElixirRemainingSecs: number;
+	/** Persistent inventory — item ID -> quantity owned. */
+	ownedItems: Record<string, number>;
+	/** ID of the currently equipped weapon. */
+	equippedWeapon: string;
 }
 
 const DEFAULT_STATE: PlayerState = {
@@ -217,6 +221,8 @@ const DEFAULT_STATE: PlayerState = {
 	activePoisonRemainingSecs: 0,
 	activeElixirId: undefined,
 	activeElixirRemainingSecs: 0,
+	ownedItems: {},
+	equippedWeapon: "fists",
 };
 
 const PLAYER_STATES = new Map<Player, PlayerState>();
@@ -284,6 +290,35 @@ function isArray(t: unknown): boolean {
 	return true;
 }
 
+// ── State-loaded callbacks (for systems that need DataStore data before acting) ─
+
+const stateLoadedCallbacks = new Map<Player, Array<() => void>>();
+const stateLoadedPlayers = new Set<Player>();
+
+function fireStateLoadedCallbacks(player: Player): void {
+	stateLoadedPlayers.add(player);
+	const cbs = stateLoadedCallbacks.get(player);
+	if (!cbs) return;
+	stateLoadedCallbacks.delete(player);
+	for (const cb of cbs) {
+		task.spawn(cb);
+	}
+}
+
+/**
+ * Register a callback to fire once the player's DataStore state has been loaded.
+ * If the state is already loaded, the callback fires on the next task step.
+ */
+export function onPlayerStateLoaded(player: Player, callback: () => void): void {
+	if (stateLoadedPlayers.has(player)) {
+		task.spawn(callback);
+		return;
+	}
+	const cbs = stateLoadedCallbacks.get(player) ?? [];
+	cbs.push(callback);
+	stateLoadedCallbacks.set(player, cbs);
+}
+
 Players.PlayerAdded.Connect((player) => {
 	// Set default state IMMEDIATELY so the player is always in PLAYER_STATES.
 	// This prevents race conditions where an assassination could happen before
@@ -304,6 +339,8 @@ Players.PlayerAdded.Connect((player) => {
 			PLAYER_STATES.set(player, merged);
 			warn(`[PlayerState] Loaded DataStore data for ${player.Name}`);
 		}
+		// Notify systems waiting on inventory / other persisted data.
+		fireStateLoadedCallbacks(player);
 	});
 });
 
@@ -562,6 +599,31 @@ export function resetAchievementsAndTitles(player: Player): void {
 /** Get the player's currently equipped title ID. */
 export function getEquippedTitleId(player: Player): string {
 	return PLAYER_STATES.get(player)?.title ?? DEFAULT_STATE.title;
+}
+
+// ── Inventory persistence ─────────────────────────────────────────────────────
+
+/**
+ * Persist the player's owned items and equipped weapon into their PlayerState
+ * so it is saved to DataStore on leave / periodic auto-save.
+ * Called by inventory-handler after every inventory mutation.
+ */
+export function setInventoryState(player: Player, ownedItems: Record<string, number>, equippedWeapon: string): void {
+	const state = PLAYER_STATES.get(player);
+	if (!state) return;
+	PLAYER_STATES.set(player, { ...state, ownedItems, equippedWeapon });
+}
+
+/**
+ * Read back the persisted inventory fields from PlayerState.
+ * Returns empty ownedItems + "fists" before DataStore has loaded.
+ */
+export function getInventoryState(player: Player): { ownedItems: Record<string, number>; equippedWeapon: string } {
+	const state = PLAYER_STATES.get(player);
+	return {
+		ownedItems: state?.ownedItems ?? {},
+		equippedWeapon: state?.equippedWeapon ?? "fists",
+	};
 }
 
 RequestAddLevel.OnServerInvoke = (player: Player, ...args: unknown[]) => {
