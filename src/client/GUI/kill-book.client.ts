@@ -8,6 +8,7 @@ import {
 import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
 import { ACHIEVEMENT_LIST, AchievementDef } from "shared/achievements";
 import { TITLES, TITLE_LIST } from "shared/config/titles";
+import { ITEMS } from "shared/inventory";
 import { getEquipTitleRemote } from "shared/remotes/title-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
@@ -520,8 +521,15 @@ function renderAchievementsTab(data: KillBookData): void {
 		const isExpanded = achievementExpanded.has(achievement.id);
 		const titleDef = achievement.reward?.titleId ? TITLES[achievement.reward.titleId] : undefined;
 
-		const CARD_COLLAPSED = 64;
-		const CARD_EXPANDED = 130;
+		const hasReward = achievement.reward !== undefined;
+		const rewardLineCount = hasReward
+			? (achievement.reward!.titleId ? 1 : 0) +
+			  (achievement.reward!.itemId ? 1 : 0) +
+			  (achievement.reward!.coins ? 1 : 0) +
+			  (achievement.reward!.xp ? 1 : 0)
+			: 0;
+		const CARD_COLLAPSED = 50;
+		const CARD_EXPANDED = 50 + 12 + 34 + (hasReward ? 4 + rewardLineCount * 18 : 0) + 8;
 		const cardHeight = isExpanded ? CARD_EXPANDED : CARD_COLLAPSED;
 
 		// ── Card container (tappable) ───────────────────────────────────
@@ -566,13 +574,13 @@ function renderAchievementsTab(data: KillBookData): void {
 
 		// ── Icon badge ──────────────────────────────────────────────────
 		const badge = new Instance("TextLabel");
-		badge.Size = new UDim2(0, 40, 0, 40);
-		badge.Position = new UDim2(0, 12, 0, 10);
+		badge.Size = new UDim2(0, 32, 0, 32);
+		badge.Position = new UDim2(0, 10, 0, 9);
 		badge.BackgroundColor3 = isUnlocked ? UI_THEME.headerBg : UI_THEME.bg;
 		badge.BackgroundTransparency = 0.1;
 		badge.TextColor3 = isUnlocked ? UI_THEME.gold : UI_THEME.textMuted;
 		badge.Font = UI_THEME.fontDisplay;
-		badge.TextSize = 20;
+		badge.TextSize = 17;
 		badge.Text = achievement.icon;
 		badge.BorderSizePixel = 0;
 		badge.Parent = card;
@@ -590,69 +598,94 @@ function renderAchievementsTab(data: KillBookData): void {
 
 		// ── Name + chevron ──────────────────────────────────────────────
 		const nameLbl = new Instance("TextLabel");
-		nameLbl.Size = new UDim2(1, -82, 0, 22);
-		nameLbl.Position = new UDim2(0, 60, 0, 8);
+		nameLbl.Size = new UDim2(1, -72, 0, 32);
+		nameLbl.Position = new UDim2(0, 50, 0, 9);
 		nameLbl.BackgroundTransparency = 1;
 		nameLbl.TextColor3 = isUnlocked ? UI_THEME.textHeader : UI_THEME.textMuted;
 		nameLbl.Font = UI_THEME.fontBold;
 		nameLbl.TextSize = 14;
-		nameLbl.Text = isUnlocked ? achievement.title : "???";		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.Text = isUnlocked ? achievement.title : "???";
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+		nameLbl.TextYAlignment = Enum.TextYAlignment.Center;
 		nameLbl.Parent = card;
 
 		const chevron = new Instance("TextLabel");
-		chevron.Size = new UDim2(0, 20, 0, 22);
-		chevron.Position = new UDim2(1, -30, 0, 8);
+		chevron.Size = new UDim2(0, 20, 0, 32);
+		chevron.Position = new UDim2(1, -28, 0, 9);
 		chevron.BackgroundTransparency = 1;
 		chevron.TextColor3 = UI_THEME.textMuted;
 		chevron.Font = UI_THEME.fontBold;
 		chevron.TextSize = 12;
 		chevron.Text = isExpanded ? "v" : ">";
+		chevron.TextYAlignment = Enum.TextYAlignment.Center;
 		chevron.Parent = card;
 
-		// ── Description preview ─────────────────────────────────────────
-		const descLbl = new Instance("TextLabel");
-		descLbl.Size = new UDim2(1, -72, 0, 16);
-		descLbl.Position = new UDim2(0, 60, 0, 32);
-		descLbl.BackgroundTransparency = 1;
-		descLbl.TextColor3 = isUnlocked ? UI_THEME.textPrimary : UI_THEME.textMuted;
-		descLbl.Font = UI_THEME.fontBody;
-		descLbl.TextSize = 11;
-		descLbl.Text = isUnlocked ? achievement.description : "Locked";
-		descLbl.TextXAlignment = Enum.TextXAlignment.Left;
-		descLbl.Parent = card;
+
 
 		// ── Expanded detail section ─────────────────────────────────────
 		if (isExpanded) {
 			const detailDiv = new Instance("Frame");
 			detailDiv.Size = new UDim2(1, -24, 0, 1);
-			detailDiv.Position = new UDim2(0, 12, 0, 62);
+			detailDiv.Position = new UDim2(0, 12, 0, 50);
 			detailDiv.BackgroundColor3 = UI_THEME.divider;
 			detailDiv.BorderSizePixel = 0;
 			detailDiv.Parent = card;
 
-			if (isUnlocked && titleDef) {
-				const titleRewardLbl = new Instance("TextLabel");
-				titleRewardLbl.Size = new UDim2(1, -24, 0, 20);
-				titleRewardLbl.Position = new UDim2(0, 12, 0, 70);
-				titleRewardLbl.BackgroundTransparency = 1;
-				titleRewardLbl.TextColor3 = titleDef.color;
-				titleRewardLbl.Font = UI_THEME.fontDisplay;
-				titleRewardLbl.TextSize = 13;
-				titleRewardLbl.Text = "Title: " + titleDef.symbol + " " + titleDef.name;
-				titleRewardLbl.TextXAlignment = Enum.TextXAlignment.Left;
-				titleRewardLbl.Parent = card;
-			}
+			// Description (or "Unknown" if not yet unlocked)
+			const expandedDesc = new Instance("TextLabel");
+			expandedDesc.Size = new UDim2(1, -24, 0, 34);
+			expandedDesc.Position = new UDim2(0, 12, 0, 56);
+			expandedDesc.BackgroundTransparency = 1;
+			expandedDesc.TextColor3 = isUnlocked ? UI_THEME.textPrimary : UI_THEME.textMuted;
+			expandedDesc.Font = UI_THEME.fontBody;
+			expandedDesc.TextSize = 11;
+			expandedDesc.TextWrapped = true;
+			expandedDesc.Text = isUnlocked ? achievement.description : "Unknown";
+			expandedDesc.TextXAlignment = Enum.TextXAlignment.Left;
+			expandedDesc.TextYAlignment = Enum.TextYAlignment.Top;
+			expandedDesc.Parent = card;
 
-			const statusLbl = new Instance("TextLabel");
-			statusLbl.Size = new UDim2(1, -24, 0, 20);
-			statusLbl.Position = new UDim2(0, 12, 0, titleDef && isUnlocked ? 94 : 70);
-			statusLbl.BackgroundTransparency = 1;
-			statusLbl.TextColor3 = isUnlocked ? UI_THEME.gold : UI_THEME.danger;
-			statusLbl.Font = UI_THEME.fontBold;
-			statusLbl.TextSize = 12;
-			statusLbl.Text = isUnlocked ? "UNLOCKED" : "LOCKED";
-			statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
-			statusLbl.Parent = card;
+			// Reward lines (always shown when the achievement has a reward)
+			if (hasReward) {
+				let rewardY = 56 + 34 + 4;
+				const r = achievement.reward!;
+
+				const addRewardLine = (text: string, color: Color3) => {
+					const lbl = new Instance("TextLabel");
+					lbl.Size = new UDim2(1, -24, 0, 16);
+					lbl.Position = new UDim2(0, 12, 0, rewardY);
+					lbl.BackgroundTransparency = 1;
+					lbl.TextColor3 = color;
+					lbl.Font = UI_THEME.fontBody;
+					lbl.TextSize = 11;
+					lbl.Text = text;
+					lbl.TextXAlignment = Enum.TextXAlignment.Left;
+					lbl.Parent = card;
+					rewardY += 18;
+				};
+
+				if (r.titleId) {
+					const td = TITLES[r.titleId];
+					if (td) {
+						addRewardLine(
+							"Reward: Title - " + td.symbol + " " + td.name,
+							isUnlocked ? td.color : UI_THEME.textMuted,
+						);
+					}
+				}
+				if (r.itemId) {
+					const itemDef = ITEMS[r.itemId];
+					const itemName = itemDef ? itemDef.name : r.itemId;
+					const count = r.itemCount !== undefined && r.itemCount > 1 ? " x" + r.itemCount : "";
+					addRewardLine("Reward: " + itemName + count, isUnlocked ? UI_THEME.textPrimary : UI_THEME.textMuted);
+				}
+				if (r.coins) {
+					addRewardLine("Reward: " + r.coins + " Notes", isUnlocked ? UI_THEME.gold : UI_THEME.textMuted);
+				}
+				if (r.xp) {
+					addRewardLine("Reward: " + r.xp + " XP", isUnlocked ? UI_THEME.textPrimary : UI_THEME.textMuted);
+				}
+			}
 		}
 
 		// ── Tap to expand/collapse ──────────────────────────────────────

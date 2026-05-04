@@ -16,11 +16,11 @@ import { ShopType } from "./shop-types";
 // Plain ASCII only. These are always shown so the shop type is readable at a glance.
 
 export const SHOP_TYPE_MARKERS: Record<ShopType, string> = {
-	weapon: "FORGE",
-	elixir: "BREWS",
-	poison: "TOXINS",
-	rare: "WARES",
-	tavern: "TAVERN",
+	weapon: "IRON",
+	elixir: "TONIC",
+	poison: "VENOM",
+	rare: "CURIO",
+	tavern: "ALE",
 };
 
 // ── Sign color schemes ────────────────────────────────────────────────────────
@@ -34,51 +34,60 @@ export interface SignColorScheme {
 	flavorLine: string;
 }
 
+// Shared worn-wood base — all signs read from the same dark painted board.
+// Shop type colour appears only in the marker text, accent border, and icon.
+// Nothing should look digital — these are physical painted signs.
+
+const WOOD_BG = Color3.fromRGB(22, 16, 10); // dark tarred oak
+const WOOD_BORDER = Color3.fromRGB(40, 28, 14); // aged plank grain
+const NAME_COLOR = Color3.fromRGB(188, 162, 105); // faded bone parchment
+const SUBTEXT_COLOR = Color3.fromRGB(90, 72, 42); // dim tallow shadow
+
 export const SIGN_COLORS: Record<ShopType, SignColorScheme> = {
-	// Forge/iron — warm charred oak, hammered brass, aged parchment
+	// Hammered brass, worn iron — smith's marker
 	weapon: {
-		marker: Color3.fromRGB(135, 98, 42), // worn brass
-		name: Color3.fromRGB(198, 172, 118), // warm bone
-		subtext: Color3.fromRGB(108, 78, 28), // dim tallow
-		background: Color3.fromRGB(32, 22, 12), // dark umber
-		border: Color3.fromRGB(58, 36, 16), // muted rust banding
-		flavorLine: "Fine Steel.",
+		marker: Color3.fromRGB(118, 88, 34), // tarnished brass
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(52, 34, 14), // rust-tinged oak banding
+		flavorLine: "Steel & Sparks.",
 	},
-	// Alchemist — cool dark slate, like chalk on worn stone
+	// Muted slate-pewter — apothecary chalk on stone
 	elixir: {
-		marker: Color3.fromRGB(95, 118, 138), // weathered pewter
-		name: Color3.fromRGB(168, 185, 195), // faded chalk
-		subtext: Color3.fromRGB(65, 85, 105), // dim stone
-		background: Color3.fromRGB(24, 22, 28), // dark charcoal, faint blue
-		border: Color3.fromRGB(42, 38, 46), // muted plum-grey
-		flavorLine: "Old Brews.",
+		marker: Color3.fromRGB(72, 95, 108), // weathered pewter
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(36, 34, 38), // cold stone edging
+		flavorLine: "Bottled Moon.",
 	},
-	// Apothecary — deep moss, like painted fen-wood
+	// Mossy fen-green — hedge-witch painted bark
 	poison: {
-		marker: Color3.fromRGB(72, 105, 55), // muted sage
-		name: Color3.fromRGB(148, 175, 108), // dried herb
-		subtext: Color3.fromRGB(52, 80, 38), // dark fern
-		background: Color3.fromRGB(22, 24, 16), // dark moss-brown
-		border: Color3.fromRGB(38, 42, 26), // dim olive
-		flavorLine: "Dark Craft.",
+		marker: Color3.fromRGB(55, 82, 40), // dim sage
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(34, 38, 22), // dark olive trim
+		flavorLine: "Quiet Death.",
 	},
-	// Curiosity — aged gilt on dark walnut, tarnished not gleaming
+	// Tarnished gilt on dark walnut — not gleaming, just old
 	rare: {
-		marker: Color3.fromRGB(142, 118, 42), // tarnished gilt
-		name: Color3.fromRGB(208, 188, 122), // old ivory
-		subtext: Color3.fromRGB(102, 76, 24), // dim tarnish
-		background: Color3.fromRGB(30, 22, 10), // dark walnut
-		border: Color3.fromRGB(56, 42, 16), // aged gilt trim
-		flavorLine: "Rare Finds.",
+		marker: Color3.fromRGB(118, 95, 34), // dim old gilt
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(48, 36, 14), // aged gilt trim
+		flavorLine: "Odd Wares.",
 	},
-	// Tavern — warm amber ale tones, candlelit wood
+	// Mead-amber, candlelit — not bright, just warm
 	tavern: {
-		marker: Color3.fromRGB(165, 120, 50), // warm amber
-		name: Color3.fromRGB(225, 195, 130), // candlelit parchment
-		subtext: Color3.fromRGB(120, 85, 35), // dim mead
-		background: Color3.fromRGB(28, 18, 8), // dark ale wood
-		border: Color3.fromRGB(62, 38, 14), // barrel stave
-		flavorLine: "Cheap Drinks.",
+		marker: Color3.fromRGB(132, 88, 28), // dim amber
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(50, 30, 10), // barrel stave
+		flavorLine: "Ale & Fire.",
 	},
 };
 
