@@ -13,6 +13,7 @@ import { syncAchievementsToClient } from "./achievement-handler";
 import { givePlayerItem } from "./inventory-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
+import { startTravelingMerchantEvent, stopTravelingMerchantEvent } from "./traveling-merchant-handler";
 
 const adminRemote = getAdminCommandRemote();
 
@@ -107,6 +108,16 @@ export function initializeAdminHandler(): void {
 			const text = strValue !== "" ? strValue : "A Special Event Has Begun";
 			getBoardBroadcastRemote().FireAllClients("event", text);
 			return "Broadcast event: " + text;
+		}
+
+		if (command === "startTravelingMerchant") {
+			startTravelingMerchantEvent();
+			return "Traveling merchant event started";
+		}
+
+		if (command === "stopTravelingMerchant") {
+			stopTravelingMerchantEvent();
+			return "Traveling merchant event stopped";
 		}
 
 		if (command === "resetAll") {

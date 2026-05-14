@@ -17,6 +17,7 @@ import {
 	BoardMessage,
 	BoardMessageType,
 	registerBoardRenderer,
+	showServerEvent,
 } from "../modules/board-state";
 import { initializeTutorialController } from "../modules/tutorial-controller";
 import { initializeTutorialHighlight } from "../modules/tutorial-highlight";
@@ -57,6 +58,10 @@ interface MessageEntry {
 	layoutOrder: number;
 }
 const activeMessages: MessageEntry[] = [];
+
+// Server-event banner — static, 1 at a time, hidden when no active event
+let serverEventFrame: Frame | undefined;
+let serverEventLabel: TextLabel | undefined;
 
 let wantedSummaryLabel: TextLabel | undefined;
 let wantedExpandedFrame: Frame | undefined;
@@ -99,6 +104,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	buildMessageStack(wrapper);
 	buildMissionCard(wrapper);
 	buildWantedSections(wrapper);
+	buildServerEventBanner(wrapper);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -407,6 +413,83 @@ function buildWantedSections(wrapper: Frame): void {
 	listLayout.Parent = listFrame;
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  SERVER EVENT BANNER  (static, 1 at a time — hidden when no active event)
+//  Set by the server via BoardBroadcast "event" type. Unlike transient
+//  messages this persists until explicitly cleared.
+// ═════════════════════════════════════════════════════════════════════════════
+function buildServerEventBanner(wrapper: Frame): void {
+	const frame = new Instance("Frame");
+	frame.Name = "ServerEvent";
+	frame.LayoutOrder = 3;
+	frame.Size = new UDim2(1, 0, 0, sc(38));
+	frame.BackgroundColor3 = UI_THEME.bg;
+	frame.BackgroundTransparency = UI_THEME.bgTransparency;
+	frame.BorderSizePixel = 0;
+	frame.Visible = false;
+	frame.Parent = wrapper;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = UI_THEME.cornerRadius;
+	corner.Parent = frame;
+
+	const stroke = new Instance("UIStroke");
+	stroke.Color = Color3.fromRGB(195, 155, 50); // gold accent — marks this as a notable event
+	stroke.Thickness = UI_THEME.strokeThickness;
+	stroke.Parent = frame;
+
+	const pad = new Instance("UIPadding");
+	pad.PaddingTop = new UDim(0, sc(5));
+	pad.PaddingBottom = new UDim(0, sc(5));
+	pad.PaddingLeft = new UDim(0, sc(10));
+	pad.PaddingRight = new UDim(0, sc(10));
+	pad.Parent = frame;
+
+	const layout = new Instance("UIListLayout");
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.Padding = new UDim(0, sc(2));
+	layout.Parent = frame;
+
+	const headerLabel = new Instance("TextLabel");
+	headerLabel.Name = "Header";
+	headerLabel.LayoutOrder = 0;
+	headerLabel.Size = new UDim2(1, 0, 0, sc(11));
+	headerLabel.BackgroundTransparency = 1;
+	headerLabel.Text = "SERVER EVENT";
+	headerLabel.TextColor3 = Color3.fromRGB(195, 155, 50);
+	headerLabel.Font = UI_THEME.fontBold;
+	headerLabel.TextSize = sc(9);
+	headerLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	headerLabel.Parent = frame;
+
+	const bodyLabel = new Instance("TextLabel");
+	bodyLabel.Name = "Body";
+	bodyLabel.LayoutOrder = 1;
+	bodyLabel.Size = new UDim2(1, 0, 0, sc(16));
+	bodyLabel.BackgroundTransparency = 1;
+	bodyLabel.Text = "";
+	bodyLabel.TextColor3 = UI_THEME.textPrimary;
+	bodyLabel.Font = UI_THEME.fontBold;
+	bodyLabel.TextSize = sc(13);
+	bodyLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	bodyLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	bodyLabel.Parent = frame;
+
+	serverEventFrame = frame;
+	serverEventLabel = bodyLabel;
+}
+
+function setServerEventBanner(text: string | undefined): void {
+	if (!serverEventFrame || !serverEventLabel) return;
+	if (text !== undefined) {
+		serverEventLabel.Text = text;
+		serverEventFrame.Visible = true;
+	} else {
+		serverEventFrame.Visible = false;
+		serverEventLabel.Text = "";
+	}
+}
+
 // ── Mark updates ──────────────────────────────────────────────────────────────
 
 function applyNPCBounty(bounty: NPCBountyPayload): void {
@@ -712,6 +795,7 @@ onPlayerInitialized(() => {
 	registerBoardRenderer({
 		renderBody,
 		pushMessage,
+		setServerEvent: setServerEventBanner,
 	});
 
 	// Wire achievement sync/unlock events into the board state.

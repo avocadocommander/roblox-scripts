@@ -4,3 +4,8 @@ import "./bootstrap"; // Load and initialize server bootstrap (spawns all NPCs b
 
 const time = 20.45;
 Lighting.ClockTime = time;
+
+// Darken the scene without shifting the time-of-day mood.
+Lighting.Brightness = 1;
+Lighting.Ambient = Color3.fromRGB(20, 20, 25);
+Lighting.OutdoorAmbient = Color3.fromRGB(30, 30, 40);

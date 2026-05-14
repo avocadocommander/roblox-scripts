@@ -42,6 +42,8 @@ export interface BoardRenderer {
 	renderBody: (content: BoardBodyContent) => void;
 	/** Push a single new event message into the rising FIFO stack. */
 	pushMessage: (message: BoardMessage) => void;
+	/** Set or clear the persistent server-event banner (one at a time). */
+	setServerEvent: (text: string | undefined) => void;
 }
 
 // ── Internal state ──────────────────────────────────────────────────────────
@@ -95,6 +97,15 @@ export function getBoardMode(): BoardMode {
 export function showBoardMessage(messageType: BoardMessageType, text: string): void {
 	if (!renderer) return;
 	renderer.pushMessage({ messageType, text });
+}
+
+/**
+ * Set or clear the persistent server-event banner.
+ * Pass undefined or empty string to hide it.
+ */
+export function showServerEvent(text: string | undefined): void {
+	if (!renderer) return;
+	renderer.setServerEvent(text === "" ? undefined : text);
 }
 
 // ── Derivation ──────────────────────────────────────────────────────────────

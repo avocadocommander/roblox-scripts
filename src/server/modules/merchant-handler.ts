@@ -409,6 +409,18 @@ export function getMerchantShop(npcName: string): ShopItem[] | undefined {
 	return merchantShops.get(npcName);
 }
 
+/** Register an NPC name + item list with the merchant shop system. */
+export function registerMerchantShop(npcName: string, items: ShopItem[]): void {
+	merchantShops.set(npcName, items);
+	reservedNames.add(npcName);
+}
+
+/** Unregister an NPC name from the merchant shop system. */
+export function unregisterMerchantShop(npcName: string): void {
+	merchantShops.delete(npcName);
+	reservedNames.delete(npcName);
+}
+
 /** Names reserved by the merchant system — do NOT also assign to normal routes. */
 export function getReservedMerchantNames(): Set<string> {
 	return reservedNames;

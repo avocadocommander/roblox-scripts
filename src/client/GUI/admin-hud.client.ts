@@ -137,6 +137,16 @@ function getDropdowns(): DropdownDef[] {
 					color: Color3.fromRGB(200, 140, 60),
 					action: () => runCommand("triggerSpecialEvent", "Royal Decree: A Special Event Has Begun"),
 				},
+				{
+					label: "Start Traveling Merchant",
+					color: Color3.fromRGB(80, 180, 120),
+					action: () => runCommand("startTravelingMerchant"),
+				},
+				{
+					label: "Stop Traveling Merchant",
+					color: Color3.fromRGB(180, 80, 80),
+					action: () => runCommand("stopTravelingMerchant"),
+				},
 			],
 		},
 		{

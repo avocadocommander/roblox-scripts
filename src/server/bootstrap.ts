@@ -19,6 +19,7 @@ import { initializePassHandler } from "./modules/pass-handler";
 import { initializeProductHandler } from "./modules/product-handler";
 import { initializePremiumOfferHandler } from "./modules/premium-offer-handler";
 import { initializeNpcSpawner } from "./modules/npc-spawner";
+import { initializeTravelingMerchantSystem } from "./modules/traveling-merchant-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -44,6 +45,7 @@ export async function bootstrapServer() {
 	initializeInspectHandler();
 	initializePremiumOfferHandler();
 	initializeNpcSpawner();
+	initializeTravelingMerchantSystem();
 
 	setServerStatus(true);
 	print("[SERVER INIT] Server Ready");

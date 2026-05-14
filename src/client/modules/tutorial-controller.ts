@@ -16,6 +16,7 @@ import {
 	BoardMessageType,
 	setUnlockedAchievements,
 	showBoardMessage,
+	showServerEvent,
 } from "./board-state";
 import { ACHIEVEMENTS } from "shared/achievements";
 
@@ -43,6 +44,11 @@ export function initializeTutorialController(): void {
 
 	// Server-wide broadcast (special events, decrees, etc.)
 	getBoardBroadcastRemote().OnClientEvent.Connect((messageType: unknown, text: unknown) => {
-		showBoardMessage(messageType as BoardMessageType, text as string);
+		if (messageType === "event") {
+			// "event" type maps to the static server-event banner (not the transient queue).
+			showServerEvent(text as string | undefined);
+		} else {
+			showBoardMessage(messageType as BoardMessageType, text as string);
+		}
 	});
 }
