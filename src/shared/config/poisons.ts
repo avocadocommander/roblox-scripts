@@ -1,9 +1,20 @@
 /**
- * Poison configuration — easy to add / tweak in one place.
+ * Poison configuration -- easy to add / tweak in one place.
  *
  * Poisons are consumable. When activated they coat the player's current
  * weapon for `coatDurationSecs` (default 30 minutes). The next assassination
  * with that weapon triggers the poison's death effect on the NPC.
+ *
+ * Progression model:
+ *   - `rarity` is the family identity / classification. It NEVER changes
+ *     between tiers in the same family.
+ *   - `tier` (1 / 2 / 3) is the strength level inside a family:
+ *       1 = Base       (display name: "Levitation Poison")
+ *       2 = +          (display name: "Levitation Poison +")
+ *       3 = ++         (display name: "Levitation Poison ++")
+ *   - The display suffix lives in `POISON_TIER_SUFFIX`; the `name` field
+ *     stores only the family base name. Use `getPoisonDisplayName(def)` to
+ *     render the full UI label.
  *
  * `poisonDelaySecs` = how long the NPC suffers the effect before dying.
  */
@@ -20,17 +31,37 @@ export const POISON_EFFECT_LABELS: Record<PoisonEffect, string> = {
 	divine_pull: "O's Guidance",
 };
 
+/** Upgrade tier within a poison family. */
+export type PoisonTier = 1 | 2 | 3;
+
+/** Display suffix appended to the family base name, keyed by tier. */
+export const POISON_TIER_SUFFIX: Record<PoisonTier, string> = {
+	1: "",
+	2: " +",
+	3: " ++",
+};
+
 export interface PoisonDef {
 	id: string;
+	/** Family base name -- never includes the +/++ suffix. Use getPoisonDisplayName() to render. */
 	name: string;
 	description: string;
 	/** Mechanical stat line shown in gold on the tooltip. */
 	effect: string;
+	/**
+	 * Optional extra-capability line shown beneath `effect` on the tooltip in
+	 * the tier's highlight colour. Use for abilities a higher tier gains beyond
+	 * the base (e.g. "Also reveals nearby targets through walls.").
+	 */
+	extraEffect?: string;
 	/** Display sub-type label (always "Vial"). */
 	poisonType: string;
 	/** Short icon character for the inventory tile. */
 	icon: string;
-	/** Rarity tier — drives border colour AND upgrade tier. */
+	/**
+	 * Rarity tier -- identity / classification only. Fixed across every
+	 * tier in the same family. Drives border colour and shop pool placement.
+	 */
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
 	/** Which death-animation effect this poison triggers. */
 	poisonEffect: PoisonEffect;
@@ -38,22 +69,23 @@ export interface PoisonDef {
 	poisonDelaySecs: number;
 	/** How long the coat lasts on the weapon (seconds). */
 	coatDurationSecs: number;
-	/** Groups upgrade tiers — all items sharing the same familyId are tiers of one poison. */
+	/** Groups upgrade tiers -- all items sharing the same familyId are tiers of one poison. */
 	familyId: string;
-	/** Short description of what this tier adds over the base. Undefined on the base tier. */
-	tierBonus?: string;
+	/** Strength tier inside the family (1 = base, 2 = +, 3 = ++). */
+	tier: PoisonTier;
 	/** Developer Product ID for Robux-purchasable poisons (repeat-purchase). */
 	devProductId?: number;
 	/** Number of charges granted per activation (undefined = standard 1-use coat). */
 	chargesPerUse?: number;
 }
 
-/** Master poison catalogue — keyed by poison ID. */
+/** Master poison catalogue -- keyed by poison ID. */
 export const POISONS: Record<string, PoisonDef> = {
-	// ── Levitation Poison family ─────────────────────────────────────────
+	// -- Levitation Poison family ---------------------------------------
 	levitation_poison: {
 		id: "levitation_poison",
 		familyId: "levitation_poison",
+		tier: 1,
 		name: "Levitation Poison",
 		description:
 			"A translucent vial of swirling violet mist. Victims drift skyward, limbs limp, before the end claims them.",
@@ -65,26 +97,27 @@ export const POISONS: Record<string, PoisonDef> = {
 		poisonDelaySecs: 5,
 		coatDurationSecs: DEFAULT_COAT_DURATION_SECS,
 	},
-	levitation_poison_rare: {
-		id: "levitation_poison_rare",
+	levitation_poison_plus: {
+		id: "levitation_poison_plus",
 		familyId: "levitation_poison",
+		tier: 2,
 		name: "Levitation Poison",
 		description:
 			"A distilled vintage -- the mist coils tighter, the ascent slower and crueller. They hang in the sky like a warning.",
-		effect: "NPC floats 8s before death. +45 min coat. Lasts 45 gameplay min.",
-		tierBonus: "+3s float, +15 min coat duration",
+		effect: "NPC floats 8s before death. Lasts 45 gameplay min.",
 		poisonType: "Vial",
 		icon: "~",
-		rarity: "rare",
+		rarity: "common",
 		poisonEffect: "floating_death",
 		poisonDelaySecs: 8,
 		coatDurationSecs: 2700,
 	},
 
-	// ── Shrinking Curse family ────────────────────────────────────────────
+	// -- Shrinking Curse family -----------------------------------------
 	shrinking_curse: {
 		id: "shrinking_curse",
 		familyId: "shrinking_curse",
+		tier: 1,
 		name: "Shrinking Curse",
 		description:
 			"Bottled spite from a hedge-witch's cauldron. The victim crumples inward, bones folding like wet parchment, until nothing remains but a faint pop.",
@@ -96,25 +129,26 @@ export const POISONS: Record<string, PoisonDef> = {
 		poisonDelaySecs: 5,
 		coatDurationSecs: DEFAULT_COAT_DURATION_SECS,
 	},
-	shrinking_curse_rare: {
-		id: "shrinking_curse_rare",
+	shrinking_curse_plus: {
+		id: "shrinking_curse_plus",
 		familyId: "shrinking_curse",
+		tier: 2,
 		name: "Shrinking Curse",
 		description: "Twice-fermented in a sealed crypt. The collapse is faster, more violent -- and the pop echoes.",
-		effect: "NPC shrinks over 3s then implodes. +45 min coat. Lasts 45 gameplay min.",
-		tierBonus: "Faster shrink (3s), +15 min coat duration",
+		effect: "NPC shrinks over 3s then implodes. Lasts 45 gameplay min.",
 		poisonType: "Vial",
 		icon: "v",
-		rarity: "rare",
+		rarity: "common",
 		poisonEffect: "shrinking_death",
 		poisonDelaySecs: 3,
 		coatDurationSecs: 2700,
 	},
 
-	// ── Dismembering Blight family ───────────────────────────────────────
+	// -- Dismembering Blight family -------------------------------------
 	dismembering_blight: {
 		id: "dismembering_blight",
 		familyId: "dismembering_blight",
+		tier: 1,
 		name: "Dismembering Blight",
 		description:
 			"A tar-black tincture that smells of iron and regret. It loosens the body's seams one joint at a time, each limb surrendering to gravity.",
@@ -126,26 +160,27 @@ export const POISONS: Record<string, PoisonDef> = {
 		poisonDelaySecs: 5,
 		coatDurationSecs: DEFAULT_COAT_DURATION_SECS,
 	},
-	dismembering_blight_rare: {
-		id: "dismembering_blight_rare",
+	dismembering_blight_plus: {
+		id: "dismembering_blight_plus",
 		familyId: "dismembering_blight",
+		tier: 2,
 		name: "Dismembering Blight",
 		description:
 			"Aged in a bone casket. The seams come undone violently -- limbs tear away with force, scattering like broken marionette strings.",
-		effect: "Violent dismember over 3s. +45 min coat. Lasts 45 gameplay min.",
-		tierBonus: "Faster dismember (3s), +15 min coat duration",
+		effect: "Violent dismember over 3s. Lasts 45 gameplay min.",
 		poisonType: "Vial",
 		icon: "x",
-		rarity: "rare",
+		rarity: "common",
 		poisonEffect: "dismember_death",
 		poisonDelaySecs: 3,
 		coatDurationSecs: 2700,
 	},
 
-	// ── O's Guidance (Developer Product) ────────────────────────────────
+	// -- O's Guidance (Developer Product) -------------------------------
 	os_guidance: {
 		id: "os_guidance",
 		familyId: "os_guidance",
+		tier: 1,
 		name: "O's Guidance",
 		description:
 			"A divine vial humming with holy light. Upon striking a target, a beam descends from the heavens and wrenches the soul skyward -- swift and merciless.",
@@ -169,10 +204,12 @@ export const POISON_LIST: PoisonDef[] = (() => {
 	return list;
 })();
 
-/** Returns all tier variants for a given poison family, sorted common → legendary. */
+/** Render a poison's full display name including the tier suffix. */
+export function getPoisonDisplayName(def: PoisonDef): string {
+	return def.name + POISON_TIER_SUFFIX[def.tier];
+}
+
+/** Returns all tier variants for a given poison family, sorted base -> +/++ . */
 export function getPoisonFamily(familyId: string): PoisonDef[] {
-	const order = ["common", "uncommon", "rare", "epic", "legendary"];
-	return POISON_LIST.filter((p) => p.familyId === familyId).sort(
-		(a, b) => order.indexOf(a.rarity) < order.indexOf(b.rarity),
-	);
+	return POISON_LIST.filter((p) => p.familyId === familyId).sort((a, b) => a.tier < b.tier);
 }

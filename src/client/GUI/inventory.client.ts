@@ -20,6 +20,7 @@ import {
 	BountyScrollPayload,
 } from "shared/inventory";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
 import { isNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
 
 const activateRemote = getActivateItemRemote();
@@ -57,6 +58,7 @@ let tooltipType: TextLabel | undefined;
 let tooltipRarity: TextLabel | undefined;
 let tooltipDesc: TextLabel | undefined;
 let tooltipEffect: TextLabel | undefined;
+let tooltipExtra: TextLabel | undefined;
 let tooltipConsumable: TextLabel | undefined;
 let currentTooltipItem: string | undefined;
 
@@ -737,6 +739,7 @@ function buildTooltip(screenGui: ScreenGui): void {
 	effectLabel.Position = new UDim2(0, 0, 0, sc(74));
 	effectLabel.BackgroundTransparency = 1;
 	effectLabel.Text = "";
+	effectLabel.RichText = true;
 	effectLabel.TextColor3 = UI_THEME.gold;
 	effectLabel.Font = UI_THEME.fontBold;
 	effectLabel.TextSize = sc(11);
@@ -745,6 +748,25 @@ function buildTooltip(screenGui: ScreenGui): void {
 	effectLabel.ZIndex = 51;
 	effectLabel.Parent = tt;
 	tooltipEffect = effectLabel;
+
+	// Extra-capability line for tier 2/3 items that gain a new ability.
+	// Sits between the effect line and the bottom consumable hint, in the
+	// tier's highlight colour (green for +, yellow for ++). Hidden when empty.
+	const extraLabel = new Instance("TextLabel");
+	extraLabel.Name = "TT_Extra";
+	extraLabel.Size = new UDim2(1, 0, 0, sc(22));
+	extraLabel.Position = new UDim2(0, 0, 0, sc(102));
+	extraLabel.BackgroundTransparency = 1;
+	extraLabel.Text = "";
+	extraLabel.TextColor3 = UI_THEME.textPrimary;
+	extraLabel.Font = UI_THEME.fontBody;
+	extraLabel.TextSize = sc(11);
+	extraLabel.TextYAlignment = Enum.TextYAlignment.Top;
+	extraLabel.TextWrapped = true;
+	extraLabel.Visible = false;
+	extraLabel.ZIndex = 51;
+	extraLabel.Parent = tt;
+	tooltipExtra = extraLabel;
 
 	const consumeLabel = new Instance("TextLabel");
 	consumeLabel.Name = "TT_Consumable";
@@ -761,12 +783,12 @@ function buildTooltip(screenGui: ScreenGui): void {
 	tooltipConsumable = consumeLabel;
 }
 
-function positionTooltip(anchor: GuiObject): void {
+function positionTooltip(anchor: GuiObject, extraHeight: number = 0): void {
 	if (tooltipFrame === undefined) return;
 	const aPos = anchor.AbsolutePosition;
 	const aSize = anchor.AbsoluteSize;
 	const ttW = sc(210);
-	const ttH = sc(140);
+	const ttH = sc(140) + extraHeight;
 	const camera = (game.GetService("Workspace") as Workspace).CurrentCamera;
 	const vpX = camera ? camera.ViewportSize.X : 1920;
 
@@ -799,7 +821,36 @@ function showItemTooltip(item: ItemDef, tile: TextButton): void {
 		tooltipRarity.TextColor3 = rarityColor;
 	}
 	if (tooltipDesc) tooltipDesc.Text = item.description;
-	if (tooltipEffect) tooltipEffect.Text = item.effect;
+
+	// Effect line: tiered items diff against their family's base for inline
+	// highlights (green for +, yellow for ++). Untiered items render plain.
+	const tier = item.tier;
+	if (tooltipEffect) {
+		if (tier !== undefined && item.baseEffect !== undefined) {
+			tooltipEffect.Text = buildEffectRichText(item.effect, item.baseEffect, tier);
+		} else {
+			tooltipEffect.Text = item.effect;
+		}
+	}
+
+	// Extra-capability line: only visible when the def declares an extraEffect.
+	// Coloured in the tier's highlight colour so it reads as a bonus the
+	// upgraded tier gains beyond the base.
+	let extraHeight = 0;
+	if (tooltipExtra) {
+		const extraText = item.extraEffect;
+		if (tier !== undefined && extraText !== undefined && extraText !== "") {
+			const tierColor = TIER_HIGHLIGHT_COLOR[tier];
+			tooltipExtra.TextColor3 = tierColor !== undefined ? tierColor : UI_THEME.textPrimary;
+			tooltipExtra.Text = extraText;
+			tooltipExtra.Visible = true;
+			extraHeight = sc(24);
+		} else {
+			tooltipExtra.Text = "";
+			tooltipExtra.Visible = false;
+		}
+	}
+
 	if (tooltipConsumable) {
 		tooltipConsumable.Text = item.consumable ? "Consumable - click to activate" : "Click to equip";
 	}
@@ -808,7 +859,7 @@ function showItemTooltip(item: ItemDef, tile: TextButton): void {
 	const strokeRef = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
 	if (strokeRef) strokeRef.Color = rarityColor;
 
-	positionTooltip(tile);
+	positionTooltip(tile, extraHeight);
 }
 
 function showScrollTooltip(scroll: BountyScroll, tile: TextButton): void {
@@ -831,6 +882,10 @@ function showScrollTooltip(scroll: BountyScroll, tile: TextButton): void {
 	}
 	if (tooltipDesc) tooltipDesc.Text = "Proof of assassination. Turn in to claim your reward.";
 	if (tooltipEffect) tooltipEffect.Text = "+" + scroll.gold + " Gold  |  +" + scroll.xp + " XP";
+	if (tooltipExtra) {
+		tooltipExtra.Text = "";
+		tooltipExtra.Visible = false;
+	}
 	if (tooltipConsumable) tooltipConsumable.Text = "COLLECTED";
 
 	tooltipFrame.BackgroundColor3 = rarityBg;

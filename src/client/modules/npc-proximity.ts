@@ -67,6 +67,8 @@ const wantedBillboards = new Map<string, BillboardGui>();
 let closestWantedPlayerInRange: Model | undefined = undefined;
 
 // ── Regular (non-wanted) Player Billboards ──────────────────────────────────────
+// Shows the player's title symbol + title name + name above their head. Gold is
+// intentionally NOT shown here -- gold lives on the local Player Board only.
 const playerBillboards = new Map<string, BillboardGui>();
 const playerTitles = new Map<string, string>(); // playerName -> equipped title ID
 

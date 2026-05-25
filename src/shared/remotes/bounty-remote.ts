@@ -1,4 +1,4 @@
-import { getRemoteSubFolder, getRemoteEvent } from "shared/remote-utils";
+import { getRemoteSubFolder, getRemoteEvent, getRemoteFunction } from "shared/remote-utils";
 
 // ─── Payload types (shared between server and client) ────────────────────────
 
@@ -65,4 +65,9 @@ export function getBountyListSyncRemote(): RemoteEvent {
 /** Client -> server: player attempting to assassinate a wanted player. */
 export function getPlayerAssassinationRemote(): RemoteEvent {
 	return getBountyEvent("PlayerAssassination");
+}
+
+/** Client -> server: synchronous fetch of the caller's current NPC bounty. */
+export function getMyNPCBountyRemote(): RemoteFunction {
+	return getRemoteFunction(getFolder(), "GetMyNPCBounty");
 }

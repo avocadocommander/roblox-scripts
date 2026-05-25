@@ -8,6 +8,7 @@ import {
 	getBountyAssignedRemote,
 	getBountyCompletedRemote,
 	getBountyListSyncRemote,
+	getMyNPCBountyRemote,
 	getPlayerAssassinationRemote,
 	getPlayerWantedClearedRemote,
 	getPlayerWantedRemote,
@@ -262,6 +263,14 @@ export function initializeBountyManager(): void {
 	getPlayerWantedRemote();
 	getPlayerWantedClearedRemote();
 	getPlayerAssassinationRemote();
+
+	// Client-callable: returns the caller's current NPC bounty (or undefined).
+	// Used by tutorial-highlight as a fallback when the BountyAssigned /
+	// BountyListSync event missed the listener (e.g. timing race on first join).
+	const myBountyRf = getMyNPCBountyRemote();
+	myBountyRf.OnServerInvoke = (player: Player): NPCBountyPayload | undefined => {
+		return getPlayerNPCBounty(player);
+	};
 
 	const lifecycle = getOrCreateLifecycleRemote();
 

@@ -21,6 +21,7 @@ export const SHOP_TYPE_MARKERS: Record<ShopType, string> = {
 	poison: "VENOM",
 	rare: "CURIO",
 	tavern: "ALE",
+	black_market: "BLACK MARKET",
 };
 
 // ── Sign color schemes ────────────────────────────────────────────────────────
@@ -89,6 +90,15 @@ export const SIGN_COLORS: Record<ShopType, SignColorScheme> = {
 		border: Color3.fromRGB(50, 30, 10), // barrel stave
 		flavorLine: "Ale & Fire.",
 	},
+	// Oxblood lacquer on charred plank — back-alley contraband
+	black_market: {
+		marker: Color3.fromRGB(138, 28, 28), // dried blood red
+		name: NAME_COLOR,
+		subtext: SUBTEXT_COLOR,
+		background: WOOD_BG,
+		border: Color3.fromRGB(56, 14, 14), // smouldered crimson
+		flavorLine: "No Questions.",
+	},
 };
 
 // ── Name template pools ───────────────────────────────────────────────────────
@@ -145,12 +155,23 @@ const TAVERN_TEMPLATES: string[] = [
 	"The Rusty $surname",
 ];
 
+const BLACK_MARKET_TEMPLATES: string[] = [
+	"$first's Back Door",
+	"The $surname Cellar",
+	"$initials Shadow Goods",
+	"$first's Hidden Stock",
+	"The $surname Underbelly",
+	"$first's Quiet Trade",
+	"The $surname Black Market",
+];
+
 const TEMPLATES: Record<ShopType, string[]> = {
 	weapon: WEAPON_TEMPLATES,
 	elixir: ELIXIR_TEMPLATES,
 	poison: POISON_TEMPLATES,
 	rare: RARE_TEMPLATES,
 	tavern: TAVERN_TEMPLATES,
+	black_market: BLACK_MARKET_TEMPLATES,
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

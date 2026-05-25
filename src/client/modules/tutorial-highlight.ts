@@ -21,6 +21,7 @@ import {
 	getBountyAssignedRemote,
 	getBountyCompletedRemote,
 	getBountyListSyncRemote,
+	getMyNPCBountyRemote,
 	NPCBountyPayload,
 } from "shared/remotes/bounty-remote";
 import { log } from "shared/helpers";
@@ -35,8 +36,28 @@ const OUTLINE_TRANSPARENCY = 0;
 
 const activeHighlights = new Map<Model, Highlight>();
 let currentBountyName: string | undefined;
+let pendingBountyFetch = false;
 
 // ── Target resolution ───────────────────────────────────────────────────────
+
+function fetchBountyFromServer(): void {
+	if (pendingBountyFetch) return;
+	pendingBountyFetch = true;
+	task.spawn(() => {
+		const [ok, result] = pcall(() => getMyNPCBountyRemote().InvokeServer());
+		pendingBountyFetch = false;
+		if (!ok) {
+			log("[TUTORIAL-HIGHLIGHT] GetMyNPCBounty invoke failed: " + tostring(result));
+			return;
+		}
+		const payload = result as NPCBountyPayload | undefined;
+		if (payload && payload.npcName !== undefined && payload.npcName !== "") {
+			currentBountyName = payload.npcName;
+			log("[TUTORIAL-HIGHLIGHT] fetched bounty target from server: " + currentBountyName);
+			refreshHighlights();
+		}
+	});
+}
 
 function getTargetNames(): Set<string> {
 	const set = new Set<string>();
@@ -48,6 +69,10 @@ function getTargetNames(): Set<string> {
 	} else if (step.highlightType === "bountyTarget") {
 		if (currentBountyName !== undefined && currentBountyName !== "") {
 			set.add(currentBountyName);
+		} else {
+			// No cached bounty -- ask the server. When it returns, refreshHighlights
+			// is called again and the highlight will land on the next pass.
+			fetchBountyFromServer();
 		}
 	}
 	return set;
@@ -181,5 +206,8 @@ export function initializeTutorialHighlight(): void {
 	}
 
 	refreshHighlights();
+	// Seed currentBountyName from the server in case BountyAssigned /
+	// BountyListSync already fired before this listener attached.
+	fetchBountyFromServer();
 	log("[TUTORIAL-HIGHLIGHT] initialized");
 }

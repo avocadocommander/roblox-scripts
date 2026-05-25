@@ -15,8 +15,8 @@
  */
 
 import { WEAPONS, WEAPON_LIST, WeaponDef } from "shared/config/weapons";
-import { POISONS, POISON_LIST, PoisonDef } from "shared/config/poisons";
-import { ELIXIRS, ELIXIR_LIST, ElixirDef } from "shared/config/elixirs";
+import { POISONS, POISON_LIST, PoisonDef, getPoisonDisplayName, getPoisonFamily } from "shared/config/poisons";
+import { ELIXIRS, ELIXIR_LIST, ElixirDef, getElixirDisplayName, getElixirFamily } from "shared/config/elixirs";
 import { MAX_BOUNTY_SLOTS } from "shared/config/player";
 
 // Re-export config types so consumers can import from one place
@@ -50,6 +50,24 @@ export interface ItemDef {
 	rarity: "common" | "uncommon" | "rare" | "epic" | "legendary";
 	/** Whether this item is consumed on use (poisons, elixirs). */
 	consumable: boolean;
+	/**
+	 * Upgrade tier inside a family for tiered consumables (1 = base, 2 = +,
+	 * 3 = ++). Undefined for weapons and untiered items.
+	 */
+	tier?: 1 | 2 | 3;
+	/** Family grouping id — shared across all tier variants of one item. */
+	familyId?: string;
+	/**
+	 * Effect text of the family's tier-1 base, used by the tooltip system to
+	 * diff against `effect` and highlight differences in the tier's colour.
+	 * Tier-1 items have this equal to `effect`.
+	 */
+	baseEffect?: string;
+	/**
+	 * Optional extra-capability text shown below the main effect line in the
+	 * tier's highlight colour. Only populated when the def declares one.
+	 */
+	extraEffect?: string;
 }
 
 // ── Build ITEMS + ITEM_LIST from config maps ──────────────────────────────────
@@ -74,9 +92,11 @@ for (const [, w] of pairs(WEAPONS)) {
 
 // Poisons
 for (const [, p] of pairs(POISONS)) {
+	const family = getPoisonFamily(p.familyId);
+	const baseDef = family[0];
 	ITEMS[p.id] = {
 		id: p.id,
-		name: p.name,
+		name: getPoisonDisplayName(p),
 		description: p.description,
 		effect: p.effect,
 		itemType: p.poisonType,
@@ -84,14 +104,20 @@ for (const [, p] of pairs(POISONS)) {
 		icon: p.icon,
 		rarity: p.rarity,
 		consumable: true,
+		tier: p.tier,
+		familyId: p.familyId,
+		baseEffect: baseDef !== undefined ? baseDef.effect : p.effect,
+		extraEffect: p.extraEffect,
 	};
 }
 
 // Elixirs
 for (const [, e] of pairs(ELIXIRS)) {
+	const family = getElixirFamily(e.familyId);
+	const baseDef = family[0];
 	ITEMS[e.id] = {
 		id: e.id,
-		name: e.name,
+		name: getElixirDisplayName(e),
 		description: e.description,
 		effect: e.effect,
 		itemType: e.elixirType,
@@ -99,6 +125,10 @@ for (const [, e] of pairs(ELIXIRS)) {
 		icon: e.icon,
 		rarity: e.rarity,
 		consumable: true,
+		tier: e.tier,
+		familyId: e.familyId,
+		baseEffect: baseDef !== undefined ? baseDef.effect : e.effect,
+		extraEffect: e.extraEffect,
 	};
 }
 

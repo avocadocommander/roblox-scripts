@@ -140,6 +140,50 @@ Royal Decree
 
 ---
 
+## Player Board
+Local player's persistent HUD panel anchored at the top-left of the screen.
+
+Shows the local player only — never another player. Contains:
+- player name
+- title + faction reputation line
+- currently equipped weapon
+- gold total (with inline +/- gain/loss effect)
+
+Code reference:
+- `src/client/GUI/user-ui-block.client.ts` (built by `buildCharacterBanner`)
+
+Do NOT call this:
+- character banner
+- HUD top-left
+- nameplate (that name is reserved — see Player Nameplate)
+
+Canonical name:
+Player Board
+
+---
+
+## Player Nameplate
+Floating BillboardGui above another player's character head, visible in the 3D world.
+
+Shows information about a remote player only. Local player's own nameplate is hidden from themselves. Contains:
+- title symbol + title name + player name (single line)
+- wanted-state border colour
+
+Does NOT contain gold (gold lives on the Player Board).
+
+Code reference:
+- `src/client/modules/npc-proximity.ts` (`createPlayerBillboard`)
+
+Do NOT call this:
+- player board
+- player overhead UI
+- name tag
+
+Canonical name:
+Player Nameplate
+
+---
+
 ## Protected Realm
 Foundational design ethic:
 fairness, immersion, no corruption by coin.

@@ -26,7 +26,13 @@
 import { CollectionService, ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { NPC_REGISTRY } from "shared/config/npcs";
-import { ShopType, SHOP_TYPE_POOLS, REQUIRED_SHOP_TYPES, MERCHANT_NPC_POOL } from "shared/config/shop-types";
+import {
+	ShopType,
+	REQUIRED_SHOP_TYPES,
+	MERCHANT_NPC_POOL,
+	buildShopInventory,
+	isExplicitOnlyShopType,
+} from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
 import { getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
@@ -396,7 +402,10 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 			log("[MERCHANT] " + npcName + " (merchant) died -- respawn in 30s");
 			merchantShops.delete(npcName);
 			task.delay(30, () => {
-				spawnMerchant(npcName, shopSite, shopItems, shopType);
+				// Re-roll inventory each respawn so black-market merchants get a
+				// fresh random selection. Static shop types return their stable pool.
+				const nextItems = buildShopInventory(shopType);
+				spawnMerchant(npcName, shopSite, nextItems.size() > 0 ? nextItems : shopItems, shopType);
 			});
 		}
 	});
@@ -472,9 +481,13 @@ function runMerchantInit(): void {
 		shuffled[j] = tmp;
 	}
 
-	// Build the type-assignment list: required types first, then random extras
+	// Build the type-assignment list: required types first, then random extras.
+	// Explicit-only shop types (e.g. black_market) are excluded here — they must
+	// be placed via a ShopType attribute on the world model.
 	const typeAssignments: ShopType[] = [...REQUIRED_SHOP_TYPES];
-	const allTypes: ShopType[] = ["weapon", "elixir", "poison", "rare"];
+	const allTypes: ShopType[] = (
+		["weapon", "elixir", "poison", "rare", "tavern", "black_market"] as ShopType[]
+	).filter((t) => isExplicitOnlyShopType(t) === false);
 	for (let i = typeAssignments.size(); i < shuffled.size(); i++) {
 		typeAssignments.push(allTypes[math.random(0, allTypes.size() - 1)]);
 	}
@@ -496,9 +509,22 @@ function runMerchantInit(): void {
 		const npcName = availablePool[poolIndex];
 		poolIndex++;
 
-		// ShopType attribute on the ShopSite model overrides the auto-assigned type
+		// ShopType attribute on the ShopSite model overrides the auto-assigned type.
+		// Explicit-only types (e.g. black_market) MUST come from the attribute —
+		// if one somehow ended up in auto-assignment, fall back to a safe default.
 		const attrType = shopSite.GetAttribute("ShopType") as string | undefined;
-		const resolvedType: ShopType = (attrType as ShopType) ?? shopType;
+		let resolvedType: ShopType = (attrType as ShopType) ?? shopType;
+		if (attrType === undefined && isExplicitOnlyShopType(resolvedType)) {
+			log(
+				"[MERCHANT] Refused to auto-assign explicit-only ShopType '" +
+					resolvedType +
+					"' to site " +
+					shopSite.Name +
+					" -- falling back to 'rare'.",
+				"WARN",
+			);
+			resolvedType = "rare";
+		}
 
 		log(
 			"[MERCHANT] Site " +
@@ -509,9 +535,9 @@ function runMerchantInit(): void {
 				(attrType !== undefined ? " (from attribute)" : " (auto-assigned)"),
 		);
 
-		const shopItems = SHOP_TYPE_POOLS[resolvedType];
-		if (!shopItems) {
-			log("[MERCHANT] Unknown ShopType '" + resolvedType + "' on site " + shopSite.Name, "WARN");
+		const shopItems = buildShopInventory(resolvedType);
+		if (!shopItems || shopItems.size() === 0) {
+			log("[MERCHANT] Empty/unknown ShopType '" + resolvedType + "' on site " + shopSite.Name, "WARN");
 			poolIndex--;
 			continue;
 		}

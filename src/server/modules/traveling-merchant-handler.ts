@@ -21,7 +21,7 @@
 import { ServerStorage, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { NPC_REGISTRY } from "shared/config/npcs";
-import { MERCHANT_NPC_POOL, SHOP_TYPE_POOLS, ShopType } from "shared/config/shop-types";
+import { MERCHANT_NPC_POOL, buildShopInventory, ShopType } from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
@@ -46,8 +46,14 @@ const SKY_HEIGHT_OFFSET = 120;
 const ARRIVE_TWEEN_SECS = 4;
 const DEPART_TWEEN_SECS = 3.5;
 
-/** Shop type for the traveling merchant (rare = sells everything). */
-const TRAVELING_MERCHANT_SHOP_TYPE: ShopType = "rare";
+/**
+ * Shop type for the traveling merchant.
+ *
+ * Uses "black_market" so each visit rolls a fresh random selection of poisons
+ * and elixirs across every rarity and tier. Fits the "travelling stranger
+ * with rare goods" fantasy and keeps the event feeling different every time.
+ */
+const TRAVELING_MERCHANT_SHOP_TYPE: ShopType = "black_market";
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 
@@ -162,7 +168,7 @@ function spawnNPCForCart(cart: Model): void {
 	assignNpcToRoute(npc, routePoints, routeConfig, setState);
 
 	// Register with the merchant system so the dialog handler can serve the shop.
-	const shopItems: ShopItem[] = SHOP_TYPE_POOLS[TRAVELING_MERCHANT_SHOP_TYPE];
+	const shopItems: ShopItem[] = buildShopInventory(TRAVELING_MERCHANT_SHOP_TYPE);
 	registerMerchantShop(npcName, shopItems);
 
 	activeNPC = npc;

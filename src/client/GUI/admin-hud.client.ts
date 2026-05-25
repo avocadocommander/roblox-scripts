@@ -3,8 +3,8 @@ import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
 import { getMockBountyKillRemote, getTurnInBountyRemote } from "shared/remotes/inventory-remote";
-import { POISON_LIST } from "shared/config/poisons";
-import { ELIXIR_LIST } from "shared/config/elixirs";
+import { POISON_LIST, getPoisonDisplayName } from "shared/config/poisons";
+import { ELIXIR_LIST, getElixirDisplayName } from "shared/config/elixirs";
 import { RARITY_COLORS } from "shared/inventory";
 
 function sc(base: number): number {
@@ -80,10 +80,23 @@ function getDropdowns(): DropdownDef[] {
 	const turnInBountyRemote = getTurnInBountyRemote();
 
 	const rarityOrder = ["common", "uncommon", "rare", "epic", "legendary"];
+	// Group by rarity, then by family, then by tier so families read "Base, +, ++" together.
 	const sortedPoisons = POISON_LIST.map((p) => p);
-	sortedPoisons.sort((a, b) => rarityOrder.indexOf(a.rarity) < rarityOrder.indexOf(b.rarity));
+	sortedPoisons.sort((a, b) => {
+		const ra = rarityOrder.indexOf(a.rarity);
+		const rb = rarityOrder.indexOf(b.rarity);
+		if (ra !== rb) return ra < rb;
+		if (a.familyId !== b.familyId) return a.familyId < b.familyId;
+		return a.tier < b.tier;
+	});
 	const sortedElixirs = ELIXIR_LIST.map((e) => e);
-	sortedElixirs.sort((a, b) => rarityOrder.indexOf(a.rarity) < rarityOrder.indexOf(b.rarity));
+	sortedElixirs.sort((a, b) => {
+		const ra = rarityOrder.indexOf(a.rarity);
+		const rb = rarityOrder.indexOf(b.rarity);
+		if (ra !== rb) return ra < rb;
+		if (a.familyId !== b.familyId) return a.familyId < b.familyId;
+		return a.tier < b.tier;
+	});
 
 	return [
 		{
@@ -154,7 +167,7 @@ function getDropdowns(): DropdownDef[] {
 			label: "Potions",
 			color: Color3.fromRGB(128, 68, 148),
 			buttons: sortedPoisons.map((p) => ({
-				label: p.name + " (" + p.rarity + ")",
+				label: getPoisonDisplayName(p) + " (" + p.rarity + ")",
 				color: RARITY_COLORS[p.rarity] ?? UI_THEME.textPrimary,
 				action: () => runCommand("givePoison", p.id),
 			})),
@@ -164,7 +177,7 @@ function getDropdowns(): DropdownDef[] {
 			label: "Elixirs",
 			color: Color3.fromRGB(68, 138, 82),
 			buttons: sortedElixirs.map((e) => ({
-				label: e.name + " (" + e.rarity + ")",
+				label: getElixirDisplayName(e) + " (" + e.rarity + ")",
 				color: RARITY_COLORS[e.rarity] ?? UI_THEME.textPrimary,
 				action: () => runCommand("giveElixir", e.id),
 			})),

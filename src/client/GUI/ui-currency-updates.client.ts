@@ -7,11 +7,10 @@ import { UI_THEME } from "shared/ui-theme";
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const ExpierenceUpdated = playerState.WaitForChild("ExpierenceUpdated") as RemoteEvent;
 const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
-const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
 
-// Track previous totals to derive deltas. -1 = not yet initialised, skip
-// animation on the very first event (which would show the full saved total).
-let prevCoins = -1;
+// Coin changes are rendered as an inline +/- floater on the Player Board
+// (see user-ui-block.client.ts), NOT here. XP deltas still use the bottom-left
+// float-pop below.
 let prevXP = -1;
 
 // ── Core float-pop ────────────────────────────────────────────────────────────
@@ -75,14 +74,7 @@ function spawnFloatPop(
 	});
 }
 
-// ── Coin gain ─────────────────────────────────────────────────────────────────
-
-function showCoinGain(delta: number, screenGui: ScreenGui): void {
-	// Tarnished gold, large, centred over the player HUD coin row
-	spawnFloatPop(screenGui, "+" + delta + "g", UI_THEME.gold, 128, 148, 25);
-}
-
-// ── XP gain ───────────────────────────────────────────────────────────────────
+// ── XP gain ───────────────────────────────────────────────────────────────────────
 
 function showXPGain(delta: number, screenGui: ScreenGui): void {
 	// Dull amber, slightly smaller, spawns a touch higher than coins so they
@@ -123,11 +115,9 @@ function stackPosAbove(i: number): UDim2 {
 function reorderStack(screenGui: ScreenGui): void {
 	for (let i = 0; i < notifyStack.size(); i++) {
 		const entry = notifyStack[i];
-		TweenService.Create(
-			entry.frame,
-			new TweenInfo(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Position: stackPos(i) },
-		).Play();
+		TweenService.Create(entry.frame, new TweenInfo(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position: stackPos(i),
+		}).Play();
 	}
 }
 
@@ -153,7 +143,12 @@ function pushNotification(frame: Frame, screenGui: ScreenGui): () => void {
 		if (idx >= 0) notifyStack.remove(idx);
 		// Slide up and fade out
 		TweenService.Create(frame, new TweenInfo(FADE_SECS, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position: new UDim2(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset - CARD_HEIGHT),
+			Position: new UDim2(
+				frame.Position.X.Scale,
+				frame.Position.X.Offset,
+				frame.Position.Y.Scale,
+				frame.Position.Y.Offset - CARD_HEIGHT,
+			),
 			BackgroundTransparency: 1,
 		}).Play();
 		for (const child of frame.GetDescendants()) {
@@ -322,14 +317,6 @@ onPlayerInitialized(() => {
 
 	LevelUpdated.OnClientEvent.Connect((newLevel: number) => {
 		showLevelUp(newLevel, screenGui);
-	});
-
-	CoinsUpdated.OnClientEvent.Connect((newTotal: number) => {
-		if (prevCoins >= 0) {
-			const delta = newTotal - prevCoins;
-			if (delta > 0) showCoinGain(delta, screenGui);
-		}
-		prevCoins = newTotal;
 	});
 
 	// Achievement unlocked notification

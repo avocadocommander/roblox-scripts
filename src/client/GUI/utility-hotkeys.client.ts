@@ -28,7 +28,7 @@ const KILL_RED = Color3.fromRGB(190, 50, 50);
 
 const UTILITIES: UtilityEntry[] = [
 	{ icon: "x", label: "Assassinate", hotkey: "Q", action: fireAssassinateAction, color: KILL_RED },
-	{ icon: "~", label: "Inventory", hotkey: "I", action: toggleInventory },
+	{ icon: "~", label: "Inventory", hotkey: "F", action: toggleInventory },
 	{ icon: "=", label: "Book", hotkey: "V", action: toggleKillBook },
 	{ icon: "*", label: "Campfire", hotkey: "Z", action: fireCampfireAction },
 ];

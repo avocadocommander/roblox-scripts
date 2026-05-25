@@ -1,4 +1,4 @@
-import { Players, SoundService, UserInputService } from "@rbxts/services";
+import { ContextActionService, Players, SoundService, StarterGui, UserInputService } from "@rbxts/services";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import { markPlayerInitialized } from "./modules/client-init";
 import { initializeMovementSystem } from "./modules/movement";
@@ -14,6 +14,15 @@ import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-fee
 import { QuipCategory } from "shared/config/player-quips";
 
 const lifecycle = getOrCreateLifecycleRemote();
+
+// ── Disable the default Roblox backpack / inventory ──────────────────────────
+// The stock backpack hijacks ` (backtick / tilde) to open and binds 1-9 to
+// hotbar slots. We use ~ for the admin menu and I for our custom inventory,
+// so the stock UI must be disabled. StarterGui.SetCoreGuiEnabled with
+// Backpack=false also unbinds those hotkeys.
+pcall(() => {
+	StarterGui.SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false);
+});
 
 // ── Create the shared ScreenGui that all UI scripts parent into ──────────────
 const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
@@ -47,12 +56,27 @@ lifecycle.OnClientEvent.Connect(async (message: string, data: unknown) => {
 		initializeNPCProximity();
 
 		// ── Keyboard hotkeys (PC players) ────────────────────────────────
+		// Inventory uses ContextActionService at a very high priority + Sink
+		// so nothing else (Roblox CoreScripts, chat focus, plugins) can steal
+		// `I`. Roblox's own CoreScript bindings cap out around 2000, so we
+		// pick a number well above that.
+		ContextActionService.BindActionAtPriority(
+			"ToggleInventory",
+			(_actionName, inputState) => {
+				if (inputState === Enum.UserInputState.Begin) {
+					toggleInventory();
+				}
+				return Enum.ContextActionResult.Sink;
+			},
+			false,
+			100000,
+			Enum.KeyCode.F,
+		);
+
 		UserInputService.InputBegan.Connect((input, gameProcessed) => {
 			if (gameProcessed) return;
 
-			if (input.KeyCode === Enum.KeyCode.I) {
-				toggleInventory();
-			} else if (input.KeyCode === Enum.KeyCode.V) {
+			if (input.KeyCode === Enum.KeyCode.V) {
 				toggleKillBook();
 			} else if (input.KeyCode === Enum.KeyCode.E) {
 				fireCurrentAction();

@@ -96,6 +96,7 @@ export const SHOP_OFFER_SLOTS: Record<ShopType, string[]> = {
 	elixir: [],
 	rare: [],
 	tavern: [],
+	black_market: [],
 };
 
 /** Return the offer IDs for a given shop type. */

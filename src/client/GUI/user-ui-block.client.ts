@@ -1,4 +1,4 @@
-import { Players, ReplicatedStorage } from "@rbxts/services";
+import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { WEAPONS } from "shared/config/weapons";
@@ -9,6 +9,13 @@ const GetPlayerTitle = playerState.WaitForChild("GetTitle") as RemoteFunction;
 const GetPlayerName = playerState.WaitForChild("GetName") as RemoteFunction;
 const GetFactionXP = playerState.WaitForChild("GetFactionXP") as RemoteFunction;
 const FactionXPUpdated = playerState.WaitForChild("FactionXPUpdated") as RemoteEvent;
+const GetCoins = playerState.WaitForChild("GetCoins") as RemoteFunction;
+const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
+
+// Gold colours — reuse the theme gold for the total, distinct greens/reds for +/- deltas.
+const GOLD_COLOR = UI_THEME.gold;
+const COIN_DELTA_POS = Color3.fromRGB(140, 220, 130);
+const COIN_DELTA_NEG = Color3.fromRGB(220, 100, 100);
 
 // -- Scaling --------------------------------------------------------------------
 
@@ -22,6 +29,10 @@ let nameLabel: TextLabel | undefined;
 let titleRepLabel: TextLabel | undefined;
 let weaponIconLabel: TextLabel | undefined;
 let weaponNameLabel: TextLabel | undefined;
+let goldLabel: TextLabel | undefined;
+let nameRow: Frame | undefined;
+
+let prevCoins = -1;
 
 // Cached state for combined title+rep line
 let cachedTitle = "";
@@ -130,20 +141,49 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 	layout.Padding = new UDim(0, sc(3));
 	layout.Parent = banner;
 
-	// ---- Line 1: Player name (largest text) --------------------------------
+	// ---- Line 1: Player name + gold total ----------------------------------
+	// Name fills the left; gold value is pinned to the right edge of the row.
+	// A +N / -N floater spawns from the gold label position on every change.
+	const GOLD_W = sc(72);
+
+	nameRow = new Instance("Frame");
+	nameRow.Name = "NameRow";
+	nameRow.LayoutOrder = 0;
+	nameRow.Size = new UDim2(1, 0, 0, sc(30));
+	nameRow.BackgroundTransparency = 1;
+	nameRow.ZIndex = 31;
+	nameRow.ClipsDescendants = false;
+	nameRow.Parent = banner;
+
 	nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "Name";
-	nameLabel.LayoutOrder = 0;
-	nameLabel.Size = new UDim2(1, 0, 0, sc(30));
+	nameLabel.Size = new UDim2(1, -GOLD_W - sc(6), 1, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.Text = "---";
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontDisplay;
 	nameLabel.TextSize = sc(26);
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	nameLabel.TextYAlignment = Enum.TextYAlignment.Center;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	nameLabel.ZIndex = 31;
-	nameLabel.Parent = banner;
+	nameLabel.Parent = nameRow;
+
+	goldLabel = new Instance("TextLabel");
+	goldLabel.Name = "Gold";
+	goldLabel.AnchorPoint = new Vector2(1, 0);
+	goldLabel.Position = new UDim2(1, 0, 0, 0);
+	goldLabel.Size = new UDim2(0, GOLD_W, 1, 0);
+	goldLabel.BackgroundTransparency = 1;
+	goldLabel.Text = "0g";
+	goldLabel.TextColor3 = GOLD_COLOR;
+	goldLabel.Font = UI_THEME.fontDisplay;
+	goldLabel.TextSize = sc(22);
+	goldLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	goldLabel.TextYAlignment = Enum.TextYAlignment.Center;
+	goldLabel.ZIndex = 31;
+	goldLabel.ClipsDescendants = false;
+	goldLabel.Parent = nameRow;
 
 	// ---- Line 2: Title - Reputation (combined) -----------------------------
 	titleRepLabel = new Instance("TextLabel");
@@ -208,6 +248,60 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 	weaponNameLabel.Parent = weaponRow;
 }
 
+// -- Gold display ---------------------------------------------------------------
+
+function formatGold(amount: number): string {
+	return tostring(amount) + "g";
+}
+
+/**
+ * Spawn a short "+N" (green) or "-N" (red) label that floats up and fades out
+ * just above the Player Board gold total to telegraph the change.
+ */
+function spawnGoldDeltaFloater(delta: number): void {
+	if (delta === 0 || !goldLabel) return;
+	const sign = delta > 0 ? "+" : "-";
+	const magnitude = math.abs(delta);
+	const color = delta > 0 ? COIN_DELTA_POS : COIN_DELTA_NEG;
+
+	const floater = new Instance("TextLabel");
+	floater.Name = "GoldDelta";
+	floater.AnchorPoint = new Vector2(1, 1);
+	// Pin the floater's bottom-right corner to the gold label's top-right corner.
+	floater.Position = new UDim2(1, 0, 0, -sc(2));
+	floater.Size = new UDim2(0, sc(72), 0, sc(22));
+	floater.BackgroundTransparency = 1;
+	floater.Text = sign + tostring(magnitude) + "g";
+	floater.TextColor3 = color;
+	floater.Font = UI_THEME.fontBold;
+	floater.TextSize = sc(18);
+	floater.TextXAlignment = Enum.TextXAlignment.Right;
+	floater.TextYAlignment = Enum.TextYAlignment.Center;
+	floater.TextTransparency = 0;
+	floater.TextStrokeColor3 = UI_THEME.bg;
+	floater.TextStrokeTransparency = 0.2;
+	floater.ZIndex = 32;
+	floater.Parent = goldLabel;
+
+	const tween = TweenService.Create(floater, new TweenInfo(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position: new UDim2(1, 0, 0, -sc(22)),
+		TextTransparency: 1,
+		TextStrokeTransparency: 1,
+	});
+	tween.Play();
+	task.delay(0.95, () => {
+		if (floater.Parent !== undefined) floater.Destroy();
+	});
+}
+
+function setGold(total: number, animateDelta: boolean): void {
+	if (!goldLabel) return;
+	const delta = animateDelta && prevCoins >= 0 ? total - prevCoins : 0;
+	goldLabel.Text = formatGold(total);
+	if (delta !== 0) spawnGoldDeltaFloater(delta);
+	prevCoins = total;
+}
+
 // -- Init -----------------------------------------------------------------------
 
 onPlayerInitialized(() => {
@@ -239,5 +333,12 @@ onPlayerInitialized(() => {
 	// Faction XP updates
 	FactionXPUpdated.OnClientEvent.Connect((fxp) => {
 		updateReputation(fxp as FactionXP);
+	});
+
+	// Initial gold + live updates (delta floater on every change).
+	const initCoins = GetCoins.InvokeServer() as number;
+	setGold(initCoins, false);
+	CoinsUpdated.OnClientEvent.Connect((newTotalRaw: unknown) => {
+		setGold(newTotalRaw as number, true);
 	});
 });
