@@ -199,6 +199,7 @@ Read and defer to:
 
 1. KINGS_BOUNTY_CANON.md
 2. KINGS_BOUNTY_DOMAIN_LANGUAGE.md
+3. KINGS_BOUNTY_CODE_STANDARDS.md
 
 If conflicts exist:
 
