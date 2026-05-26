@@ -107,6 +107,11 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 				owned: getPlayerOwnedCount(player, si.itemId),
 				gamePassId: passId,
 				ownsPass: passId !== undefined ? playerOwnsPass(player, passId) : undefined,
+				durationSecs: itemDef.durationSecs,
+				tier: itemDef.tier,
+				baseEffect: itemDef.baseEffect,
+				extraEffect: itemDef.extraEffect,
+				baseDurationSecs: itemDef.baseDurationSecs,
 			});
 		}
 	}

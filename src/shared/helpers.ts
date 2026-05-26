@@ -51,3 +51,26 @@ export function getActiveNPCNames(assignedRoutes: Map<string, Assignment>): stri
 	});
 	return activeNPCs;
 }
+
+/**
+ * Format a duration in seconds as a short human-readable string for tooltips.
+ * Examples: 1800 -> "30 min", 90 -> "1 min 30 sec", 45 -> "45 sec",
+ *           3600 -> "1 hour", 5400 -> "1 hour 30 min".
+ */
+export function formatDuration(seconds: number): string {
+	if (seconds <= 0) return "0 sec";
+	const totalSec = math.floor(seconds);
+	const hours = math.floor(totalSec / 3600);
+	const mins = math.floor((totalSec % 3600) / 60);
+	const secs = totalSec % 60;
+
+	if (hours > 0) {
+		if (mins > 0) return tostring(hours) + " hour" + (hours === 1 ? "" : "s") + " " + tostring(mins) + " min";
+		return tostring(hours) + " hour" + (hours === 1 ? "" : "s");
+	}
+	if (mins > 0) {
+		if (secs > 0) return tostring(mins) + " min " + tostring(secs) + " sec";
+		return tostring(mins) + " min";
+	}
+	return tostring(secs) + " sec";
+}

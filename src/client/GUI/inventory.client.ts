@@ -21,6 +21,7 @@ import {
 } from "shared/inventory";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
+import { formatDuration } from "shared/helpers";
 import { isNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
 
 const activateRemote = getActivateItemRemote();
@@ -59,6 +60,7 @@ let tooltipRarity: TextLabel | undefined;
 let tooltipDesc: TextLabel | undefined;
 let tooltipEffect: TextLabel | undefined;
 let tooltipExtra: TextLabel | undefined;
+let tooltipDuration: TextLabel | undefined;
 let tooltipConsumable: TextLabel | undefined;
 let currentTooltipItem: string | undefined;
 
@@ -768,6 +770,26 @@ function buildTooltip(screenGui: ScreenGui): void {
 	extraLabel.Parent = tt;
 	tooltipExtra = extraLabel;
 
+	// Duration line -- own row under effect/extra for time-limited consumables.
+	// Rendered with more visual weight (gold, slightly larger) since duration
+	// is a key consumable property. RichText enabled so tier upgrades can
+	// highlight the changed number in green / yellow.
+	const durationLabel = new Instance("TextLabel");
+	durationLabel.Name = "TT_Duration";
+	durationLabel.Size = new UDim2(1, 0, 0, sc(16));
+	durationLabel.Position = new UDim2(0, 0, 0, sc(126));
+	durationLabel.BackgroundTransparency = 1;
+	durationLabel.Text = "";
+	durationLabel.RichText = true;
+	durationLabel.TextColor3 = UI_THEME.gold;
+	durationLabel.Font = UI_THEME.fontBold;
+	durationLabel.TextSize = sc(12);
+	durationLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	durationLabel.Visible = false;
+	durationLabel.ZIndex = 51;
+	durationLabel.Parent = tt;
+	tooltipDuration = durationLabel;
+
 	const consumeLabel = new Instance("TextLabel");
 	consumeLabel.Name = "TT_Consumable";
 	consumeLabel.Size = new UDim2(1, 0, 0, sc(12));
@@ -851,6 +873,28 @@ function showItemTooltip(item: ItemDef, tile: TextButton): void {
 		}
 	}
 
+	// Duration line: prominent gold row for time-limited consumables. Diff-
+	// highlighted when an upgrade tier extends or shortens the family base.
+	let durationHeight = 0;
+	if (tooltipDuration) {
+		const secs = item.durationSecs;
+		if (secs !== undefined && secs > 0) {
+			const durText = "Duration: " + formatDuration(secs);
+			const baseSecs = item.baseDurationSecs;
+			if (tier !== undefined && baseSecs !== undefined && baseSecs > 0 && baseSecs !== secs) {
+				const baseText = "Duration: " + formatDuration(baseSecs);
+				tooltipDuration.Text = buildEffectRichText(durText, baseText, tier);
+			} else {
+				tooltipDuration.Text = durText;
+			}
+			tooltipDuration.Visible = true;
+			durationHeight = sc(20);
+		} else {
+			tooltipDuration.Text = "";
+			tooltipDuration.Visible = false;
+		}
+	}
+
 	if (tooltipConsumable) {
 		tooltipConsumable.Text = item.consumable ? "Consumable - click to activate" : "Click to equip";
 	}
@@ -859,7 +903,7 @@ function showItemTooltip(item: ItemDef, tile: TextButton): void {
 	const strokeRef = tooltipFrame.FindFirstChild("TooltipStroke") as UIStroke | undefined;
 	if (strokeRef) strokeRef.Color = rarityColor;
 
-	positionTooltip(tile, extraHeight);
+	positionTooltip(tile, extraHeight + durationHeight);
 }
 
 function showScrollTooltip(scroll: BountyScroll, tile: TextButton): void {

@@ -89,7 +89,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "Levitation Poison",
 		description:
 			"A translucent vial of swirling violet mist. Victims drift skyward, limbs limp, before the end claims them.",
-		effect: "NPC floats upward for 5s before death. Lasts 30 gameplay min.",
+		effect: "NPC floats upward for 5s before death.",
 		poisonType: "Vial",
 		icon: "~",
 		rarity: "common",
@@ -104,7 +104,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "Levitation Poison",
 		description:
 			"A distilled vintage -- the mist coils tighter, the ascent slower and crueller. They hang in the sky like a warning.",
-		effect: "NPC floats 8s before death. Lasts 45 gameplay min.",
+		effect: "NPC floats 8s before death.",
 		poisonType: "Vial",
 		icon: "~",
 		rarity: "common",
@@ -121,7 +121,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "Shrinking Curse",
 		description:
 			"Bottled spite from a hedge-witch's cauldron. The victim crumples inward, bones folding like wet parchment, until nothing remains but a faint pop.",
-		effect: "NPC shrinks over 5s then implodes. Lasts 30 gameplay min.",
+		effect: "NPC shrinks over 5s then implodes.",
 		poisonType: "Vial",
 		icon: "v",
 		rarity: "common",
@@ -135,7 +135,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		tier: 2,
 		name: "Shrinking Curse",
 		description: "Twice-fermented in a sealed crypt. The collapse is faster, more violent -- and the pop echoes.",
-		effect: "NPC shrinks over 3s then implodes. Lasts 45 gameplay min.",
+		effect: "NPC shrinks over 3s then implodes.",
 		poisonType: "Vial",
 		icon: "v",
 		rarity: "common",
@@ -152,7 +152,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "Dismembering Blight",
 		description:
 			"A tar-black tincture that smells of iron and regret. It loosens the body's seams one joint at a time, each limb surrendering to gravity.",
-		effect: "NPC limbs fall off one by one over 5s. Lasts 30 gameplay min.",
+		effect: "NPC limbs fall off one by one over 5s.",
 		poisonType: "Vial",
 		icon: "x",
 		rarity: "common",
@@ -167,7 +167,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "Dismembering Blight",
 		description:
 			"Aged in a bone casket. The seams come undone violently -- limbs tear away with force, scattering like broken marionette strings.",
-		effect: "Violent dismember over 3s. Lasts 45 gameplay min.",
+		effect: "Violent dismember over 3s.",
 		poisonType: "Vial",
 		icon: "x",
 		rarity: "common",
@@ -184,7 +184,7 @@ export const POISONS: Record<string, PoisonDef> = {
 		name: "O's Guidance",
 		description:
 			"A divine vial humming with holy light. Upon striking a target, a beam descends from the heavens and wrenches the soul skyward -- swift and merciless.",
-		effect: "Beam from sky, ragdoll, rapid pull upward. Lasts 30 gameplay min.",
+		effect: "Beam from sky, ragdoll, rapid pull upward.",
 		poisonType: "Vial",
 		icon: "*",
 		rarity: "legendary",

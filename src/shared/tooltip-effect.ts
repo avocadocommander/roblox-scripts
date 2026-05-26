@@ -40,26 +40,48 @@ export const TIER_HIGHLIGHT_COLOR: Record<TooltipTier, Color3 | undefined> = {
 // ── Internal: tokenize + diff ────────────────────────────────────────────────
 
 /**
- * Split a string into whitespace-delimited tokens, preserving each run of
- * whitespace as its own token so the rendered output keeps the original
- * spacing intact when tokens are concatenated.
+ * Split a string into tokens for diffing.
+ *
+ * Whitespace runs are preserved as their own tokens so spacing survives the
+ * round-trip when tokens are concatenated. Within a non-whitespace run we
+ * further split at the digit / non-digit boundary so numeric changes diff
+ * independently of the letters and punctuation around them. Example:
+ *
+ *   "target collapses in 8s."
+ *      -> ["target", " ", "collapses", " ", "in", " ", "8", "s."]
+ *   "target collapses in 12s."
+ *      -> ["target", " ", "collapses", " ", "in", " ", "12", "s."]
+ *
+ * So the LCS matches everything except "8" vs "12" and only the number gets
+ * highlighted -- not the trailing unit ("s.").
  */
 function tokenize(s: string): string[] {
 	const out: string[] = [];
 	let buf = "";
+	let bufIsDigit = false;
+
+	const flush = () => {
+		if (buf !== "") {
+			out.push(buf);
+			buf = "";
+		}
+	};
+
 	for (let i = 1; i <= s.size(); i++) {
 		const ch = s.sub(i, i);
 		if (ch === " " || ch === "\t" || ch === "\n") {
-			if (buf !== "") {
-				out.push(buf);
-				buf = "";
-			}
+			flush();
 			out.push(ch);
-		} else {
-			buf += ch;
+			continue;
 		}
+		const isDigit = ch >= "0" && ch <= "9";
+		if (buf !== "" && isDigit !== bufIsDigit) {
+			flush();
+		}
+		buf += ch;
+		bufIsDigit = isDigit;
 	}
-	if (buf !== "") out.push(buf);
+	flush();
 	return out;
 }
 

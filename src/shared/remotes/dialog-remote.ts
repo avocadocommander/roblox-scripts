@@ -82,4 +82,14 @@ export interface ShopItemPayload {
 	gamePassId?: number;
 	/** Whether the player already owns the required Game Pass. */
 	ownsPass?: boolean;
+	/** Effect duration in seconds for time-limited consumables. Omitted for instant/permanent items. */
+	durationSecs?: number;
+	/** Upgrade tier inside a family (1 base, 2 +, 3 ++). Omitted for untiered items. */
+	tier?: 1 | 2 | 3;
+	/** Family base tier's effect string. Used for diff highlighting on tier 2/3. */
+	baseEffect?: string;
+	/** Optional extra-capability line shown beneath effect in tier highlight colour. */
+	extraEffect?: string;
+	/** Family base tier's duration in seconds, for highlighting duration upgrades. */
+	baseDurationSecs?: number;
 }

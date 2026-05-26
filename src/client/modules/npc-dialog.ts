@@ -20,6 +20,8 @@ import {
 import { RARITY_COLORS, RARITY_LABELS, RARITY_BG_COLORS } from "shared/inventory";
 import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
+import { formatDuration } from "shared/helpers";
+import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
 import { spawnFloatingText } from "./npc-floating-text";
 import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
 import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
@@ -94,11 +96,12 @@ let playerGoldLabel: TextLabel | undefined;
 let tradeGrid: ScrollingFrame | undefined;
 let tradeTooltip: Frame | undefined;
 let tradeTTName: TextLabel | undefined;
-let tradeTTRarity: TextLabel | undefined;
-let tradeTTType: TextLabel | undefined;
+let tradeTTPrice: TextLabel | undefined; // top-right of header, e.g. "40g"
+let tradeTTSubtitle: TextLabel | undefined; // row 2, e.g. "Common Elixer"
 let tradeTTDesc: TextLabel | undefined;
 let tradeTTEffect: TextLabel | undefined;
-let tradeTTPriceLabel: TextLabel | undefined;
+let tradeTTExtra: TextLabel | undefined; // optional extra-capability line (tier 2/3)
+let tradeTTDuration: TextLabel | undefined; // own line under effect for timed items
 let tradeStatusLabel: TextLabel | undefined;
 let currentTooltipItemId: string | undefined;
 let hoveredTile: TextButton | undefined;
@@ -339,7 +342,7 @@ function buildTradeSection(root: Frame): void {
 function buildTradeTooltip(parent: Instance): void {
 	const tt = new Instance("Frame");
 	tt.Name = "TradeTooltip";
-	tt.Size = new UDim2(0, sc(210), 0, sc(140));
+	tt.Size = new UDim2(0, sc(210), 0, sc(180));
 	tt.Position = new UDim2(0, 0, 0, 0);
 	tt.AnchorPoint = new Vector2(0, 0);
 	tt.BackgroundColor3 = UI_THEME.bg;
@@ -367,6 +370,8 @@ function buildTradeTooltip(parent: Instance): void {
 	ttPad.PaddingBottom = new UDim(0, sc(6));
 	ttPad.Parent = tt;
 
+	// Row 1: Name (left) -- Price (right). Price lives in the header so the
+	// item's cost is always visible at a glance alongside the name.
 	const nLabel = new Instance("TextLabel");
 	nLabel.Name = "TT_Name";
 	nLabel.Size = new UDim2(0.65, 0, 0, sc(16));
@@ -376,37 +381,39 @@ function buildTradeTooltip(parent: Instance): void {
 	nLabel.Font = UI_THEME.fontDisplay;
 	nLabel.TextSize = sc(14);
 	nLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	nLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	nLabel.ZIndex = 51;
 	nLabel.Parent = tt;
 	tradeTTName = nLabel;
 
-	const rLabel = new Instance("TextLabel");
-	rLabel.Name = "TT_Rarity";
-	rLabel.Size = new UDim2(0.35, 0, 0, sc(14));
-	rLabel.Position = new UDim2(0.65, 0, 0, sc(1));
-	rLabel.BackgroundTransparency = 1;
-	rLabel.Text = "";
-	rLabel.TextColor3 = UI_THEME.textMuted;
-	rLabel.Font = UI_THEME.fontBold;
-	rLabel.TextSize = sc(10);
-	rLabel.TextXAlignment = Enum.TextXAlignment.Right;
-	rLabel.ZIndex = 51;
-	rLabel.Parent = tt;
-	tradeTTRarity = rLabel;
+	const pLabel = new Instance("TextLabel");
+	pLabel.Name = "TT_Price";
+	pLabel.Size = new UDim2(0.35, 0, 0, sc(16));
+	pLabel.Position = new UDim2(0.65, 0, 0, 0);
+	pLabel.BackgroundTransparency = 1;
+	pLabel.Text = "";
+	pLabel.TextColor3 = UI_THEME.gold;
+	pLabel.Font = UI_THEME.fontBold;
+	pLabel.TextSize = sc(13);
+	pLabel.TextXAlignment = Enum.TextXAlignment.Right;
+	pLabel.ZIndex = 51;
+	pLabel.Parent = tt;
+	tradeTTPrice = pLabel;
 
-	const tLabel = new Instance("TextLabel");
-	tLabel.Name = "TT_Type";
-	tLabel.Size = new UDim2(1, 0, 0, sc(12));
-	tLabel.Position = new UDim2(0, 0, 0, sc(18));
-	tLabel.BackgroundTransparency = 1;
-	tLabel.Text = "";
-	tLabel.TextColor3 = UI_THEME.textMuted;
-	tLabel.Font = UI_THEME.fontBody;
-	tLabel.TextSize = sc(10);
-	tLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	tLabel.ZIndex = 51;
-	tLabel.Parent = tt;
-	tradeTTType = tLabel;
+	// Row 2: "<Rarity> <ItemType>" (e.g. "Common Elixer"), in the rarity colour.
+	const sLabel = new Instance("TextLabel");
+	sLabel.Name = "TT_Subtitle";
+	sLabel.Size = new UDim2(1, 0, 0, sc(12));
+	sLabel.Position = new UDim2(0, 0, 0, sc(18));
+	sLabel.BackgroundTransparency = 1;
+	sLabel.Text = "";
+	sLabel.TextColor3 = UI_THEME.textMuted;
+	sLabel.Font = UI_THEME.fontBold;
+	sLabel.TextSize = sc(11);
+	sLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	sLabel.ZIndex = 51;
+	sLabel.Parent = tt;
+	tradeTTSubtitle = sLabel;
 
 	const ttDiv = new Instance("Frame");
 	ttDiv.Size = new UDim2(1, 0, 0, 1);
@@ -418,7 +425,7 @@ function buildTradeTooltip(parent: Instance): void {
 
 	const dLabel = new Instance("TextLabel");
 	dLabel.Name = "TT_Desc";
-	dLabel.Size = new UDim2(1, 0, 0, sc(24));
+	dLabel.Size = new UDim2(1, 0, 0, sc(40));
 	dLabel.Position = new UDim2(0, 0, 0, sc(36));
 	dLabel.BackgroundTransparency = 1;
 	dLabel.Text = "";
@@ -433,39 +440,58 @@ function buildTradeTooltip(parent: Instance): void {
 
 	const eLabel = new Instance("TextLabel");
 	eLabel.Name = "TT_Effect";
-	eLabel.Size = new UDim2(1, 0, 0, sc(14));
-	eLabel.Position = new UDim2(0, 0, 0, sc(64));
+	eLabel.Size = new UDim2(1, 0, 0, sc(28));
+	eLabel.Position = new UDim2(0, 0, 0, sc(80));
 	eLabel.BackgroundTransparency = 1;
 	eLabel.Text = "";
 	eLabel.TextColor3 = UI_THEME.gold;
 	eLabel.Font = UI_THEME.fontBold;
 	eLabel.TextSize = sc(10);
 	eLabel.TextWrapped = true;
+	eLabel.RichText = true;
+	eLabel.TextYAlignment = Enum.TextYAlignment.Top;
 	eLabel.ZIndex = 51;
 	eLabel.Parent = tt;
 	tradeTTEffect = eLabel;
 
-	// Price row
-	const priceRow = new Instance("Frame");
-	priceRow.Name = "PriceRow";
-	priceRow.Size = new UDim2(1, 0, 0, sc(24));
-	priceRow.Position = new UDim2(0, 0, 1, -sc(28));
-	priceRow.BackgroundTransparency = 1;
-	priceRow.ZIndex = 51;
-	priceRow.Parent = tt;
+	// Extra-capability line -- only shown when the def declares an extraEffect.
+	// Coloured in the tier's highlight colour so it reads as a bonus the
+	// upgraded tier gains beyond the base.
+	const xLabel = new Instance("TextLabel");
+	xLabel.Name = "TT_Extra";
+	xLabel.Size = new UDim2(1, 0, 0, sc(24));
+	xLabel.Position = new UDim2(0, 0, 0, sc(108));
+	xLabel.BackgroundTransparency = 1;
+	xLabel.Text = "";
+	xLabel.TextColor3 = UI_THEME.textPrimary;
+	xLabel.Font = UI_THEME.fontBold;
+	xLabel.TextSize = sc(10);
+	xLabel.TextWrapped = true;
+	xLabel.TextYAlignment = Enum.TextYAlignment.Top;
+	xLabel.Visible = false;
+	xLabel.ZIndex = 51;
+	xLabel.Parent = tt;
+	tradeTTExtra = xLabel;
 
-	const priceLabel = new Instance("TextLabel");
-	priceLabel.Name = "PriceLabel";
-	priceLabel.Size = new UDim2(1, 0, 1, 0);
-	priceLabel.BackgroundTransparency = 1;
-	priceLabel.Text = "";
-	priceLabel.TextColor3 = UI_THEME.gold;
-	priceLabel.Font = UI_THEME.fontBold;
-	priceLabel.TextSize = sc(12);
-	priceLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	priceLabel.ZIndex = 52;
-	priceLabel.Parent = priceRow;
-	tradeTTPriceLabel = priceLabel;
+	// Duration line -- own row under effect/extra for time-limited consumables.
+	// Rendered with more visual weight (larger, gold) since duration is a key
+	// purchase decision. RichText is enabled so tier upgrades can highlight the
+	// changed number in green / yellow.
+	const durLabel = new Instance("TextLabel");
+	durLabel.Name = "TT_Duration";
+	durLabel.Size = new UDim2(1, 0, 0, sc(16));
+	durLabel.Position = new UDim2(0, 0, 0, sc(132));
+	durLabel.BackgroundTransparency = 1;
+	durLabel.Text = "";
+	durLabel.TextColor3 = UI_THEME.gold;
+	durLabel.Font = UI_THEME.fontBold;
+	durLabel.TextSize = sc(12);
+	durLabel.RichText = true;
+	durLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	durLabel.Visible = false;
+	durLabel.ZIndex = 51;
+	durLabel.Parent = tt;
+	tradeTTDuration = durLabel;
 }
 
 // ── Dialog option button ──────────────────────────────────────────────────────
@@ -736,14 +762,59 @@ function showShopTooltip(shopItem: ShopItemPayload, tile: TextButton): void {
 		tradeTTName.Text = shopItem.name;
 		tradeTTName.TextColor3 = rarityColor;
 	}
-	if (tradeTTRarity) {
-		tradeTTRarity.Text = rarityLbl;
-		tradeTTRarity.TextColor3 = rarityColor;
+	if (tradeTTPrice) {
+		tradeTTPrice.Text = shopItem.price + "g";
 	}
-	if (tradeTTType) tradeTTType.Text = shopItem.itemType;
+	if (tradeTTSubtitle) {
+		// e.g. "Common Elixer" -- rarity label + item type, in the rarity colour.
+		tradeTTSubtitle.Text = rarityLbl + " " + shopItem.itemType;
+		tradeTTSubtitle.TextColor3 = rarityColor;
+	}
 	if (tradeTTDesc) tradeTTDesc.Text = shopItem.description;
-	if (tradeTTEffect) tradeTTEffect.Text = shopItem.effect;
-	if (tradeTTPriceLabel) tradeTTPriceLabel.Text = shopItem.price + " Gold";
+
+	// Effect: diff-highlight against the family's base for tier 2 (+) / 3 (++).
+	const tier = shopItem.tier;
+	if (tradeTTEffect) {
+		if (tier !== undefined && shopItem.baseEffect !== undefined) {
+			tradeTTEffect.Text = buildEffectRichText(shopItem.effect, shopItem.baseEffect, tier);
+		} else {
+			tradeTTEffect.Text = shopItem.effect;
+		}
+	}
+
+	// Extra capability line -- only shown when the def declares one.
+	if (tradeTTExtra) {
+		const extraText = shopItem.extraEffect;
+		if (tier !== undefined && extraText !== undefined && extraText !== "") {
+			const tierColor = TIER_HIGHLIGHT_COLOR[tier];
+			tradeTTExtra.TextColor3 = tierColor !== undefined ? tierColor : UI_THEME.textPrimary;
+			tradeTTExtra.Text = extraText;
+			tradeTTExtra.Visible = true;
+		} else {
+			tradeTTExtra.Text = "";
+			tradeTTExtra.Visible = false;
+		}
+	}
+
+	// Duration: own line, prominent, diff-highlighted when upgrade extends or
+	// shortens the family base's duration.
+	if (tradeTTDuration) {
+		const secs = shopItem.durationSecs;
+		if (secs !== undefined && secs > 0) {
+			const durText = "Duration: " + formatDuration(secs);
+			const baseSecs = shopItem.baseDurationSecs;
+			if (tier !== undefined && baseSecs !== undefined && baseSecs > 0 && baseSecs !== secs) {
+				const baseText = "Duration: " + formatDuration(baseSecs);
+				tradeTTDuration.Text = buildEffectRichText(durText, baseText, tier);
+			} else {
+				tradeTTDuration.Text = durText;
+			}
+			tradeTTDuration.Visible = true;
+		} else {
+			tradeTTDuration.Text = "";
+			tradeTTDuration.Visible = false;
+		}
+	}
 
 	tradeTooltip.BackgroundColor3 = rarityBg;
 	const strokeRef = tradeTooltip.FindFirstChild("TTStroke") as UIStroke | undefined;
@@ -757,7 +828,7 @@ function positionTradeTooltip(anchor: GuiObject): void {
 	const aPos = anchor.AbsolutePosition;
 	const aSize = anchor.AbsoluteSize;
 	const ttW = sc(210);
-	const ttH = sc(140);
+	const ttH = sc(180);
 	const camera = Workspace.CurrentCamera;
 	const vpX = camera ? camera.ViewportSize.X : 1920;
 	const vpY = camera ? camera.ViewportSize.Y : 1080;

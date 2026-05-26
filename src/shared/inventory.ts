@@ -68,6 +68,17 @@ export interface ItemDef {
 	 * tier's highlight colour. Only populated when the def declares one.
 	 */
 	extraEffect?: string;
+	/**
+	 * Effect duration in seconds for time-limited consumables (poison coat,
+	 * long-term elixir). Omitted / 0 for instant or permanent items.
+	 */
+	durationSecs?: number;
+	/**
+	 * Family base tier's durationSecs. Used by tooltip diff highlighting when
+	 * an upgrade tier extends or shortens the duration. Equals `durationSecs`
+	 * for tier-1 items.
+	 */
+	baseDurationSecs?: number;
 }
 
 // ── Build ITEMS + ITEM_LIST from config maps ──────────────────────────────────
@@ -108,6 +119,8 @@ for (const [, p] of pairs(POISONS)) {
 		familyId: p.familyId,
 		baseEffect: baseDef !== undefined ? baseDef.effect : p.effect,
 		extraEffect: p.extraEffect,
+		durationSecs: p.coatDurationSecs,
+		baseDurationSecs: baseDef !== undefined ? baseDef.coatDurationSecs : p.coatDurationSecs,
 	};
 }
 
@@ -129,6 +142,13 @@ for (const [, e] of pairs(ELIXIRS)) {
 		familyId: e.familyId,
 		baseEffect: baseDef !== undefined ? baseDef.effect : e.effect,
 		extraEffect: e.extraEffect,
+		durationSecs: e.effectDurationSecs > 0 ? e.effectDurationSecs : undefined,
+		baseDurationSecs:
+			baseDef !== undefined && baseDef.effectDurationSecs > 0
+				? baseDef.effectDurationSecs
+				: e.effectDurationSecs > 0
+					? e.effectDurationSecs
+					: undefined,
 	};
 }
 
