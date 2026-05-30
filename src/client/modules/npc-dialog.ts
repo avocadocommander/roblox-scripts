@@ -574,13 +574,16 @@ function refreshShopGrid(): void {
 }
 
 function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order: number): void {
-	const rarityColor = RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary;
+	const isLocked = shopItem.requirement !== undefined && shopItem.requirementMet === false;
+	const rarityColor = isLocked
+		? Color3.fromRGB(70, 70, 70)
+		: (RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary);
 
 	const tile = new Instance("TextButton");
 	tile.Name = "Shop_" + shopItem.itemId;
 	tile.LayoutOrder = order;
-	tile.BackgroundColor3 = UI_THEME.bgInset;
-	tile.BackgroundTransparency = 0.15;
+	tile.BackgroundColor3 = isLocked ? Color3.fromRGB(18, 16, 14) : UI_THEME.bgInset;
+	tile.BackgroundTransparency = isLocked ? 0.05 : 0.15;
 	tile.BorderSizePixel = 0;
 	tile.Text = "";
 	tile.AutoButtonColor = false;
@@ -593,18 +596,22 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 
 	const tileStroke = new Instance("UIStroke");
 	tileStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-	const isSelected = selectedItemIds.has(shopItem.itemId);
+	const isSelected = !isLocked && selectedItemIds.has(shopItem.itemId);
 	tileStroke.Color = isSelected ? UI_THEME.gold : rarityColor;
 	tileStroke.Thickness = isSelected ? 2.5 : 1;
-	tileStroke.Transparency = isSelected ? 0 : 0.4;
+	tileStroke.Transparency = isLocked ? 0.6 : isSelected ? 0 : 0.4;
 	tileStroke.Parent = tile;
 
 	const icon = new Instance("TextLabel");
 	icon.Size = new UDim2(1, 0, 0, sc(24));
 	icon.Position = new UDim2(0, 0, 0, sc(4));
 	icon.BackgroundTransparency = 1;
-	icon.Text = shopItem.icon;
-	icon.TextColor3 = shopItem.gamePassId !== undefined ? UI_THEME.gold : rarityColor;
+	icon.Text = isLocked ? "?" : shopItem.icon;
+	icon.TextColor3 = isLocked
+		? Color3.fromRGB(120, 110, 100)
+		: shopItem.gamePassId !== undefined
+			? UI_THEME.gold
+			: rarityColor;
 	icon.Font = UI_THEME.fontDisplay;
 	icon.TextSize = sc(20);
 	icon.ZIndex = 33;
@@ -614,8 +621,8 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	nameLabel.Size = new UDim2(1, -4, 0, sc(20));
 	nameLabel.Position = new UDim2(0, 2, 0, sc(28));
 	nameLabel.BackgroundTransparency = 1;
-	nameLabel.Text = shopItem.name;
-	nameLabel.TextColor3 = UI_THEME.textPrimary;
+	nameLabel.Text = isLocked ? "???" : shopItem.name;
+	nameLabel.TextColor3 = isLocked ? Color3.fromRGB(140, 130, 120) : UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontBody;
 	nameLabel.TextSize = sc(9);
 	nameLabel.TextWrapped = true;
@@ -632,7 +639,10 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	priceTag.ZIndex = 34;
 	priceTag.Parent = tile;
 
-	if (shopItem.gamePassId !== undefined) {
+	if (isLocked) {
+		priceTag.Text = "LOCKED";
+		priceTag.TextColor3 = Color3.fromRGB(150, 80, 80);
+	} else if (shopItem.gamePassId !== undefined) {
 		// Premium item — still sold for gold, just themed gold
 		priceTag.Text = shopItem.price + "g";
 		priceTag.TextColor3 = UI_THEME.gold;
@@ -705,6 +715,7 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	});
 	tile.MouseButton1Up.Connect(() => {
 		if (pressStart > 0 && os.clock() - pressStart < 0.3) {
+			if (isLocked) return;
 			toggleItemSelection(shopItem);
 		}
 		pressStart = 0;
@@ -754,9 +765,46 @@ function showShopTooltip(shopItem: ShopItemPayload, tile: TextButton): void {
 	// Position tooltip next to the hovered tile (pop over to right, fallback left)
 	positionTradeTooltip(tile);
 
-	const rarityColor = RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary;
-	const rarityBg = RARITY_BG_COLORS[shopItem.rarity] ?? UI_THEME.bgInset;
+	const isLocked = shopItem.requirement !== undefined && shopItem.requirementMet === false;
+	const rarityColor = isLocked
+		? Color3.fromRGB(120, 110, 100)
+		: (RARITY_COLORS[shopItem.rarity] ?? UI_THEME.textPrimary);
+	const rarityBg = isLocked ? Color3.fromRGB(18, 16, 14) : (RARITY_BG_COLORS[shopItem.rarity] ?? UI_THEME.bgInset);
 	const rarityLbl = RARITY_LABELS[shopItem.rarity] ?? "Common";
+
+	if (isLocked && shopItem.requirement) {
+		const guildName = shopItem.requirement.factionId === "Night" ? "Night Guild" : "Dawn Order";
+		const lockedDesc =
+			"You have not earned the trust of this circle. Reach level " +
+			shopItem.requirement.level +
+			" with the " +
+			guildName +
+			" to learn of this brew.";
+		if (tradeTTName) {
+			tradeTTName.Text = "Unknown Brew";
+			tradeTTName.TextColor3 = rarityColor;
+		}
+		if (tradeTTPrice) tradeTTPrice.Text = "LOCKED";
+		if (tradeTTSubtitle) {
+			tradeTTSubtitle.Text = "???";
+			tradeTTSubtitle.TextColor3 = rarityColor;
+		}
+		if (tradeTTDesc) tradeTTDesc.Text = lockedDesc;
+		if (tradeTTEffect) tradeTTEffect.Text = "";
+		if (tradeTTExtra) {
+			tradeTTExtra.Text = "";
+			tradeTTExtra.Visible = false;
+		}
+		if (tradeTTDuration) {
+			tradeTTDuration.Text = "";
+			tradeTTDuration.Visible = false;
+		}
+		tradeTooltip.BackgroundColor3 = rarityBg;
+		const strokeRefL = tradeTooltip.FindFirstChild("TTStroke") as UIStroke | undefined;
+		if (strokeRefL) strokeRefL.Color = rarityColor;
+		tradeTooltip.Visible = true;
+		return;
+	}
 
 	if (tradeTTName) {
 		tradeTTName.Text = shopItem.name;

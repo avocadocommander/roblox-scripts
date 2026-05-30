@@ -16,11 +16,18 @@
 
 import { WEAPONS, WEAPON_LIST, WeaponDef } from "shared/config/weapons";
 import { POISONS, POISON_LIST, PoisonDef, getPoisonDisplayName, getPoisonFamily } from "shared/config/poisons";
-import { ELIXIRS, ELIXIR_LIST, ElixirDef, getElixirDisplayName, getElixirFamily } from "shared/config/elixirs";
+import {
+	ELIXIRS,
+	ELIXIR_LIST,
+	ElixirDef,
+	ElixirRequirement,
+	getElixirDisplayName,
+	getElixirFamily,
+} from "shared/config/elixirs";
 import { MAX_BOUNTY_SLOTS } from "shared/config/player";
 
 // Re-export config types so consumers can import from one place
-export type { WeaponDef, PoisonDef, ElixirDef };
+export type { WeaponDef, PoisonDef, ElixirDef, ElixirRequirement };
 export { WEAPONS, WEAPON_LIST, POISONS, POISON_LIST, ELIXIRS, ELIXIR_LIST };
 export { MAX_BOUNTY_SLOTS };
 
@@ -79,6 +86,11 @@ export interface ItemDef {
 	 * for tier-1 items.
 	 */
 	baseDurationSecs?: number;
+	/**
+	 * Optional faction-level requirement to purchase / acquire this item.
+	 * Shop UI shows the item as locked/masked until the player meets it.
+	 */
+	requirement?: ElixirRequirement;
 }
 
 // ── Build ITEMS + ITEM_LIST from config maps ──────────────────────────────────
@@ -149,6 +161,7 @@ for (const [, e] of pairs(ELIXIRS)) {
 				: e.effectDurationSecs > 0
 					? e.effectDurationSecs
 					: undefined,
+		requirement: e.requirement,
 	};
 }
 

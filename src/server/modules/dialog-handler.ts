@@ -17,6 +17,7 @@ import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npc
 import { pickRandom } from "shared/config/npc-shops";
 import { getMerchantShop } from "./merchant-handler";
 import { factionForNPC } from "shared/config/factions";
+import { levelFromXP } from "shared/config/factions";
 import {
 	getOpenDialogRemote,
 	getPurchaseItemRemote,
@@ -91,10 +92,18 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 	// Shop items — only populated if the NPC actually has a shop
 	const shopItems: ShopItemPayload[] = [];
 	if (shop) {
+		const state = getPlayerStateSnapshot(player);
 		for (const si of shop.shopItems) {
 			const itemDef = ITEMS[si.itemId];
 			if (!itemDef) continue;
 			const passId = getGamePassForItem(si.itemId);
+			let requirementMet: boolean | undefined;
+			if (itemDef.requirement && state) {
+				const factionLvl = levelFromXP(state.factionXP[itemDef.requirement.factionId] ?? 0);
+				requirementMet = factionLvl >= itemDef.requirement.level;
+			} else if (itemDef.requirement) {
+				requirementMet = false;
+			}
 			shopItems.push({
 				itemId: si.itemId,
 				name: itemDef.name,
@@ -112,6 +121,8 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 				baseEffect: itemDef.baseEffect,
 				extraEffect: itemDef.extraEffect,
 				baseDurationSecs: itemDef.baseDurationSecs,
+				requirement: itemDef.requirement,
+				requirementMet,
 			});
 		}
 	}
@@ -168,6 +179,18 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	const requiredPassId = getGamePassForItem(itemId);
 	if (requiredPassId !== undefined && !playerOwnsPass(player, requiredPassId)) {
 		return [false, "You must own the Game Pass to purchase this item."];
+	}
+
+	// Faction-rep gate (e.g. legendary guild elixirs)
+	if (itemDef.requirement) {
+		const state0 = getPlayerStateSnapshot(player);
+		const factionLvl = state0 ? levelFromXP(state0.factionXP[itemDef.requirement.factionId] ?? 0) : 0;
+		if (factionLvl < itemDef.requirement.level) {
+			return [
+				false,
+				"Requires level " + itemDef.requirement.level + " with " + itemDef.requirement.factionId + " Guild.",
+			];
+		}
 	}
 
 	// Check player has enough gold

@@ -225,7 +225,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	// NPC name — bright warm white, rarity colour is shown via the card border
 	const npcInteractionAttr = npc.GetAttribute("Interaction") as string | undefined;
 	const hasShopInteraction = (npcInteractionAttr ?? getNPCInteraction(npcName)) === "Shop";
-	const displayName = hasShopInteraction ? "(G) " + npcName : npcName;
+	const displayName = hasShopInteraction ? "(M) " + npcName : npcName;
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "TextLabel";
@@ -664,6 +664,48 @@ function setupPremiumOfferProximity(model: Model): void {
 		part.Anchored = true;
 	}
 
+	// Golden glow + sparkles on the slot's anchor part (or first BasePart).
+	const glowHost = (model.PrimaryPart as BasePart | undefined) ?? allParts[0];
+	if (glowHost) {
+		const GOLD = Color3.fromRGB(255, 210, 110);
+
+		const light = new Instance("PointLight");
+		light.Name = "OfferGlow";
+		light.Color = GOLD;
+		light.Brightness = 0.6;
+		light.Range = 6;
+		light.Shadows = false;
+		light.Parent = glowHost;
+
+		const sparkleAttachment = new Instance("Attachment");
+		sparkleAttachment.Name = "OfferSparkles";
+		sparkleAttachment.Parent = glowHost;
+
+		const sparkles = new Instance("ParticleEmitter");
+		sparkles.Name = "Sparkles";
+		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		sparkles.Color = new ColorSequence(GOLD);
+		sparkles.LightEmission = 0.85;
+		sparkles.LightInfluence = 0;
+		sparkles.Size = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.4),
+			new NumberSequenceKeypoint(0.5, 0.55),
+			new NumberSequenceKeypoint(1, 0),
+		]);
+		sparkles.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.2),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+		sparkles.Lifetime = new NumberRange(0.8, 1.4);
+		sparkles.Rate = 18;
+		sparkles.Speed = new NumberRange(1.5, 3);
+		sparkles.SpreadAngle = new Vector2(180, 180);
+		sparkles.Rotation = new NumberRange(-180, 180);
+		sparkles.RotSpeed = new NumberRange(-120, 120);
+		sparkles.Acceleration = new Vector3(0, 1.5, 0);
+		sparkles.Parent = sparkleAttachment;
+	}
+
 	// Continuous bob + rotate via Heartbeat
 	let elapsed = 0;
 	RunService.Heartbeat.Connect((dt) => {
@@ -906,9 +948,28 @@ function updateNPCProximityUI() {
 		cachedInspectables = Workspace.GetDescendants().filter(
 			(inst): inst is Model => inst.IsA("Model") && inst.GetAttribute("inspectId") !== undefined,
 		);
-		cachedOfferModels = Workspace.GetDescendants().filter(
-			(inst): inst is Model => inst.IsA("Model") && inst.GetAttribute("offerId") !== undefined,
-		);
+		const offerSet = new Set<Model>();
+		for (const inst of Workspace.GetDescendants()) {
+			if (inst.GetAttribute("offerId") === undefined) continue;
+			if (inst.IsA("Model")) {
+				offerSet.add(inst);
+				continue;
+			}
+			if (inst.IsA("BasePart")) {
+				// Resolve to nearest ancestor Model
+				let ancestor: Instance | undefined = inst.Parent;
+				while (ancestor && !ancestor.IsA("Model")) ancestor = ancestor.Parent;
+				if (ancestor && ancestor.IsA("Model")) {
+					// Bubble the offerId up so the rest of the pipeline finds it on the Model
+					if (ancestor.GetAttribute("offerId") === undefined) {
+						ancestor.SetAttribute("offerId", inst.GetAttribute("offerId"));
+					}
+					offerSet.add(ancestor);
+				}
+			}
+		}
+		cachedOfferModels = [];
+		for (const m of offerSet) cachedOfferModels.push(m);
 	}
 
 	// ── Inspectable object proximity ────────────────────────────────────────────────

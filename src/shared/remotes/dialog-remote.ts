@@ -92,4 +92,11 @@ export interface ShopItemPayload {
 	extraEffect?: string;
 	/** Family base tier's duration in seconds, for highlighting duration upgrades. */
 	baseDurationSecs?: number;
+	/**
+	 * Optional faction-level requirement to purchase. When set & unmet,
+	 * the tile is shown locked / masked.
+	 */
+	requirement?: { factionId: "Night" | "Dawn"; level: number };
+	/** True when the player currently meets the requirement (server-evaluated). */
+	requirementMet?: boolean;
 }
