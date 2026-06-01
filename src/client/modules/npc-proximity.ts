@@ -1255,17 +1255,31 @@ function initializeNPCProximity() {
 		setupNPCProximity(npc as Model);
 	});
 
-	// Listen for new NPCs being added (excluding player characters)
+	const trySetupCandidate = (model: Model) => {
+		if (npcUIMap.has(model)) return;
+		const playerObj = Players.FindFirstChild(model.Name);
+		if (playerObj && playerObj.IsA("Player")) {
+			const playerChar = (playerObj as Player).Character;
+			if (playerChar === model) return;
+		}
+		setupNPCProximity(model);
+	};
+
+	// Listen for new NPCs being added (excluding player characters).
+	// On the client, Models and their Humanoids can replicate in either order,
+	// so we react to BOTH the Model arriving and a Humanoid being added later.
 	Workspace.DescendantAdded.Connect((descendant) => {
-		if (descendant.IsA("Model") && descendant.FindFirstChild("Humanoid")) {
-			// Exclude player characters
-			const playerObj = Players.FindFirstChild(descendant.Name);
-			if (playerObj && playerObj.IsA("Player")) {
-				const playerChar = (playerObj as Player).Character;
-				if (playerChar === descendant) return;
-			}
-			task.wait(0.1);
-			setupNPCProximity(descendant as Model);
+		if (descendant.IsA("Model")) {
+			task.spawn(() => {
+				const humanoid = descendant.WaitForChild("Humanoid", 5) as Humanoid | undefined;
+				if (!humanoid || !descendant.Parent) return;
+				trySetupCandidate(descendant);
+			});
+			return;
+		}
+		if (descendant.IsA("Humanoid")) {
+			const model = descendant.Parent;
+			if (model && model.IsA("Model")) trySetupCandidate(model);
 		}
 	});
 

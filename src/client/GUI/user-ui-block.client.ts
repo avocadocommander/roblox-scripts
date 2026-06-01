@@ -1,16 +1,12 @@
 import { Players, ReplicatedStorage, RunService, TweenService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
-import { WEAPONS } from "shared/config/weapons";
-import { FactionXP, FACTION_IDS, levelFromXP } from "shared/config/factions";
 import { ITEMS, RARITY_COLORS, RARITY_BG_COLORS } from "shared/inventory";
 import { getEffectSyncRemote, EffectSyncPayload } from "shared/remotes/effect-remote";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
 const GetPlayerTitle = playerState.WaitForChild("GetTitle") as RemoteFunction;
 const GetPlayerName = playerState.WaitForChild("GetName") as RemoteFunction;
-const GetFactionXP = playerState.WaitForChild("GetFactionXP") as RemoteFunction;
-const FactionXPUpdated = playerState.WaitForChild("FactionXPUpdated") as RemoteEvent;
 const GetCoins = playerState.WaitForChild("GetCoins") as RemoteFunction;
 const CoinsUpdated = playerState.WaitForChild("CoinsUpdated") as RemoteEvent;
 
@@ -28,11 +24,12 @@ function sc(baseSize: number): number {
 // -- Live refs ------------------------------------------------------------------
 
 let nameLabel: TextLabel | undefined;
-let titleRepLabel: TextLabel | undefined;
-let weaponIconLabel: TextLabel | undefined;
-let weaponNameLabel: TextLabel | undefined;
 let goldLabel: TextLabel | undefined;
 let nameRow: Frame | undefined;
+
+let currentTitle = "";
+let currentName = "---";
+let currentWeaponId = "fists";
 
 let prevCoins = -1;
 
@@ -43,7 +40,8 @@ interface ActiveEffectSlot {
 	remainingSecs: number;
 	lastSyncClock: number;
 }
-let effectsBar: Frame | undefined;
+let effectsBarLeft: Frame | undefined;
+let effectsBarRight: Frame | undefined;
 let effectsTooltip: Frame | undefined;
 let effectsTTName: TextLabel | undefined;
 let effectsTTSubtitle: TextLabel | undefined;
@@ -54,72 +52,39 @@ const activeEffects = new Map<string, ActiveEffectSlot>(); // slotKey -> data
 const effectTiles = new Map<string, Frame>(); // slotKey -> tile frame
 let hoveredEffectKey: string | undefined;
 
-// Cached state for combined title+rep line
-let cachedTitle = "";
-let cachedReputation = "Unaligned";
-
 // -- Helpers --------------------------------------------------------------------
 
-function toRoman(n: number): string {
-	if (n <= 0) return "I";
-	const numerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-	if (n > numerals.size()) return tostring(n);
-	return numerals[n - 1];
+function colorToHex(c: Color3): string {
+	const r = math.floor(c.R * 255 + 0.5);
+	const g = math.floor(c.G * 255 + 0.5);
+	const b = math.floor(c.B * 255 + 0.5);
+	return string.format("#%02X%02X%02X", r, g, b);
 }
 
-function reputationLine(fxp: FactionXP): string {
-	let bestFaction = FACTION_IDS[0];
-	let bestXP = 0;
-	for (const fid of FACTION_IDS) {
-		if (fxp[fid] > bestXP) {
-			bestXP = fxp[fid];
-			bestFaction = fid;
-		}
-	}
-	if (bestXP <= 0) return "Unaligned";
-	return bestFaction + " Reputation " + toRoman(levelFromXP(bestXP));
-}
-
-function refreshTitleRepLine(): void {
-	if (!titleRepLabel) return;
-	if (cachedTitle !== "" && cachedReputation !== "") {
-		titleRepLabel.Text = cachedTitle + " - " + cachedReputation;
-	} else if (cachedTitle !== "") {
-		titleRepLabel.Text = cachedTitle;
+function refreshNameLine(): void {
+	if (!nameLabel) return;
+	const titleHex = colorToHex(UI_THEME.textSection);
+	const nameHex = colorToHex(UI_THEME.textPrimary);
+	if (currentTitle !== "") {
+		nameLabel.Text =
+			'<font color="' +
+			titleHex +
+			'">' +
+			currentTitle +
+			'</font> <font color="' +
+			nameHex +
+			'">' +
+			currentName +
+			"</font>";
 	} else {
-		titleRepLabel.Text = cachedReputation;
+		nameLabel.Text = currentName;
 	}
 }
 
 function updateWeapon(weaponId: string | undefined): void {
 	const id = weaponId !== undefined && weaponId !== "" ? weaponId : "fists";
-	if (id === "fists") {
-		if (weaponIconLabel) {
-			weaponIconLabel.Text = "";
-			weaponIconLabel.Visible = false;
-		}
-		if (weaponNameLabel) {
-			weaponNameLabel.Text = "Unarmed";
-			weaponNameLabel.TextColor3 = UI_THEME.textMuted;
-		}
-	} else {
-		const def = WEAPONS[id];
-		const wname = def !== undefined ? def.name : id;
-		const wicon = def !== undefined ? def.icon : "/";
-		if (weaponIconLabel) {
-			weaponIconLabel.Text = wicon;
-			weaponIconLabel.Visible = true;
-		}
-		if (weaponNameLabel) {
-			weaponNameLabel.Text = wname;
-			weaponNameLabel.TextColor3 = UI_THEME.textPrimary;
-		}
-	}
-}
-
-function updateReputation(fxp: FactionXP): void {
-	cachedReputation = reputationLine(fxp);
-	refreshTitleRepLine();
+	currentWeaponId = id;
+	refreshWeaponTile();
 }
 
 // -- Builder --------------------------------------------------------------------
@@ -130,8 +95,7 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 
 	const banner = new Instance("Frame");
 	banner.Name = "CharacterBanner";
-	banner.Size = new UDim2(0, BANNER_W, 0, 0);
-	banner.AutomaticSize = Enum.AutomaticSize.Y;
+	banner.Size = new UDim2(0, BANNER_W, 0, sc(50));
 	banner.Position = new UDim2(0, sc(20), 0, sc(40));
 	banner.AnchorPoint = new Vector2(0, 0);
 	banner.BackgroundColor3 = UI_THEME.bg;
@@ -156,19 +120,12 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 	pad.PaddingRight = new UDim(0, sc(12));
 	pad.Parent = banner;
 
-	const layout = new Instance("UIListLayout");
-	layout.SortOrder = Enum.SortOrder.LayoutOrder;
-	layout.Padding = new UDim(0, sc(3));
-	layout.Parent = banner;
-
-	// ---- Line 1: Player name + gold total ----------------------------------
-	// Name fills the left; gold value is pinned to the right edge of the row.
-	// A +N / -N floater spawns from the gold label position on every change.
+	// ---- Single line: Title + Name + Gold ----------------------------------
+	// Title prefix + name fill the left (RichText), gold pinned right.
 	const GOLD_W = sc(72);
 
 	nameRow = new Instance("Frame");
 	nameRow.Name = "NameRow";
-	nameRow.LayoutOrder = 0;
 	nameRow.Size = new UDim2(1, 0, 0, sc(30));
 	nameRow.BackgroundTransparency = 1;
 	nameRow.ZIndex = 31;
@@ -179,10 +136,11 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 	nameLabel.Name = "Name";
 	nameLabel.Size = new UDim2(1, -GOLD_W - sc(6), 1, 0);
 	nameLabel.BackgroundTransparency = 1;
+	nameLabel.RichText = true;
 	nameLabel.Text = "---";
 	nameLabel.TextColor3 = UI_THEME.textPrimary;
 	nameLabel.Font = UI_THEME.fontDisplay;
-	nameLabel.TextSize = sc(26);
+	nameLabel.TextSize = sc(24);
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	nameLabel.TextYAlignment = Enum.TextYAlignment.Center;
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
@@ -204,68 +162,6 @@ function buildCharacterBanner(screenGui: ScreenGui): void {
 	goldLabel.ZIndex = 31;
 	goldLabel.ClipsDescendants = false;
 	goldLabel.Parent = nameRow;
-
-	// ---- Line 2: Title - Reputation (combined) -----------------------------
-	titleRepLabel = new Instance("TextLabel");
-	titleRepLabel.Name = "TitleRep";
-	titleRepLabel.LayoutOrder = 1;
-	titleRepLabel.Size = new UDim2(1, 0, 0, sc(20));
-	titleRepLabel.BackgroundTransparency = 1;
-	titleRepLabel.Text = "";
-	titleRepLabel.TextColor3 = UI_THEME.textSection;
-	titleRepLabel.Font = UI_THEME.fontBold;
-	titleRepLabel.TextSize = sc(16);
-	titleRepLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	titleRepLabel.TextTruncate = Enum.TextTruncate.AtEnd;
-	titleRepLabel.ZIndex = 31;
-	titleRepLabel.Parent = banner;
-
-	// ---- Divider line -------------------------------------------------------
-	const divider = new Instance("Frame");
-	divider.Name = "Divider";
-	divider.LayoutOrder = 2;
-	divider.Size = new UDim2(1, 0, 0, sc(1));
-	divider.BackgroundColor3 = UI_THEME.divider;
-	divider.BackgroundTransparency = 0.4;
-	divider.BorderSizePixel = 0;
-	divider.ZIndex = 31;
-	divider.Parent = banner;
-
-	// ---- Line 3: Weapon (icon + name) --------------------------------------
-	const weaponRow = new Instance("Frame");
-	weaponRow.Name = "WeaponRow";
-	weaponRow.LayoutOrder = 3;
-	weaponRow.Size = new UDim2(1, 0, 0, sc(22));
-	weaponRow.BackgroundTransparency = 1;
-	weaponRow.ZIndex = 31;
-	weaponRow.Parent = banner;
-
-	weaponIconLabel = new Instance("TextLabel");
-	weaponIconLabel.Name = "WeaponIcon";
-	weaponIconLabel.Size = new UDim2(0, sc(18), 1, 0);
-	weaponIconLabel.BackgroundTransparency = 1;
-	weaponIconLabel.Text = "";
-	weaponIconLabel.TextColor3 = UI_THEME.textHeader;
-	weaponIconLabel.Font = UI_THEME.fontDisplay;
-	weaponIconLabel.TextSize = sc(16);
-	weaponIconLabel.TextXAlignment = Enum.TextXAlignment.Center;
-	weaponIconLabel.Visible = false;
-	weaponIconLabel.ZIndex = 31;
-	weaponIconLabel.Parent = weaponRow;
-
-	weaponNameLabel = new Instance("TextLabel");
-	weaponNameLabel.Name = "WeaponName";
-	weaponNameLabel.Size = new UDim2(1, sc(-20), 1, 0);
-	weaponNameLabel.Position = new UDim2(0, sc(20), 0, 0);
-	weaponNameLabel.BackgroundTransparency = 1;
-	weaponNameLabel.Text = "Unarmed";
-	weaponNameLabel.TextColor3 = UI_THEME.textMuted;
-	weaponNameLabel.Font = UI_THEME.fontBold;
-	weaponNameLabel.TextSize = sc(16);
-	weaponNameLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	weaponNameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
-	weaponNameLabel.ZIndex = 31;
-	weaponNameLabel.Parent = weaponRow;
 }
 
 // -- Gold display ---------------------------------------------------------------
@@ -328,31 +224,53 @@ const EFFECT_TILE_SIZE = 36;
 const EFFECT_TILE_GAP = 6;
 
 function buildEffectsBar(screenGui: ScreenGui, banner: Frame): void {
-	const bar = new Instance("Frame");
-	bar.Name = "ActiveEffectsBar";
-	// Pinned below the banner's bottom-left corner. The banner uses
-	// AutomaticSize.Y so we follow its AbsoluteSize each frame.
-	bar.AnchorPoint = new Vector2(0, 0);
-	bar.Position = new UDim2(0, sc(20), 0, sc(40));
-	bar.Size = new UDim2(0, sc(EFFECT_TILE_SIZE * 6 + EFFECT_TILE_GAP * 5), 0, sc(EFFECT_TILE_SIZE));
-	bar.BackgroundTransparency = 1;
-	bar.BorderSizePixel = 0;
-	bar.ZIndex = 30;
-	bar.Parent = screenGui;
+	// Left bar: equipped weapon. Pinned under the banner's bottom-left corner.
+	const leftBar = new Instance("Frame");
+	leftBar.Name = "ActiveEffectsBarLeft";
+	leftBar.AnchorPoint = new Vector2(0, 0);
+	leftBar.Position = new UDim2(0, sc(20), 0, sc(40));
+	leftBar.Size = new UDim2(0, sc(EFFECT_TILE_SIZE * 2 + EFFECT_TILE_GAP), 0, sc(EFFECT_TILE_SIZE));
+	leftBar.BackgroundTransparency = 1;
+	leftBar.BorderSizePixel = 0;
+	leftBar.ZIndex = 30;
+	leftBar.Parent = screenGui;
 
-	const layout = new Instance("UIListLayout");
-	layout.FillDirection = Enum.FillDirection.Horizontal;
-	layout.SortOrder = Enum.SortOrder.LayoutOrder;
-	layout.Padding = new UDim(0, sc(EFFECT_TILE_GAP));
-	layout.Parent = bar;
+	const leftLayout = new Instance("UIListLayout");
+	leftLayout.FillDirection = Enum.FillDirection.Horizontal;
+	leftLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
+	leftLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	leftLayout.Padding = new UDim(0, sc(EFFECT_TILE_GAP));
+	leftLayout.Parent = leftBar;
 
-	effectsBar = bar;
+	effectsBarLeft = leftBar;
 
-	// Reposition the bar to sit just below the banner whenever the banner resizes.
+	// Right bar: consumable effects (poison + elixir). Pinned under banner's bottom-right.
+	const rightBar = new Instance("Frame");
+	rightBar.Name = "ActiveEffectsBarRight";
+	rightBar.AnchorPoint = new Vector2(1, 0);
+	rightBar.Position = new UDim2(0, sc(20), 0, sc(40));
+	rightBar.Size = new UDim2(0, sc(EFFECT_TILE_SIZE * 4 + EFFECT_TILE_GAP * 3), 0, sc(EFFECT_TILE_SIZE));
+	rightBar.BackgroundTransparency = 1;
+	rightBar.BorderSizePixel = 0;
+	rightBar.ZIndex = 30;
+	rightBar.Parent = screenGui;
+
+	const rightLayout = new Instance("UIListLayout");
+	rightLayout.FillDirection = Enum.FillDirection.Horizontal;
+	rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right;
+	rightLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	rightLayout.Padding = new UDim(0, sc(EFFECT_TILE_GAP));
+	rightLayout.Parent = rightBar;
+
+	effectsBarRight = rightBar;
+
+	// Reposition the bars to sit just below the banner whenever it moves/resizes.
 	const reposition = (): void => {
 		const bSize = banner.AbsoluteSize;
 		const bPos = banner.AbsolutePosition;
-		bar.Position = new UDim2(0, bPos.X, 0, bPos.Y + bSize.Y + sc(6));
+		const y = bPos.Y + bSize.Y + sc(6);
+		leftBar.Position = new UDim2(0, bPos.X, 0, y);
+		rightBar.Position = new UDim2(0, bPos.X + bSize.X, 0, y);
 	};
 	banner.GetPropertyChangedSignal("AbsoluteSize").Connect(reposition);
 	banner.GetPropertyChangedSignal("AbsolutePosition").Connect(reposition);
@@ -479,13 +397,16 @@ function ensureEffectTile(slotKey: string, itemId: string): Frame {
 
 	tile = new Instance("Frame");
 	tile.Name = "Effect_" + slotKey;
-	tile.LayoutOrder = slotKey === "elixir" ? 0 : 1;
+	const parentBar = slotKey === "weapon" ? effectsBarLeft : effectsBarRight;
+	if (slotKey === "elixir") tile.LayoutOrder = 0;
+	else if (slotKey === "poison") tile.LayoutOrder = 1;
+	else tile.LayoutOrder = 0;
 	tile.Size = new UDim2(0, sc(EFFECT_TILE_SIZE), 0, sc(EFFECT_TILE_SIZE));
 	tile.BackgroundColor3 = rarityBg;
 	tile.BackgroundTransparency = 0.05;
 	tile.BorderSizePixel = 0;
 	tile.ZIndex = 31;
-	tile.Parent = effectsBar;
+	tile.Parent = parentBar;
 
 	const c = new Instance("UICorner");
 	c.CornerRadius = new UDim(0, 4);
@@ -498,7 +419,8 @@ function ensureEffectTile(slotKey: string, itemId: string): Frame {
 
 	const icon = new Instance("TextLabel");
 	icon.Name = "Icon";
-	icon.Size = new UDim2(1, 0, 1, -sc(10));
+	const showCountdown = slotKey !== "weapon";
+	icon.Size = showCountdown ? new UDim2(1, 0, 1, -sc(10)) : new UDim2(1, 0, 1, 0);
 	icon.BackgroundTransparency = 1;
 	icon.Text = def ? def.icon : "?";
 	icon.TextColor3 = rarityColor;
@@ -507,18 +429,20 @@ function ensureEffectTile(slotKey: string, itemId: string): Frame {
 	icon.ZIndex = 32;
 	icon.Parent = tile;
 
-	const cd = new Instance("TextLabel");
-	cd.Name = "Countdown";
-	cd.AnchorPoint = new Vector2(0.5, 1);
-	cd.Position = new UDim2(0.5, 0, 1, -sc(1));
-	cd.Size = new UDim2(1, 0, 0, sc(10));
-	cd.BackgroundTransparency = 1;
-	cd.Text = "";
-	cd.TextColor3 = UI_THEME.textHeader;
-	cd.Font = UI_THEME.fontBold;
-	cd.TextSize = sc(10);
-	cd.ZIndex = 32;
-	cd.Parent = tile;
+	if (showCountdown) {
+		const cd = new Instance("TextLabel");
+		cd.Name = "Countdown";
+		cd.AnchorPoint = new Vector2(0.5, 1);
+		cd.Position = new UDim2(0.5, 0, 1, -sc(1));
+		cd.Size = new UDim2(1, 0, 0, sc(10));
+		cd.BackgroundTransparency = 1;
+		cd.Text = "";
+		cd.TextColor3 = UI_THEME.textHeader;
+		cd.Font = UI_THEME.fontBold;
+		cd.TextSize = sc(10);
+		cd.ZIndex = 32;
+		cd.Parent = tile;
+	}
 
 	// Hover handlers
 	const hoverIn = (): void => {
@@ -556,9 +480,13 @@ function showEffectTooltip(slotKey: string, anchor: Frame): void {
 	if (effectsTTDesc) effectsTTDesc.Text = def.description;
 	if (effectsTTEffect) effectsTTEffect.Text = def.effect;
 	if (effectsTTCountdown) {
-		const elapsed = os.clock() - slot.lastSyncClock;
-		const remaining = math.max(0, slot.remainingSecs - elapsed);
-		effectsTTCountdown.Text = "Time left: " + formatRemaining(remaining);
+		if (slot.remainingSecs < 0) {
+			effectsTTCountdown.Text = "";
+		} else {
+			const elapsed = os.clock() - slot.lastSyncClock;
+			const remaining = math.max(0, slot.remainingSecs - elapsed);
+			effectsTTCountdown.Text = "Time left: " + formatRemaining(remaining);
+		}
 	}
 
 	effectsTooltip.BackgroundColor3 = rarityBg;
@@ -638,9 +566,42 @@ function applyEffectSync(payload: EffectSyncPayload): void {
 	}
 }
 
+function refreshWeaponTile(): void {
+	if (!effectsBarLeft) return;
+	const id = currentWeaponId;
+	// Fists = unarmed, no tile.
+	if (id === "fists" || id === "" || ITEMS[id] === undefined) {
+		activeEffects.delete("weapon");
+		const existing = effectTiles.get("weapon");
+		if (existing) {
+			existing.Destroy();
+			effectTiles.delete("weapon");
+		}
+		if (hoveredEffectKey === "weapon") hideEffectTooltip();
+		return;
+	}
+	const existing = effectTiles.get("weapon");
+	const prev = activeEffects.get("weapon");
+	activeEffects.set("weapon", {
+		itemId: id,
+		durationSecs: 0,
+		remainingSecs: -1,
+		lastSyncClock: 0,
+	});
+	// If the weapon changed (or no tile yet), rebuild.
+	if (!existing || !prev || prev.itemId !== id) {
+		if (existing) {
+			existing.Destroy();
+			effectTiles.delete("weapon");
+		}
+		ensureEffectTile("weapon", id);
+	}
+}
+
 function tickEffectTiles(): void {
 	const now = os.clock();
 	for (const [key, slot] of activeEffects) {
+		if (slot.remainingSecs < 0) continue;
 		const tile = effectTiles.get(key);
 		if (!tile) continue;
 		const elapsed = now - slot.lastSyncClock;
@@ -650,7 +611,7 @@ function tickEffectTiles(): void {
 	}
 	if (hoveredEffectKey !== undefined && effectsTTCountdown) {
 		const slot = activeEffects.get(hoveredEffectKey);
-		if (slot) {
+		if (slot && slot.remainingSecs >= 0) {
 			const elapsed = now - slot.lastSyncClock;
 			const remaining = math.max(0, slot.remainingSecs - elapsed);
 			effectsTTCountdown.Text = "Time left: " + formatRemaining(remaining);
@@ -682,14 +643,12 @@ onPlayerInitialized(() => {
 	// Fetch initial values
 	const initTitle = GetPlayerTitle.InvokeServer() as string;
 	const initName = GetPlayerName.InvokeServer() as string;
-	const initFactionXP = GetFactionXP.InvokeServer() as FactionXP;
 
-	if (nameLabel) nameLabel.Text = initName;
-	cachedTitle = initTitle;
-	cachedReputation = reputationLine(initFactionXP);
-	refreshTitleRepLine();
+	currentName = initName;
+	currentTitle = initTitle ?? "";
+	refreshNameLine();
 
-	// Initial weapon state
+	// Initial weapon state — render weapon tile in active row
 	const initWeapon = Players.LocalPlayer.GetAttribute("EquippedWeapon") as string | undefined;
 	updateWeapon(initWeapon);
 
@@ -699,9 +658,20 @@ onPlayerInitialized(() => {
 		updateWeapon(wId);
 	});
 
-	// Faction XP updates
-	FactionXPUpdated.OnClientEvent.Connect((fxp) => {
-		updateReputation(fxp as FactionXP);
+	// Fallback: if inventory.client's first SetAttribute fired before our
+	// AttributeChanged listener connected, re-check the attribute for a few
+	// seconds so the weapon tile shows up on first join without re-equipping.
+	task.spawn(() => {
+		const deadline = os.clock() + 5;
+		while (os.clock() < deadline) {
+			task.wait(0.25);
+			const wId = Players.LocalPlayer.GetAttribute("EquippedWeapon") as string | undefined;
+			if (wId !== undefined && wId !== "" && wId !== currentWeaponId) {
+				updateWeapon(wId);
+				break;
+			}
+			if (wId !== undefined && wId === currentWeaponId && currentWeaponId !== "fists") break;
+		}
 	});
 
 	// Initial gold + live updates (delta floater on every change).

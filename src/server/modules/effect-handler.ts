@@ -4,7 +4,7 @@ import { awardAchievement } from "./achievement-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
 import { getEffectSyncRemote, EffectSyncPayload } from "shared/remotes/effect-remote";
-import { getPlayerStateSnapshot, setPlayerEffectFields } from "shared/player-state";
+import { getPlayerStateSnapshot, onPlayerStateLoaded, setPlayerEffectFields } from "shared/player-state";
 
 const effectSyncRemote = getEffectSyncRemote();
 
@@ -83,7 +83,9 @@ export function activatePoison(player: Player, poisonId: string): void {
 			player.Name +
 			" activated poison: " +
 			def.name +
-			(def.chargesPerUse !== undefined ? " (" + def.chargesPerUse + " charges)" : " (" + def.coatDurationSecs + "s)"),
+			(def.chargesPerUse !== undefined
+				? " (" + def.chargesPerUse + " charges)"
+				: " (" + def.coatDurationSecs + "s)"),
 	);
 	persistEffects(player);
 	pushEffectSync(player);
@@ -164,57 +166,55 @@ export function clearElixir(player: Player): void {
 export function initializeEffectHandler(): void {
 	log("[EFFECT] Initializing consumable effect handler");
 
-	// Restore effects from PlayerState on join
+	const restoreFromState = (player: Player): void => {
+		const state = getPlayerStateSnapshot(player);
+		if (!state) return;
+		const effects = getOrCreate(player);
+		if (state.activePoisonId !== undefined && state.activePoisonRemainingSecs > 0) {
+			effects.poisonId = state.activePoisonId;
+			effects.poisonRemainingSecs = state.activePoisonRemainingSecs;
+			const pdef = POISONS[state.activePoisonId];
+			effects.poisonCharges = pdef && pdef.chargesPerUse !== undefined ? pdef.chargesPerUse : -1;
+			log(
+				"[EFFECT] Restored poison for " +
+					player.Name +
+					": " +
+					state.activePoisonId +
+					" (" +
+					state.activePoisonRemainingSecs +
+					"s left)",
+			);
+		}
+		if (state.activeElixirId !== undefined && state.activeElixirRemainingSecs > 0) {
+			effects.elixirId = state.activeElixirId;
+			effects.elixirRemainingSecs = state.activeElixirRemainingSecs;
+			log(
+				"[EFFECT] Restored elixir for " +
+					player.Name +
+					": " +
+					state.activeElixirId +
+					" (" +
+					state.activeElixirRemainingSecs +
+					"s left)",
+			);
+		}
+		pushEffectSync(player);
+	};
+
+	// Restore effects from PlayerState once DataStore has loaded.
 	Players.PlayerAdded.Connect((player) => {
-		// Delay slightly so PlayerState has loaded from DataStore
-		task.delay(3, () => {
-			const state = getPlayerStateSnapshot(player);
-			if (!state) return;
-			const effects = getOrCreate(player);
-			if (state.activePoisonId && state.activePoisonRemainingSecs > 0) {
-				effects.poisonId = state.activePoisonId;
-				effects.poisonRemainingSecs = state.activePoisonRemainingSecs;
-				log(
-					"[EFFECT] Restored poison for " +
-						player.Name +
-						": " +
-						state.activePoisonId +
-						" (" +
-						state.activePoisonRemainingSecs +
-						"s left)",
-				);
-			}
-			if (state.activeElixirId && state.activeElixirRemainingSecs > 0) {
-				effects.elixirId = state.activeElixirId;
-				effects.elixirRemainingSecs = state.activeElixirRemainingSecs;
-				log(
-					"[EFFECT] Restored elixir for " +
-						player.Name +
-						": " +
-						state.activeElixirId +
-						" (" +
-						state.activeElixirRemainingSecs +
-						"s left)",
-				);
-			}
-			pushEffectSync(player);
+		onPlayerStateLoaded(player, () => {
+			if (player.Parent === undefined) return;
+			restoreFromState(player);
 		});
 	});
 
-	// Also restore for players already in-game
+	// Also handle players already in-game (in case bootstrap ran late).
 	for (const player of Players.GetPlayers()) {
-		const state = getPlayerStateSnapshot(player);
-		if (!state) continue;
-		const effects = getOrCreate(player);
-		if (state.activePoisonId && state.activePoisonRemainingSecs > 0) {
-			effects.poisonId = state.activePoisonId;
-			effects.poisonRemainingSecs = state.activePoisonRemainingSecs;
-		}
-		if (state.activeElixirId && state.activeElixirRemainingSecs > 0) {
-			effects.elixirId = state.activeElixirId;
-			effects.elixirRemainingSecs = state.activeElixirRemainingSecs;
-		}
-		pushEffectSync(player);
+		onPlayerStateLoaded(player, () => {
+			if (player.Parent === undefined) return;
+			restoreFromState(player);
+		});
 	}
 
 	// Cleanup on leave

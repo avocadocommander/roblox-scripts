@@ -3,7 +3,8 @@ import { log } from "../helpers";
 import { NPCData, Race } from "../module";
 import { RouteConfig } from "../npc-manager";
 import { makeSeededRandom } from "./utils";
-import { STATUS_CLOTHING, ROUTE_ACCESSORIES, NPCAccessoryDef } from "../config/npc-clothing";
+import { STATUS_CLOTHING, ROUTE_ACCESSORIES, ROUTE_CLOTHING_POOLS } from "../config/npc-clothing";
+import { NPC_REGISTRY } from "../config/npcs";
 
 const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 	Human: [
@@ -31,26 +32,6 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 
 function getRaceSkinTones(race: Race): Color3[] {
 	return RACE_SKIN_TONES[race] ?? RACE_SKIN_TONES.Human;
-}
-
-// ── Body part aliases (R6 <-> R15) ────────────────────────────────────────────
-// Tries the given name first, then falls back to known equivalents.
-const PART_ALIASES: Record<string, string[]> = {
-	Torso:         ["Torso", "UpperTorso"],
-	UpperTorso:    ["UpperTorso", "Torso"],
-	"Left Leg":    ["Left Leg", "LeftFoot", "LeftLowerLeg", "LeftUpperLeg"],
-	"Right Leg":   ["Right Leg", "RightFoot", "RightLowerLeg", "RightUpperLeg"],
-	LeftFoot:      ["LeftFoot", "Left Leg", "LeftLowerLeg"],
-	RightFoot:     ["RightFoot", "Right Leg", "RightLowerLeg"],
-};
-
-function findBodyPart(npc: Model, partName: string): BasePart | undefined {
-	const aliases = PART_ALIASES[partName] ?? [partName];
-	for (const alias of aliases) {
-		const found = npc.FindFirstChild(alias) as BasePart | undefined;
-		if (found) return found;
-	}
-	return undefined;
 }
 
 function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
@@ -141,89 +122,52 @@ function getGenericSeededAppearance(
 		if (shoes) shoes.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shoeColors, seed());
 	}
 
-	// ── Tier accessories are applied AFTER ApplyDescription in setHumanoidDefaults
-	// so the welds target the final body parts, not pre-description ones.
+	// Clothing items are attached post-ApplyDescription via attachClothingItems
+	// (called from setHumanoidDefaults).
 
 	return humanoidDescription;
 }
 
-function cloneAndAttachAccessory(npc: Model, accDef: NPCAccessoryDef): void {
-	const template = ReplicatedStorage.FindFirstChild(accDef.name);
+function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
+	const template = ReplicatedStorage.FindFirstChild(accessoryName);
 	if (!template) {
-		log("[APPEARANCE] Missing accessory in ReplicatedStorage: " + accDef.name);
+		log(
+			"[APPEARANCE] Missing accessory in ReplicatedStorage: '" +
+				accessoryName +
+				"' (NPC=" +
+				npc.Name +
+				"). Make sure an Accessory with this exact name exists at the root of ReplicatedStorage.",
+			"WARN",
+		);
 		return;
 	}
-
-	if (accDef.hideShirt === true) {
-		const basicShirt = npc.FindFirstChild("BasicShirt") as Accessory | undefined;
-		if (basicShirt) basicShirt.Destroy();
-	}
-
-	// weldToMany: clone once per part entry and weld each independently
-	if (accDef.weldToMany !== undefined) {
-		for (const entry of accDef.weldToMany) {
-			const targetPart = findBodyPart(npc, entry.part);
-			if (!targetPart) {
-				log("[APPEARANCE] weldToMany target '" + entry.part + "' not found for " + accDef.name, "WARN");
-				continue;
-			}
-			const clone = template.Clone() as Accessory;
-			if (accDef.color !== undefined) {
-				const h = clone.FindFirstChild("Handle") as BasePart | undefined;
-				if (h) h.Color = accDef.color;
-			}
-			const handle = clone.FindFirstChild("Handle") as BasePart | undefined;
-			if (handle) {
-				handle.Anchored = false;
-				clone.Parent = npc;
-				const weld = new Instance("Weld");
-				weld.Part0 = targetPart;
-				weld.Part1 = handle;
-				weld.C0 = entry.cframe ?? new CFrame(0, 0, 0);
-				weld.Parent = handle;
-				log("[APPEARANCE] Welded " + accDef.name + " to " + targetPart.Name + " (via '" + entry.part + "')");
-			}
-		}
+	if (!template.IsA("Accessory")) {
+		log(
+			"[APPEARANCE] ReplicatedStorage." +
+				accessoryName +
+				" is a " +
+				template.ClassName +
+				", expected Accessory (NPC=" +
+				npc.Name +
+				")",
+			"WARN",
+		);
 		return;
 	}
 
 	const accessory = template.Clone() as Accessory;
-	if (accDef.color !== undefined) {
-		const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
-		if (handle) handle.Color = accDef.color;
-	}
-
-	// Single weld path — use when the accessory lacks correct attachment data
-	if (accDef.weldTo !== undefined) {
-		const targetPart = findBodyPart(npc, accDef.weldTo);
-		const handle = accessory.FindFirstChild("Handle") as BasePart | undefined;
-		if (targetPart && handle) {
-			handle.Anchored = false;
-			accessory.Parent = npc;
-			const weld = new Instance("Weld");
-			weld.Part0 = targetPart;
-			weld.Part1 = handle;
-			weld.C0 = accDef.weldCFrame ?? new CFrame(0, 0, 0);
-			weld.Parent = handle;
-			log("[APPEARANCE] Welded " + accDef.name + " to " + targetPart.Name + " (via '" + accDef.weldTo + "')");
-		} else {
-			log("[APPEARANCE] weldTo target '" + accDef.weldTo + "' not found for " + accDef.name, "WARN");
-		}
-		return;
-	}
-
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 	if (humanoid) {
 		const [ok] = pcall(() => humanoid.AddAccessory(accessory));
 		if (!ok) {
-			log("[APPEARANCE] AddAccessory failed for " + accDef.name + ", parenting directly");
+			log("[APPEARANCE] AddAccessory failed for " + accessoryName + ", parenting directly");
 			accessory.Parent = npc;
 		}
 	} else {
 		accessory.Parent = npc;
 	}
 
-	log("[APPEARANCE] Attached accessory: " + accDef.name);
+	log("[APPEARANCE] Attached accessory: " + accessoryName);
 }
 
 function attachTierAccessories(
@@ -241,19 +185,59 @@ function attachTierAccessories(
 	if (routeAccs !== undefined && routeAccs.size() > 0) {
 		// Route accessories take priority — skip tier accessories entirely
 		log("[APPEARANCE] Applying " + routeAccs.size() + " route accessories for " + tostring(position));
-		for (const accDef of routeAccs) {
-			cloneAndAttachAccessory(npc, accDef);
+		for (const name of routeAccs) {
+			cloneAndAttachAccessory(npc, name);
 		}
 	} else {
 		// ── Status-tier accessories (chest pieces, capes, etc.) ──────────────
 		const tierClothing = STATUS_CLOTHING[data.status];
 		const chance = tierClothing.accessoryChance ?? 1;
 
-		for (const accDef of tierClothing.accessories) {
+		for (const name of tierClothing.accessories) {
 			const roll = seed();
 			if (roll > chance) continue;
-			cloneAndAttachAccessory(npc, accDef);
+			cloneAndAttachAccessory(npc, name);
 		}
+	}
+
+	// Catalog clothing handled post-ApplyDescription via attachClothingItems.
+}
+
+// ── Clothing items (ReplicatedStorage templates) ─────────────────────────
+// Each name MUST match an Accessory child under ReplicatedStorage.
+
+function pickClothingItemsForNPC(
+	npc: Model,
+	data: NPCData,
+	seed: () => number,
+	routeData: RouteConfig | undefined,
+): string[] {
+	const npcName = npc.GetAttribute("NPCName") as string | undefined;
+	const npcDef = npcName !== undefined ? NPC_REGISTRY[npcName] : undefined;
+
+	// 1) NPC-level override always wins (applies every item).
+	if (npcDef && npcDef.clothing !== undefined && npcDef.clothing.size() > 0) {
+		return npcDef.clothing;
+	}
+
+	// 2) Route pool overrides tier pool (one seeded pick).
+	const position = routeData?.position;
+	const routePool = position !== undefined ? ROUTE_CLOTHING_POOLS[position] : undefined;
+	const pool = routePool ?? STATUS_CLOTHING[data.status].clothingPool;
+	if (pool === undefined || pool.size() === 0) return [];
+	const pick = pool[math.floor(seed() * pool.size())];
+	return pick !== undefined ? [pick] : [];
+}
+
+function attachClothingItems(
+	npc: Model,
+	data: NPCData,
+	seed: () => number,
+	routeData: RouteConfig | undefined,
+): void {
+	const items = pickClothingItemsForNPC(npc, data, seed, routeData);
+	for (const name of items) {
+		cloneAndAttachAccessory(npc, name);
 	}
 }
 
@@ -270,11 +254,11 @@ function setHumanoidDefaults(
 		return undefined;
 	}
 	const rand = makeSeededRandom(seed);
-	//randomizeBodyShape(npcDescription, rand, data.race);
+	randomizeBodyShape(npcDescription, rand, data.race);
 	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeData);
 
 	if (routeData?.position === "Guard" && routeData?.pace !== "Stationary") {
-		const torch = ReplicatedStorage.FindFirstChild("HandTorch") as Tool | undefined;
+		const torch = ReplicatedStorage.FindFirstChild("Handtorch") as Tool | undefined;
 		const animator = humanoid.FindFirstChildOfClass("Animator");
 
 		if (torch && animator) {
@@ -287,20 +271,28 @@ function setHumanoidDefaults(
 
 			track.Play();
 
-			humanoid.EquipTool(torch.Clone());
+			// EquipTool yields until the character is ready -- run on its own
+			// thread so we don't stall the NPC spawn loop / server replication.
+			const torchClone = torch.Clone();
+			task.spawn(() => humanoid.EquipTool(torchClone));
 		} else {
-			log("[APPEARANCE] Guard missing HandTorch or Animator, skipping torch");
+			log("[APPEARANCE] Guard missing Handtorch or Animator, skipping torch");
 		}
 	}
 
 	if (!appearenceDescription) return;
-	humanoid.ApplyDescription(appearenceDescription);
+	const [applyOk, applyErr] = pcall(() => humanoid.ApplyDescription(appearenceDescription));
+	if (!applyOk) {
+		log("[APPEARANCE] ApplyDescription failed: " + tostring(applyErr), "WARN");
+	}
 
-	// Attach tier accessories AFTER ApplyDescription so the body parts are final
+	// Attach tier accessories + clothing items AFTER ApplyDescription so the
+	// body parts are final and welds target the correct rig.
 	const npc = humanoid.Parent as Model;
 	if (npc) {
 		const accRand = makeSeededRandom(seed);
 		attachTierAccessories(npc, data, accRand, routeData);
+		attachClothingItems(npc, data, makeSeededRandom(seed), routeData);
 	}
 
 	return humanoid;
@@ -331,15 +323,15 @@ function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => num
 			proportion: [0.45, 0.65],
 		},
 		Elf: {
-			height: [1.05, 1.15],
-			width: [0.9, 1.0],
-			depth: [0.95, 1.05],
-			head: [0.85, 1.0],
-			bodyType: [0.2, 0.5],
-			proportion: [0.55, 0.75],
+			height: [1.15, 1.28],
+			width: [0.78, 0.88],
+			depth: [0.85, 0.95],
+			head: [0.8, 0.95],
+			bodyType: [0.15, 0.35],
+			proportion: [0.65, 0.85],
 		},
 		Goblin: {
-			height: [0.75, 0.9],
+			height: [0.88, 1.0],
 			width: [0.85, 0.95],
 			depth: [0.85, 0.95],
 			head: [0.9, 1.05],

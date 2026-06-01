@@ -290,23 +290,48 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 		const model = new Instance("Model");
 		model.Name = "OfferSlot_" + offerId;
 
-		// Clone the 3D display model from ReplicatedStorage > DisplayModels
+		// Resolve the 3D display source. Order:
+		//   1) ReplicatedStorage.DisplayModels.<name>  (legacy display models)
+		//   2) ReplicatedStorage.<name>                (Accessory or Model at root)
+		// Accessories are cloned and the Handle is extracted as the display.
 		const displayFolder = ReplicatedStorage.FindFirstChild("DisplayModels") as Folder | undefined;
 		let displayClone: Model | undefined;
-		if (offer.displayModelName !== undefined && displayFolder) {
-			const source = displayFolder.FindFirstChild(offer.displayModelName) as Model | undefined;
-			if (source) {
+		if (offer.displayModelName !== undefined) {
+			let source: Instance | undefined =
+				displayFolder?.FindFirstChild(offer.displayModelName) ??
+				ReplicatedStorage.FindFirstChild(offer.displayModelName);
+
+			if (source && source.IsA("Accessory")) {
+				const handle = source.FindFirstChild("Handle") as BasePart | undefined;
+				if (handle) {
+					const wrapper = new Instance("Model");
+					const handleClone = handle.Clone();
+					handleClone.Parent = wrapper;
+					wrapper.PrimaryPart = handleClone;
+					displayClone = wrapper;
+				} else {
+					log("[MERCHANT] Accessory '" + offer.displayModelName + "' has no Handle", "WARN");
+					source = undefined;
+				}
+			} else if (source && source.IsA("Model")) {
 				displayClone = source.Clone();
+			}
+
+			if (displayClone) {
 				displayClone.Parent = model;
-				// Anchor all parts so physics doesn't interfere
 				for (const part of displayClone.GetDescendants()) {
 					if (part.IsA("BasePart")) {
 						part.Anchored = true;
 						part.CanCollide = false;
 					}
 				}
-			} else {
-				log("[MERCHANT] DisplayModels/" + offer.displayModelName + " not found in ReplicatedStorage", "WARN");
+			} else if (!source) {
+				log(
+					"[MERCHANT] Display source '" +
+						offer.displayModelName +
+						"' not found in ReplicatedStorage.DisplayModels or root",
+					"WARN",
+				);
 			}
 		}
 

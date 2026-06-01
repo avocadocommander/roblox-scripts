@@ -70,6 +70,12 @@ export interface NPCDef {
 	fixedRouteId: string | undefined;
 	dialog: NPCDialogDef | undefined;
 	shop: NPCShopDef | undefined;
+	/**
+	 * Optional per-NPC clothing override. When set, replaces the tier
+	 * `clothingPool` selection for this NPC and all listed items are always
+	 * applied. See `NPCClothingItem` in `config/npc-clothing.ts`.
+	 */
+	clothing?: import("./npc-clothing").NPCClothingOverride;
 }
 
 export type NPCRegistry = Record<string, NPCDef>;

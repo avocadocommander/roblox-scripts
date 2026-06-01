@@ -190,21 +190,38 @@ function getDropdowns(): DropdownDef[] {
 function buildAdminHUD(screenGui: ScreenGui): void {
 	const dropdowns = getDropdowns();
 
-	// ── Small bottom-right hint so admins know the key ─────────────────────
-	hintLabel = new Instance("TextLabel");
-	hintLabel.Name = "AdminHint";
-	hintLabel.Size = new UDim2(0, sc(140), 0, sc(20));
-	hintLabel.AnchorPoint = new Vector2(1, 1);
-	hintLabel.Position = new UDim2(1, sc(-8), 1, sc(-8));
-	hintLabel.BackgroundTransparency = 1;
-	hintLabel.Text = "[ `  debug ]";
-	hintLabel.TextColor3 = UI_THEME.textMuted;
-	hintLabel.Font = UI_THEME.fontBody;
-	hintLabel.TextSize = sc(11);
-	hintLabel.TextXAlignment = Enum.TextXAlignment.Right;
-	hintLabel.TextTransparency = 0.35;
-	hintLabel.ZIndex = 60;
-	hintLabel.Parent = screenGui;
+	// ── Settings-style button next to the top-left character banner ─────────
+	// Banner lives at (sc(20), sc(40)) with width sc(320); slot it just to
+	// the right with a small gap. Square, grey, equip-slot styling.
+	const SLOT = sc(50);
+	const hintButton = new Instance("TextButton");
+	hintButton.Name = "AdminHint";
+	hintButton.Size = new UDim2(0, SLOT, 0, SLOT);
+	hintButton.AnchorPoint = new Vector2(0, 0);
+	hintButton.Position = new UDim2(0, sc(20) + sc(320) + sc(8), 0, sc(40));
+	hintButton.BackgroundColor3 = UI_THEME.bg;
+	hintButton.BackgroundTransparency = UI_THEME.bgTransparency;
+	hintButton.AutoButtonColor = false;
+	hintButton.Text = "*";
+	hintButton.TextColor3 = UI_THEME.textMuted;
+	hintButton.Font = UI_THEME.fontBody;
+	hintButton.TextSize = sc(22);
+	hintButton.BorderSizePixel = 0;
+	hintButton.ZIndex = 31;
+	hintButton.Parent = screenGui;
+
+	const hintCorner = new Instance("UICorner");
+	hintCorner.CornerRadius = new UDim(0, 6);
+	hintCorner.Parent = hintButton;
+
+	const hintStroke = new Instance("UIStroke");
+	hintStroke.Color = UI_THEME.textMuted;
+	hintStroke.Thickness = 1;
+	hintStroke.Transparency = 0.5;
+	hintStroke.Parent = hintButton;
+
+	hintButton.Activated.Connect(() => togglePanel());
+	hintLabel = hintButton as unknown as TextLabel;
 
 	// ── Root popup (hidden by default) ─────────────────────────────────────
 	const root = new Instance("Frame");
