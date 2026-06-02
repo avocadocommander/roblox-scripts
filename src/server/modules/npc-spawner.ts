@@ -59,9 +59,14 @@ function getNPCRoutes(): Folder[] {
 
 	const updatedRoutes = CollectionService.GetTagged("Route").filter((child): child is Folder => {
 		if (!child.IsA("Folder")) return false;
-		// Skip routes that live inside a MerchantShop site -- those are managed by merchant-handler
-		const parent = child.Parent;
-		if (parent !== undefined && CollectionService.HasTag(parent, "MerchantShop")) return false;
+		// Skip routes that live anywhere inside a merchant shop site -- those are
+		// managed by merchant-handler. Walk ancestors so nested Routes are caught.
+		let p: Instance | undefined = child.Parent;
+		while (p !== undefined && p !== game) {
+			if (CollectionService.HasTag(p, "MerchantShop")) return false;
+			if (p.IsA("Model") && p.Name === "Shop") return false;
+			p = p.Parent;
+		}
 		return true;
 	});
 
@@ -230,9 +235,14 @@ export function initializeNpcSpawner(): void {
 	}
 
 	// ── Phase 1: Spawn fixed-route NPCs first
+	const reservedMerchants = getReservedMerchantNames();
 	for (const npcName of FIXED_ROUTE_NPC_NAMES) {
 		const def = NPC_REGISTRY[npcName];
 		if (!def || !def.fixedRouteId) continue;
+		if (reservedMerchants.has(npcName)) {
+			log(`[NPC-SPAWNER] Skipping fixed route for ${npcName} -- pinned to a merchant shop`);
+			continue;
+		}
 		const route = routesByName.get(def.fixedRouteId);
 		if (!route) {
 			log(`[NPC-SPAWNER] Fixed route "${def.fixedRouteId}" not found for NPC ${npcName}`, "WARN");

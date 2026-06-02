@@ -47,6 +47,11 @@ const merchantShops = new Map<string, ShopItem[]>();
 /** Names already claimed by the merchant system (skip in route spawning). */
 const reservedNames = new Set<string>();
 
+/** Names pinned to a specific ShopSite via NPCName attribute. Populated
+ *  synchronously at init so npc-spawner skips their fixed routes before the
+ *  full merchant placement (which is deferred) runs. */
+const pinnedNames = new Set<string>();
+
 // ── Fallback route config (used when a Route folder has no Configuration child) ──
 
 const FALLBACK_ROUTE_CONFIG: RouteConfig = {
@@ -457,7 +462,10 @@ export function unregisterMerchantShop(npcName: string): void {
 
 /** Names reserved by the merchant system — do NOT also assign to normal routes. */
 export function getReservedMerchantNames(): Set<string> {
-	return reservedNames;
+	const combined = new Set<string>();
+	for (const n of reservedNames) combined.add(n);
+	for (const n of pinnedNames) combined.add(n);
+	return combined;
 }
 
 function runMerchantInit(): void {
@@ -496,9 +504,64 @@ function runMerchantInit(): void {
 			" by name).",
 	);
 
+	// ── Pinned sites (NPCName attribute) ─────────────────────────────────────
+	// Any ShopSite with an "NPCName" attribute is locked to that specific NPC
+	// (and optionally a specific ShopType via the existing attribute). Handle
+	// these first so their NPC is reserved before random pool allocation runs.
+	const pinnedSites: Model[] = [];
+	const unpinnedSites: Model[] = [];
+	for (const site of shopSites) {
+		const pinnedName = site.GetAttribute("NPCName") as string | undefined;
+		if (pinnedName !== undefined && pinnedName !== "") pinnedSites.push(site);
+		else unpinnedSites.push(site);
+	}
+
+	for (const site of pinnedSites) {
+		const npcName = site.GetAttribute("NPCName") as string;
+		if (!NPC_REGISTRY[npcName]) {
+			log("[MERCHANT] Pinned NPCName '" + npcName + "' on " + site.Name + " not in registry.", "WARN");
+			continue;
+		}
+		if (reservedNames.has(npcName)) {
+			log("[MERCHANT] Pinned NPC '" + npcName + "' already reserved -- skipping " + site.Name + ".", "WARN");
+			continue;
+		}
+
+		const attrType = site.GetAttribute("ShopType") as string | undefined;
+		const npcDef = NPC_REGISTRY[npcName];
+
+		// NPC-level shop overrides the ShopType pool. Use "rare" as the recorded
+		// type so the sign still renders a sensible marker.
+		let pinnedType: ShopType;
+		let pinnedItems: ShopItem[];
+		if (npcDef.shop !== undefined && npcDef.shop.shopItems.size() > 0) {
+			pinnedType = (attrType as ShopType) ?? "rare";
+			pinnedItems = npcDef.shop.shopItems;
+			log(
+				"[MERCHANT] Pinned site " +
+					site.Name +
+					" -> " +
+					npcName +
+					" (NPC-defined inventory, sign type '" +
+					pinnedType +
+					"')",
+			);
+		} else {
+			pinnedType = (attrType as ShopType) ?? "rare";
+			pinnedItems = buildShopInventory(pinnedType);
+			if (!pinnedItems || pinnedItems.size() === 0) {
+				log("[MERCHANT] Pinned site " + site.Name + " has empty ShopType '" + pinnedType + "'.", "WARN");
+				continue;
+			}
+			log("[MERCHANT] Pinned site " + site.Name + " -> " + npcName + " (type '" + pinnedType + "')");
+		}
+
+		spawnMerchant(npcName, site, pinnedItems, pinnedType);
+	}
+
 	// ── Assign shop types ────────────────────────────────────────────────────
 	// Shuffle sites so type assignments are random each session
-	const shuffled = [...shopSites];
+	const shuffled = [...unpinnedSites];
 	for (let i = shuffled.size() - 1; i > 0; i--) {
 		const j = math.random(0, i);
 		const tmp = shuffled[i];
@@ -573,7 +636,33 @@ function runMerchantInit(): void {
 	log("[MERCHANT] Initialized " + merchantShops.size() + " merchants across " + shopSites.size() + " shop site(s).");
 }
 
+/**
+ * Synchronously scan ShopSites for an "NPCName" attribute and reserve those
+ * names so the NPC spawner skips them (including their fixedRouteId routes).
+ * Must run before initializeNpcSpawner so pinned NPCs don't double-spawn.
+ */
+function reservePinnedMerchantNames(): void {
+	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => inst.IsA("Model"));
+	const byName: Model[] = [];
+	for (const inst of Workspace.GetDescendants()) {
+		if (inst.IsA("Model") && inst.Name === "Shop") byName.push(inst);
+	}
+	const seen = new Set<Model>();
+	for (const m of [...tagged, ...byName]) {
+		if (seen.has(m)) continue;
+		seen.add(m);
+		const pinnedName = m.GetAttribute("NPCName") as string | undefined;
+		if (pinnedName !== undefined && pinnedName !== "") {
+			pinnedNames.add(pinnedName);
+			log("[MERCHANT] Reserved pinned NPC '" + pinnedName + "' for site " + m.Name);
+		}
+	}
+}
+
 export function initializeMerchantSystem(): void {
-	// Defer 3 seconds so CollectionService tags are fully registered in the DataModel
+	// Reserve pinned NPC names immediately so npc-spawner won't also spawn them
+	// at their fixedRouteId routes.
+	reservePinnedMerchantNames();
+	// Defer full merchant placement 3s so CollectionService tags are fully registered
 	task.delay(3, () => runMerchantInit());
 }

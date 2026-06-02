@@ -151,6 +151,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		interaction: "TurnIn",
 		fixedRouteId: "Thorne",
 		killable: false,
+		clothing: ["LightAssassinHood"],
 		dialog: {
 			greetings: ["Listen -- theres far more you will hear", "Do i know you?"],
 			chatLines: [
@@ -205,6 +206,43 @@ export const NPC_REGISTRY: NPCRegistry = {
 	},
 	"Edric Thornwell": std("Edric Thornwell", "M", "Human", "Commoner"),
 	"Moira Blackfen": std("Moira Blackfen", "F", "Human", "Serf"),
+	Zabud: {
+		...std("Zabud", "M", "Human", "Merchant", "Wandering Apothecary"),
+		shop: {
+			shopItems: [
+				{ itemId: "fleetfoot_elixir_plus", price: 520 },
+				{ itemId: "featherfall_draught_plus", price: 720 },
+				{ itemId: "veil_of_silence_plus", price: 940 },
+				{ itemId: "shadowsight_elixir", price: 680 },
+				{ itemId: "dawnsight_elixir", price: 680 },
+			],
+		},
+		dialog: {
+			greetings: [
+				"Ah! A face. A real one, I think. Come, come -- the bottles have been restless.",
+				"Oh hello, traveller. Mind the toad. He bites only on Tuesdays.",
+				"Step in, step in. The smoke is mostly harmless tonight.",
+				"You arrive at the exact moment I expected. Or close enough. Time is a suggestion.",
+			],
+			chatLines: [
+				"She taught me half of these recipes. The other half I dreamt. I am still sorting which is which.",
+				"A proper elixir hums when you uncork it. If yours screams, return it. That one was not finished.",
+				"The realm wobbles like a poorly stirred draught. I wonder if anyone is stirring at all.",
+				"I used to know what the work was for. Now I just trust the bottles know.",
+				"Magic is mostly listening. The trouble is everything is talking at once these days.",
+				"Grief, I have found, distills beautifully. Do not drink it. Just observe.",
+				"Kings rise. Kings fall. The mortar and pestle remain. There is comfort in that. I think.",
+				"If a bottle giggles, that is fine. If it argues, do not drink it.",
+				"Sometimes I forget her name for an hour and panic. Then it returns, like a moth to a candle.",
+			],
+			farewells: [
+				"Off you go. Try not to explode anything important.",
+				"Walk gently. The world is thinner than it looks.",
+				"Come back when the moon is honest. We will talk properly then.",
+				"If you find a feather that hums, bring it. I have a use for it. Probably.",
+			],
+		},
+	},
 	"Garrick Hallowmere": {
 		...std("Garrick Hallowmere", "M", "Human", "Merchant", "Merchant"),
 		dialog: {

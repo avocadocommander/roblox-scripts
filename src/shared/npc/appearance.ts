@@ -136,38 +136,58 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 				accessoryName +
 				"' (NPC=" +
 				npc.Name +
-				"). Make sure an Accessory with this exact name exists at the root of ReplicatedStorage.",
-			"WARN",
-		);
-		return;
-	}
-	if (!template.IsA("Accessory")) {
-		log(
-			"[APPEARANCE] ReplicatedStorage." +
-				accessoryName +
-				" is a " +
-				template.ClassName +
-				", expected Accessory (NPC=" +
-				npc.Name +
-				")",
+				"). Make sure an Accessory/Hat with this exact name exists at the root of ReplicatedStorage.",
 			"WARN",
 		);
 		return;
 	}
 
-	const accessory = template.Clone() as Accessory;
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
-	if (humanoid) {
-		const [ok] = pcall(() => humanoid.AddAccessory(accessory));
-		if (!ok) {
-			log("[APPEARANCE] AddAccessory failed for " + accessoryName + ", parenting directly");
+
+	// Accessory or Hat: humanoid can equip directly.
+	if (template.IsA("Accessory") || template.IsA("Hat")) {
+		const accessory = template.Clone() as Accessory;
+		if (humanoid) {
+			const [ok] = pcall(() => humanoid.AddAccessory(accessory));
+			if (!ok) {
+				log("[APPEARANCE] AddAccessory failed for " + accessoryName + ", parenting directly");
+				accessory.Parent = npc;
+			}
+		} else {
 			accessory.Parent = npc;
 		}
-	} else {
-		accessory.Parent = npc;
+		log("[APPEARANCE] Attached accessory: " + accessoryName);
+		return;
 	}
 
-	log("[APPEARANCE] Attached accessory: " + accessoryName);
+	// Model wrapper: find the first Accessory/Hat inside and equip that.
+	if (template.IsA("Model")) {
+		const inner = template
+			.GetDescendants()
+			.find((d) => d.IsA("Accessory") || d.IsA("Hat")) as Accessory | undefined;
+		if (inner) {
+			const accessory = inner.Clone() as Accessory;
+			if (humanoid) {
+				const [ok] = pcall(() => humanoid.AddAccessory(accessory));
+				if (!ok) accessory.Parent = npc;
+			} else {
+				accessory.Parent = npc;
+			}
+			log("[APPEARANCE] Attached accessory from Model wrapper: " + accessoryName);
+			return;
+		}
+	}
+
+	log(
+		"[APPEARANCE] ReplicatedStorage." +
+			accessoryName +
+			" is a " +
+			template.ClassName +
+			", expected Accessory/Hat (NPC=" +
+			npc.Name +
+			")",
+		"WARN",
+	);
 }
 
 function attachTierAccessories(
