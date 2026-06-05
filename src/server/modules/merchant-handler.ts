@@ -266,7 +266,10 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 		} else if (desc.IsA("Attachment")) {
 			// Only count attachments inside a BasePart -- if they're inside an
 			// OfferSlot Model we already counted that model above.
-			if (desc.Parent?.IsA("BasePart") && !desc.FindFirstAncestorOfClass("Model")?.Name.lower().sub(1, 9).match("offerslot")[0]) {
+			if (
+				desc.Parent?.IsA("BasePart") &&
+				!desc.FindFirstAncestorOfClass("Model")?.Name.lower().sub(1, 9).match("offerslot")[0]
+			) {
 				slots.push({ position: desc.WorldPosition });
 			}
 		} else if (desc.IsA("BasePart")) {
