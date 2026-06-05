@@ -16,11 +16,11 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 		Color3.fromRGB(101, 67, 33), // dark brown
 		Color3.fromRGB(77, 51, 25), // very dark
 	],
-	Elf: [
-		Color3.fromRGB(245, 245, 240), // porcelain
-		Color3.fromRGB(235, 245, 238), // pale with green tint
-		Color3.fromRGB(235, 238, 255), // pale with blue tint
-		Color3.fromRGB(250, 235, 245), // pale rose
+	Gnome: [
+		Color3.fromRGB(238, 198, 168), // rosy fair
+		Color3.fromRGB(225, 178, 140), // warm tan
+		Color3.fromRGB(208, 158, 118), // ruddy
+		Color3.fromRGB(195, 140, 100), // sun-browned
 	],
 	Goblin: [
 		Color3.fromRGB(60, 100, 60), // moss green
@@ -77,12 +77,14 @@ function getGenericSeededAppearance(
 	let earType: string | undefined = undefined;
 
 	switch (data.race) {
-		case "Elf": {
-			earType = "Elf Ears";
-			break;
-		}
 		case "Goblin": {
 			earType = "Goblin Ears";
+			break;
+		}
+		case "Gnome": {
+			// Gnomes always wear their signature mask -- attach via the same
+			// ear-slot pipeline (clones the 'Gnome' Accessory from ReplicatedStorage).
+			earType = "Gnome";
 			break;
 		}
 		default: {
@@ -106,14 +108,10 @@ function getGenericSeededAppearance(
 		return humanoidDescription;
 	}
 
-	// Route-specific overrides (Guards, Preachers) take priority
+	// Route-specific overrides (Guards) take priority
 	if (routeData?.position === "Guard") {
 		if (shirt) shirt.Color = new Color3(0, 0, 0);
 		if (pants) pants.Color = new Color3(0, 0, 0);
-		if (shoes) shoes.Color = new Color3(0, 0, 0);
-	} else if (routeData?.position === "Preacher") {
-		if (shirt) shirt.Color = new Color3(0.59, 0.03, 0.03);
-		if (pants) pants.Color = new Color3(0.59, 0.03, 0.03);
 		if (shoes) shoes.Color = new Color3(0, 0, 0);
 	} else {
 		// Use status-tier palette
@@ -176,6 +174,26 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 			log("[APPEARANCE] Attached accessory from Model wrapper: " + accessoryName);
 			return;
 		}
+
+		// Model containing a `Handle` BasePart (no nested Accessory) — wrap
+		// the Handle in a runtime Accessory so the humanoid can equip it.
+		// The Handle should carry its own Attachment so AddAccessory can weld.
+		const handle = template.FindFirstChild("Handle");
+		if (handle && handle.IsA("BasePart")) {
+			const accessory = new Instance("Accessory");
+			accessory.Name = template.Name;
+			const handleClone = handle.Clone();
+			handleClone.Name = "Handle";
+			handleClone.Parent = accessory;
+			if (humanoid) {
+				const [ok] = pcall(() => humanoid.AddAccessory(accessory));
+				if (!ok) accessory.Parent = npc;
+			} else {
+				accessory.Parent = npc;
+			}
+			log("[APPEARANCE] Attached accessory from Model+Handle: " + accessoryName);
+			return;
+		}
 	}
 
 	log(
@@ -196,7 +214,7 @@ function attachTierAccessories(
 	seed: () => number,
 	routeData: RouteConfig | undefined,
 ): void {
-	// ── Route-specific accessories (guard shirt, preacher hood, etc.) ─────────
+	// ── Route-specific accessories (guard shirt, etc.) ───────────────────────
 	const position = routeData?.position;
 	const routeAccs = position !== undefined ? ROUTE_ACCESSORIES[position] : undefined;
 
@@ -239,6 +257,10 @@ function pickClothingItemsForNPC(
 	if (npcDef && npcDef.clothing !== undefined && npcDef.clothing.size() > 0) {
 		return npcDef.clothing;
 	}
+
+	// Gnomes only ever wear their signature mask (attached via the ear-slot
+	// pipeline). Skip the random hat/clothing pool entirely.
+	if (data.race === "Gnome") return [];
 
 	// 2) Route pool overrides tier pool (one seeded pick).
 	const position = routeData?.position;
@@ -342,13 +364,13 @@ function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => num
 			bodyType: [0.3, 0.7],
 			proportion: [0.45, 0.65],
 		},
-		Elf: {
-			height: [1.15, 1.28],
-			width: [0.78, 0.88],
+		Gnome: {
+			height: [0.82, 0.95],
+			width: [0.85, 0.98],
 			depth: [0.85, 0.95],
-			head: [0.8, 0.95],
-			bodyType: [0.15, 0.35],
-			proportion: [0.65, 0.85],
+			head: [1.0, 1.15],
+			bodyType: [0.25, 0.55],
+			proportion: [0.4, 0.6],
 		},
 		Goblin: {
 			height: [0.88, 1.0],

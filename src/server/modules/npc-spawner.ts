@@ -1,7 +1,7 @@
 import { CollectionService, Workspace } from "@rbxts/services";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
-import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "shared/config/npcs";
+import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getConfigFromRoute } from "shared/npc-manager";
 import { getReservedMerchantNames } from "./merchant-handler";
@@ -29,6 +29,56 @@ export function getSpawnedNPCNames(): string[] {
 	const out: string[] = [];
 	spawnAssignments.forEach((a) => out.push(a.npc.model.Name));
 	return out;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Route SocialClass tagging
+//
+// Each tagged "Route" folder may carry an optional "SocialClass" string
+// attribute (case-insensitive): "Serf" | "Commoner" | "Merchant" | "Nobility"
+// | "Royalty" | "Any". "Any" or unset means the route accepts whatever pool
+// names remain after typed routes are filled.
+// ──────────────────────────────────────────────────────────────────────────
+
+const VALID_SOCIAL_CLASSES: ReadonlySet<string> = new Set<string>([
+	"Serf",
+	"Commoner",
+	"Merchant",
+	"Nobility",
+	"Royalty",
+]);
+
+/** Read the SocialClass attribute off a route folder. Returns undefined for
+ *  unset / "any" / "x" / unrecognised values (meaning: accept any class). */
+function getRouteSocialClass(route: Folder): SocialClass | undefined {
+	const raw = route.GetAttribute("SocialClass");
+	if (typeIs(raw, "string") === false) return undefined;
+	const s = raw as string;
+	if (s === "" || s.lower() === "any" || s.lower() === "x") return undefined;
+	// Canonicalise: first letter upper, rest lower.
+	const canon = s.sub(1, 1).upper() + s.sub(2).lower();
+	if (!VALID_SOCIAL_CLASSES.has(canon)) {
+		log(`[NPC-SPAWNER] Route ${route.Name} has invalid SocialClass attribute '${s}' -- treating as Any`, "WARN");
+		return undefined;
+	}
+	return canon as SocialClass;
+}
+
+const VALID_RACES: ReadonlySet<string> = new Set<string>(["Human", "Goblin", "Gnome"]);
+
+/** Read the Race attribute off a route folder. Returns undefined for
+ *  unset / "any" / "x" / unrecognised values (meaning: accept any race). */
+function getRouteRace(route: Folder): Race | undefined {
+	const raw = route.GetAttribute("Race");
+	if (typeIs(raw, "string") === false) return undefined;
+	const s = raw as string;
+	if (s === "" || s.lower() === "any" || s.lower() === "x") return undefined;
+	const canon = s.sub(1, 1).upper() + s.sub(2).lower();
+	if (!VALID_RACES.has(canon)) {
+		log(`[NPC-SPAWNER] Route ${route.Name} has invalid Race attribute '${s}' -- treating as Any`, "WARN");
+		return undefined;
+	}
+	return canon as Race;
 }
 
 function getNPCSpawnPoints(): Attachment[] {
@@ -130,10 +180,43 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 
 		const takenNames: string[] = getActiveNPCNames(assigned);
 		const reservedMerchants = getReservedMerchantNames();
-		const avaliableNames = ROUTABLE_NPC_NAMES.filter(
+		const routeClass = getRouteSocialClass(npcRoute);
+		const routeRace = getRouteRace(npcRoute);
+
+		let availableNames = ROUTABLE_NPC_NAMES.filter(
 			(name: string) => !takenNames.includes(name) && !reservedMerchants.has(name),
 		);
-		const npcName = avaliableNames[math.random(0, avaliableNames.size() - 1)];
+
+		// Gnomes can't be guards.
+		if (routeConfig?.position === "Guard") {
+			availableNames = availableNames.filter((n) => NPC_REGISTRY[n].race !== "Gnome");
+		}
+
+		if (routeClass !== undefined) {
+			const typed = availableNames.filter((n) => NPC_REGISTRY[n].socialClass === routeClass);
+			if (typed.size() === 0) {
+				log(
+					`[NPC-SPAWNER] Route ${npcRoute.Name} requested class '${routeClass}' but no NPCs of that class are available -- falling back to Any`,
+					"WARN",
+				);
+			} else {
+				availableNames = typed;
+			}
+		}
+
+		if (routeRace !== undefined) {
+			const typed = availableNames.filter((n) => NPC_REGISTRY[n].race === routeRace);
+			if (typed.size() === 0) {
+				log(
+					`[NPC-SPAWNER] Route ${npcRoute.Name} requested race '${routeRace}' but no NPCs of that race are available -- falling back to Any`,
+					"WARN",
+				);
+			} else {
+				availableNames = typed;
+			}
+		}
+
+		const npcName = availableNames[math.random(0, availableNames.size() - 1)];
 
 		if (!npcName) {
 			throw `NPC name is invalid: ${npcName}`;
@@ -264,7 +347,15 @@ export function initializeNpcSpawner(): void {
 	}
 
 	// ── Phase 2: Spawn random routable NPCs on remaining routes
+	//          Typed routes (SocialClass attribute set) first, untyped after,
+	//          so a typed route can't be starved by an untyped pick.
 	const remainingRoutes = npcRoutes.filter((r) => !assigned.has(r.Name));
+	const typedRoutes: Folder[] = [];
+	const untypedRoutes: Folder[] = [];
+	for (const r of remainingRoutes) {
+		if (getRouteSocialClass(r) !== undefined || getRouteRace(r) !== undefined) typedRoutes.push(r);
+		else untypedRoutes.push(r);
+	}
 
 	if (remainingRoutes.size() > ROUTABLE_NPC_NAMES.size()) {
 		log(
@@ -273,16 +364,18 @@ export function initializeNpcSpawner(): void {
 		);
 	}
 	print(
-		`[NPC-SPAWNER] Routes: ${npcRoutes.size()} (${assigned.size()} fixed, ${remainingRoutes.size()} remaining) | Routable NPCs: ${ROUTABLE_NPC_NAMES.size()}`,
+		`[NPC-SPAWNER] Routes: ${npcRoutes.size()} (${assigned.size()} fixed, ${typedRoutes.size()} typed, ${untypedRoutes.size()} any) | Routable NPCs: ${ROUTABLE_NPC_NAMES.size()}`,
 	);
 
-	remainingRoutes.forEach((npcRoute) => {
+	const spawnFn = (npcRoute: Folder) => {
 		try {
 			spawnForRoute(npcRoute, assigned, true);
 		} catch (err) {
 			log(`[NPC-SPAWNER] Spawn failed for NPC: ${err as string}`, "ERROR");
 		}
-	});
+	};
+	typedRoutes.forEach(spawnFn);
+	untypedRoutes.forEach(spawnFn);
 
 	print(`[NPC-SPAWNER] Initial spawn complete (${assigned.size()} NPCs placed)`);
 }

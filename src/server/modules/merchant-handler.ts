@@ -251,31 +251,41 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 	const offerIds = getOfferSlotsForShopType(shopType);
 	if (offerIds.size() === 0) return;
 
-	// Collect slot positions: Attachments (must be inside a BasePart) or BaseParts named "OfferSlot"
+	// Collect slot positions: Models, BaseParts, or Attachments whose name
+	// starts with "offerslot" (case-insensitive). This accepts "OfferSlot",
+	// "OfferSlot1", "OfferSlot_Main", an OfferSlot Model wrapper, etc.
 	const slots: { position: Vector3 }[] = [];
 
 	for (const desc of shopSite.GetDescendants()) {
-		if (desc.Name === "OfferSlot") {
-			if (desc.IsA("Attachment")) {
-				// WorldPosition only works when parented to a BasePart
-				if (desc.Parent?.IsA("BasePart")) {
-					slots.push({ position: desc.WorldPosition });
-				} else {
-					log(
-						"[MERCHANT] OfferSlot Attachment in " +
-							shopSite.Name +
-							" is not inside a BasePart -- move it under a Part/MeshPart",
-						"WARN",
-					);
-				}
-			} else if (desc.IsA("BasePart")) {
-				slots.push({ position: desc.Position });
+		const nameLower = (desc.Name as string).lower();
+		if (!nameLower.sub(1, 9).match("offerslot")[0]) continue;
+		if (desc.IsA("Model")) {
+			// Use the model's pivot for placement. Skip any inner Attachment so
+			// we don't double-count the same slot.
+			slots.push({ position: desc.GetPivot().Position });
+		} else if (desc.IsA("Attachment")) {
+			// Only count attachments inside a BasePart -- if they're inside an
+			// OfferSlot Model we already counted that model above.
+			if (desc.Parent?.IsA("BasePart") && !desc.FindFirstAncestorOfClass("Model")?.Name.lower().sub(1, 9).match("offerslot")[0]) {
+				slots.push({ position: desc.WorldPosition });
 			}
+		} else if (desc.IsA("BasePart")) {
+			slots.push({ position: desc.Position });
 		}
 	}
 
 	if (slots.size() === 0) {
 		log("[MERCHANT] No OfferSlot attachments in " + shopSite.Name + " for " + shopType);
+		// Dump what we DID see so the level designer can fix the names.
+		// Includes Models so empty OfferSlot Model wrappers are visible too.
+		const seen: string[] = [];
+		for (const desc of shopSite.GetDescendants()) {
+			if (desc.IsA("Attachment") || desc.IsA("BasePart") || desc.IsA("Model")) {
+				seen.push(desc.ClassName + ":" + desc.GetFullName());
+			}
+		}
+		log("[MERCHANT] " + shopSite.Name + " contains " + seen.size() + " parts/attachments/models");
+		for (const name of seen) log("  - " + name);
 		return;
 	}
 
@@ -324,6 +334,21 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 
 			if (displayClone) {
 				displayClone.Parent = model;
+				// Strip anything that would make this look or act like an NPC.
+				// Display models must be inert visuals only.
+				for (const inst of displayClone.GetDescendants()) {
+					if (
+						inst.IsA("Humanoid") ||
+						inst.IsA("Script") ||
+						inst.IsA("LocalScript") ||
+						inst.IsA("ModuleScript") ||
+						inst.IsA("Tool") ||
+						inst.IsA("ProximityPrompt") ||
+						inst.IsA("ClickDetector")
+					) {
+						inst.Destroy();
+					}
+				}
 				for (const part of displayClone.GetDescendants()) {
 					if (part.IsA("BasePart")) {
 						part.Anchored = true;
@@ -352,9 +377,37 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 
 		model.PrimaryPart = anchor;
 
-		// Position the display clone at the slot
+		// Position the display clone at the slot: translate every BasePart so
+		// the model's bounding-box center lands exactly at slot.position. This
+		// ignores any (possibly wrong) authored WorldPivot/PrimaryPart on the
+		// source model.
 		if (displayClone) {
-			displayClone.PivotTo(new CFrame(slot.position));
+			const parts: BasePart[] = [];
+			for (const desc of displayClone.GetDescendants()) {
+				if (desc.IsA("BasePart")) parts.push(desc);
+			}
+			if (parts.size() > 0) {
+				let minX = math.huge,
+					minY = math.huge,
+					minZ = math.huge;
+				let maxX = -math.huge,
+					maxY = -math.huge,
+					maxZ = -math.huge;
+				for (const p of parts) {
+					const c = p.Position;
+					if (c.X < minX) minX = c.X;
+					if (c.Y < minY) minY = c.Y;
+					if (c.Z < minZ) minZ = c.Z;
+					if (c.X > maxX) maxX = c.X;
+					if (c.Y > maxY) maxY = c.Y;
+					if (c.Z > maxZ) maxZ = c.Z;
+				}
+				const center = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+				const offset = slot.position.sub(center);
+				for (const p of parts) {
+					p.CFrame = p.CFrame.add(offset);
+				}
+			}
 		}
 
 		model.SetAttribute("offerId", offerId);
@@ -368,7 +421,13 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 				")" +
 				(displayClone ? " with display model" : " no display model") +
 				" at " +
-				shopSite.Name,
+				shopSite.Name +
+				" pos=" +
+				tostring(math.floor(slot.position.X)) +
+				"," +
+				tostring(math.floor(slot.position.Y)) +
+				"," +
+				tostring(math.floor(slot.position.Z)),
 		);
 	}
 }

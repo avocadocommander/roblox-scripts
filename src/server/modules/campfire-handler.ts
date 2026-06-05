@@ -120,14 +120,14 @@ function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3
 		oldData.campfire.Destroy();
 	}
 
-	const campfireTemplate = ReplicatedStorage.FindFirstChild("Campfire") as Model | undefined;
+	const campfireTemplate = ReplicatedStorage.FindFirstChild("Rune") as Model | undefined;
 	if (!campfireTemplate) {
-		log(`[CAMPFIRE] Campfire template not found in ReplicatedStorage for ${player.Name}`, "ERROR");
+		log(`[CAMPFIRE] Rune template not found in ReplicatedStorage for ${player.Name}`, "ERROR");
 		return;
 	}
 
 	const campfire = campfireTemplate.Clone();
-	campfire.Name = `Campfire_${player.Name}`;
+	campfire.Name = `Rune_${player.Name}`;
 
 	// Ensure PrimaryPart is set so PivotTo anchors correctly.
 	if (!campfire.PrimaryPart) {

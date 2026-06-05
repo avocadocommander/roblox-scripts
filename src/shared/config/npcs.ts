@@ -32,7 +32,7 @@
 
 export type SocialClass = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
 export type Gender = "M" | "F";
-export type Race = "Human" | "Elf" | "Goblin";
+export type Race = "Human" | "Goblin" | "Gnome";
 
 /**
  * Player-facing system behaviour.
@@ -151,7 +151,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		interaction: "TurnIn",
 		fixedRouteId: "Thorne",
 		killable: false,
-		clothing: ["LightAssassinHood"],
+		clothing: ["LightAssassinHood", "coat"],
 		dialog: {
 			greetings: ["Listen -- theres far more you will hear", "Do i know you?"],
 			chatLines: [
@@ -163,7 +163,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		},
 	},
 	"Veyra Ashenmaw": {
-		...std("Veyra Ashenmaw", "F", "Elf", "Merchant", "Merchant"),
+		...std("Veyra Ashenmaw", "F", "Gnome", "Merchant", "Merchant"),
 		dialog: {
 			greetings: [
 				"Another errand runner. Show me what you have.",
@@ -305,14 +305,14 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Geoffrey Saltmarsh": std("Geoffrey Saltmarsh", "M", "Human", "Merchant", "Merchant"),
 	"Alinor Fairholt": std("Alinor Fairholt", "F", "Human", "Commoner"),
 
-	// ── Elves ─────────────────────────────────────────────────────────────
-	"Faelanis Windglen": std("Faelanis Windglen", "F", "Elf", "Serf"),
-	"Thalion Brightshade": std("Thalion Brightshade", "M", "Elf", "Serf"),
-	"Elandriel Moonvale": std("Elandriel Moonvale", "M", "Elf", "Serf"),
-	"Caerwyn Duskwhisper": std("Caerwyn Duskwhisper", "M", "Elf", "Commoner"),
-	"Aerendyl Silversong": std("Aerendyl Silversong", "F", "Elf", "Royalty"),
+	// ── Gnomes (formerly Elves — names kept, race re-skinned) ─────────────────
+	"Faelanis Windglen": std("Faelanis Windglen", "F", "Gnome", "Serf"),
+	"Thalion Brightshade": std("Thalion Brightshade", "M", "Gnome", "Serf"),
+	"Elandriel Moonvale": std("Elandriel Moonvale", "M", "Gnome", "Serf"),
+	"Caerwyn Duskwhisper": std("Caerwyn Duskwhisper", "M", "Gnome", "Commoner"),
+	"Aerendyl Silversong": std("Aerendyl Silversong", "F", "Gnome", "Royalty"),
 	"Thessaly Nywen": {
-		...std("Thessaly Nywen", "F", "Elf", "Merchant", "Merchant"),
+		...std("Thessaly Nywen", "F", "Gnome", "Merchant", "Merchant"),
 		dialog: {
 			greetings: [
 				"An outsider. How... quaint. What do you seek?",
@@ -328,25 +328,25 @@ export const NPC_REGISTRY: NPCRegistry = {
 			farewells: ["Walk softly, short-lived one.", "The forest watches. As do I.", "Until the next moon."],
 		},
 	},
-	"Varethion Hollowmantle": std("Varethion Hollowmantle", "M", "Elf", "Nobility", "Noble"),
-	"Seraphina Duskwillow": std("Seraphina Duskwillow", "F", "Elf", "Nobility", "Noble"),
-	"Tamsin Silmare": std("Tamsin Silmare", "F", "Elf", "Royalty"),
-	"Yseldra Nightbloom": std("Yseldra Nightbloom", "F", "Elf", "Nobility", "Noble"),
-	"Elira Frostbrook": std("Elira Frostbrook", "F", "Elf", "Commoner"),
-	"Fiora Thistlewynd": std("Fiora Thistlewynd", "F", "Elf", "Merchant", "Merchant"),
-	"Selara Moonpetal": std("Selara Moonpetal", "F", "Elf", "Commoner"),
-	"Fenriel Duskbranch": std("Fenriel Duskbranch", "M", "Elf", "Merchant", "Merchant"),
-	"Aeloria Silvercrest": std("Aeloria Silvercrest", "F", "Elf", "Nobility", "Noble"),
-	"Lorien Blackvale": std("Lorien Blackvale", "F", "Elf", "Serf"),
-	"Maelis Stormgrove": std("Maelis Stormgrove", "F", "Elf", "Royalty"),
-	"Ithariel Dawnsong": std("Ithariel Dawnsong", "M", "Elf", "Nobility", "Noble"),
-	"Sylwen Starbrook": std("Sylwen Starbrook", "F", "Elf", "Commoner"),
-	"Vaelion Greenmantle": std("Vaelion Greenmantle", "M", "Elf", "Merchant", "Merchant"),
-	"Orendis Whisperglen": std("Orendis Whisperglen", "M", "Elf", "Serf"),
-	"Nythera Frostpetal": std("Nythera Frostpetal", "F", "Elf", "Commoner"),
-	"Thalindra Emberglen": std("Thalindra Emberglen", "F", "Elf", "Merchant", "Merchant"),
-	"Corenith Leafwhisper": std("Corenith Leafwhisper", "M", "Elf", "Serf"),
-	"Elvandar Duskpetal": std("Elvandar Duskpetal", "M", "Elf", "Nobility", "Noble"),
+	"Varethion Hollowmantle": std("Varethion Hollowmantle", "M", "Gnome", "Nobility", "Noble"),
+	"Seraphina Duskwillow": std("Seraphina Duskwillow", "F", "Gnome", "Nobility", "Noble"),
+	"Tamsin Silmare": std("Tamsin Silmare", "F", "Gnome", "Royalty"),
+	"Yseldra Nightbloom": std("Yseldra Nightbloom", "F", "Gnome", "Nobility", "Noble"),
+	"Elira Frostbrook": std("Elira Frostbrook", "F", "Gnome", "Commoner"),
+	"Fiora Thistlewynd": std("Fiora Thistlewynd", "F", "Gnome", "Merchant", "Merchant"),
+	"Selara Moonpetal": std("Selara Moonpetal", "F", "Gnome", "Commoner"),
+	"Fenriel Duskbranch": std("Fenriel Duskbranch", "M", "Gnome", "Merchant", "Merchant"),
+	"Aeloria Silvercrest": std("Aeloria Silvercrest", "F", "Gnome", "Nobility", "Noble"),
+	"Lorien Blackvale": std("Lorien Blackvale", "F", "Gnome", "Serf"),
+	"Maelis Stormgrove": std("Maelis Stormgrove", "F", "Gnome", "Royalty"),
+	"Ithariel Dawnsong": std("Ithariel Dawnsong", "M", "Gnome", "Nobility", "Noble"),
+	"Sylwen Starbrook": std("Sylwen Starbrook", "F", "Gnome", "Commoner"),
+	"Vaelion Greenmantle": std("Vaelion Greenmantle", "M", "Gnome", "Merchant", "Merchant"),
+	"Orendis Whisperglen": std("Orendis Whisperglen", "M", "Gnome", "Serf"),
+	"Nythera Frostpetal": std("Nythera Frostpetal", "F", "Gnome", "Commoner"),
+	"Thalindra Emberglen": std("Thalindra Emberglen", "F", "Gnome", "Merchant", "Merchant"),
+	"Corenith Leafwhisper": std("Corenith Leafwhisper", "M", "Gnome", "Serf"),
+	"Elvandar Duskpetal": std("Elvandar Duskpetal", "M", "Gnome", "Nobility", "Noble"),
 
 	// ── Goblins ───────────────────────────────────────────────────────────
 	"Aldruk Ravensnarl": std("Aldruk Ravensnarl", "M", "Goblin", "Nobility", "Noble"),

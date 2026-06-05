@@ -61,7 +61,7 @@ const COMMONER_CLOTHING: TierClothingDef = {
 	pantsColors: [Color3.fromHex("#6B4C2E"), Color3.fromHex("#556B2F"), Color3.fromHex("#D8C9A8")],
 	shoeColors: [Color3.fromHex("#6B4C2E"), Color3.fromHex("#2C2C2C"), Color3.fromHex("#A1886F")],
 	accessories: [],
-	clothingPool: ["Gnome", "LeatherWizardHat", "WornHat"],
+	clothingPool: ["LeatherWizardHat", "WornHat"],
 };
 
 const MERCHANT_CLOTHING: TierClothingDef = {
@@ -116,7 +116,7 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
 	Royalty: ROYALTY_CLOTHING,
 };
 
-// ── Route-specific accessories (Guards, Preachers, etc.) ──────────────────────
+// ── Route-specific accessories (Guards, etc.) ────────────────────────────────
 
 /**
  * Accessory names always added to NPCs on a given route, regardless of tier.

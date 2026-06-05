@@ -664,19 +664,80 @@ function setupPremiumOfferProximity(model: Model): void {
 		part.Anchored = true;
 	}
 
-	// Golden glow + sparkles on the slot's anchor part (or first BasePart).
-	const glowHost = (model.PrimaryPart as BasePart | undefined) ?? allParts[0];
+	// Pick the largest visible part as the glow host so effects attach to the mesh
+	// rather than a tiny joint helper / invisible bbox part.
+	let glowHost: BasePart | undefined = model.PrimaryPart as BasePart | undefined;
+	if (!glowHost) {
+		let bestVolume = -1;
+		for (const part of allParts) {
+			const v = part.Size.X * part.Size.Y * part.Size.Z;
+			if (v > bestVolume) {
+				bestVolume = v;
+				glowHost = part;
+			}
+		}
+	}
+	// Some offer "models" are marker-only (no BaseParts inside) — create an
+	// invisible anchor at the model's pivot so effects still appear at the spot.
+	if (!glowHost) {
+		const anchor = new Instance("Part");
+		anchor.Name = "OfferEffectsHost";
+		anchor.Size = new Vector3(0.2, 0.2, 0.2);
+		anchor.Transparency = 1;
+		anchor.CanCollide = false;
+		anchor.CanQuery = false;
+		anchor.CanTouch = false;
+		anchor.Massless = true;
+		anchor.Anchored = true;
+		anchor.CFrame = model.GetPivot();
+		anchor.Parent = model;
+		glowHost = anchor;
+	}
 	if (glowHost) {
+		const offerIdForGlow = model.GetAttribute("offerId") as string | undefined;
+		const accent = offerIdForGlow ? getOfferColors(offerIdForGlow).accent : Color3.fromRGB(255, 210, 110);
+		const fill = offerIdForGlow ? getOfferColors(offerIdForGlow).fill : Color3.fromRGB(255, 210, 110);
 		const GOLD = Color3.fromRGB(255, 210, 110);
 
+		// Highlight outline — always visible regardless of lighting, reads through walls.
+		const highlight = new Instance("Highlight");
+		highlight.Name = "OfferHighlight";
+		highlight.FillColor = fill;
+		highlight.OutlineColor = accent;
+		highlight.FillTransparency = 0.75;
+		highlight.OutlineTransparency = 0;
+		highlight.DepthMode = Enum.HighlightDepthMode.Occluded;
+		highlight.Adornee = model;
+		highlight.Parent = model;
+
+		// Primary warm point light at the pedestal — strong enough to read in daylight
 		const light = new Instance("PointLight");
-		light.Name = "OfferGlow";
-		light.Color = GOLD;
-		light.Brightness = 0.6;
-		light.Range = 6;
+		light.Name = "PremiumGlow";
+		light.Color = accent;
+		light.Brightness = 2.5;
+		light.Range = 12;
 		light.Shadows = false;
 		light.Parent = glowHost;
 
+		// Secondary accent-coloured spotlight above, pointing down ("display lighting")
+		const aboveAttachment = new Instance("Attachment");
+		aboveAttachment.Name = "OfferAccentLightAttachment";
+		aboveAttachment.Position = new Vector3(0, 5, 0);
+		aboveAttachment.Axis = new Vector3(0, -1, 0);
+		aboveAttachment.SecondaryAxis = new Vector3(1, 0, 0);
+		aboveAttachment.Parent = glowHost;
+
+		const accentLight = new Instance("SpotLight");
+		accentLight.Name = "OfferAccentLight";
+		accentLight.Color = accent;
+		accentLight.Brightness = 3.5;
+		accentLight.Range = 14;
+		accentLight.Angle = 90;
+		accentLight.Face = Enum.NormalId.Front;
+		accentLight.Shadows = false;
+		accentLight.Parent = aboveAttachment;
+
+		// Sparkle burst — rises off the pedestal
 		const sparkleAttachment = new Instance("Attachment");
 		sparkleAttachment.Name = "OfferSparkles";
 		sparkleAttachment.Parent = glowHost;
@@ -685,25 +746,73 @@ function setupPremiumOfferProximity(model: Model): void {
 		sparkles.Name = "Sparkles";
 		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds";
 		sparkles.Color = new ColorSequence(GOLD);
-		sparkles.LightEmission = 0.85;
+		sparkles.LightEmission = 1;
 		sparkles.LightInfluence = 0;
 		sparkles.Size = new NumberSequence([
-			new NumberSequenceKeypoint(0, 0.4),
-			new NumberSequenceKeypoint(0.5, 0.55),
+			new NumberSequenceKeypoint(0, 0.6),
+			new NumberSequenceKeypoint(0.5, 0.9),
 			new NumberSequenceKeypoint(1, 0),
 		]);
 		sparkles.Transparency = new NumberSequence([
-			new NumberSequenceKeypoint(0, 0.2),
+			new NumberSequenceKeypoint(0, 0),
 			new NumberSequenceKeypoint(1, 1),
 		]);
-		sparkles.Lifetime = new NumberRange(0.8, 1.4);
-		sparkles.Rate = 18;
+		sparkles.Lifetime = new NumberRange(1.0, 1.8);
+		sparkles.Rate = 40;
 		sparkles.Speed = new NumberRange(1.5, 3);
 		sparkles.SpreadAngle = new Vector2(180, 180);
 		sparkles.Rotation = new NumberRange(-180, 180);
 		sparkles.RotSpeed = new NumberRange(-120, 120);
 		sparkles.Acceleration = new Vector3(0, 1.5, 0);
 		sparkles.Parent = sparkleAttachment;
+
+		// Floating accent-coloured motes drifting up around the item
+		const motes = new Instance("ParticleEmitter");
+		motes.Name = "OfferMotes";
+		motes.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		motes.Color = new ColorSequence(accent);
+		motes.LightEmission = 1;
+		motes.LightInfluence = 0;
+		motes.Size = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0),
+			new NumberSequenceKeypoint(0.2, 0.5),
+			new NumberSequenceKeypoint(0.8, 0.4),
+			new NumberSequenceKeypoint(1, 0),
+		]);
+		motes.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 1),
+			new NumberSequenceKeypoint(0.15, 0),
+			new NumberSequenceKeypoint(0.85, 0.2),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+		motes.Lifetime = new NumberRange(2.5, 4.0);
+		motes.Rate = 20;
+		motes.Speed = new NumberRange(0.5, 1.0);
+		motes.SpreadAngle = new Vector2(180, 180);
+		motes.Acceleration = new Vector3(0, 0.6, 0);
+		motes.Drag = 1.2;
+		motes.Parent = sparkleAttachment;
+
+		// Soft upward beam column from the pedestal
+		const beam = new Instance("ParticleEmitter");
+		beam.Name = "OfferBeam";
+		beam.Texture = "rbxasset://textures/particles/sparkles_main.dds";
+		beam.Color = new ColorSequence(accent);
+		beam.LightEmission = 1;
+		beam.LightInfluence = 0;
+		beam.Size = new NumberSequence([new NumberSequenceKeypoint(0, 1.4), new NumberSequenceKeypoint(1, 0.6)]);
+		beam.Transparency = new NumberSequence([
+			new NumberSequenceKeypoint(0, 0.5),
+			new NumberSequenceKeypoint(0.5, 0.75),
+			new NumberSequenceKeypoint(1, 1),
+		]);
+		beam.Lifetime = new NumberRange(1.2, 1.6);
+		beam.Rate = 24;
+		beam.Speed = new NumberRange(2.5, 3.5);
+		beam.SpreadAngle = new Vector2(6, 6);
+		beam.Acceleration = new Vector3(0, 0.4, 0);
+		beam.EmissionDirection = Enum.NormalId.Top;
+		beam.Parent = sparkleAttachment;
 	}
 
 	// Continuous bob + rotate via Heartbeat

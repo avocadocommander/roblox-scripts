@@ -279,7 +279,7 @@ function renderBestiaryTab(data: KillBookData): void {
 	makeDivider(contentFrame, order++);
 
 	// Group by race
-	const races = ["Human", "Elf", "Goblin"];
+	const races = ["Human", "Goblin", "Gnome"];
 	for (const race of races) {
 		makeSectionHeader(contentFrame, race.upper() + "S", order++);
 

@@ -610,7 +610,7 @@ export function addKillPrompt(npc: NPC) {
 }
 
 export type Pace = "Stationary" | "Slow" | "Medium" | "Fast";
-export type Position = "Guard" | "Preacher";
+export type Position = "Guard";
 export type Tempo = "Chill" | "Hurry" | "Gas";
 export type RouteConfig = Partial<RouteConfiguration>;
 
