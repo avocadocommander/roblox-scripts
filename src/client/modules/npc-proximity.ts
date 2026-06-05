@@ -1372,8 +1372,15 @@ export function fireCurrentAction(): void {
 	} else if (ctx === "jump") {
 		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
-			humanoid.Jump = true;
-			humanoid.ChangeState(Enum.HumanoidStateType.Jumping);
+			const state = humanoid.GetState();
+			const grounded =
+				humanoid.FloorMaterial !== Enum.Material.Air &&
+				state !== Enum.HumanoidStateType.Freefall &&
+				state !== Enum.HumanoidStateType.Jumping &&
+				state !== Enum.HumanoidStateType.FallingDown;
+			if (grounded) {
+				humanoid.Jump = true;
+			}
 		}
 	}
 }
