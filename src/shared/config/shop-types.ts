@@ -18,6 +18,7 @@
 import { ShopItem } from "./npcs";
 import { POISON_LIST } from "./poisons";
 import { ELIXIR_LIST } from "./elixirs";
+import { DEV_PRODUCTS } from "./dev-products";
 
 export type ShopType = "weapon" | "elixir" | "poison" | "rare" | "tavern" | "black_market";
 
@@ -102,6 +103,22 @@ function blackMarketPriceFor(rarity: string, tier: number): number {
 }
 
 /**
+ * Item IDs that are sold ONLY as Roblox Developer Products (Robux). These
+ * must never appear in any random-vendor pool -- they're paid-content items
+ * with their own purchase flow (see premium-offers + product-handler).
+ */
+const DEV_PRODUCT_ITEM_IDS: ReadonlySet<string> = (() => {
+	const set = new Set<string>();
+	for (const [, def] of pairs(DEV_PRODUCTS)) set.add(def.grantItemId);
+	return set;
+})();
+
+/** True if `itemId` is a Robux-only Developer Product reward. */
+export function isDevProductItem(itemId: string): boolean {
+	return DEV_PRODUCT_ITEM_IDS.has(itemId);
+}
+
+/**
  * Build a fresh 5-item black-market inventory: distinct random picks from the
  * combined poison + elixir catalogue (every rarity and tier eligible).
  * Called fresh every time a black-market merchant (re)spawns so each visit
@@ -109,9 +126,17 @@ function blackMarketPriceFor(rarity: string, tier: number): number {
  */
 function buildBlackMarketInventory(): ShopItem[] {
 	// Combined pool of all consumable item ids (poisons + elixirs, every tier).
+	// Dev-product items are excluded -- they're Robux-only and must not appear
+	// at a random vendor.
 	const pool: { itemId: string; rarity: string; tier: number }[] = [];
-	for (const p of POISON_LIST) pool.push({ itemId: p.id, rarity: p.rarity, tier: p.tier });
-	for (const e of ELIXIR_LIST) pool.push({ itemId: e.id, rarity: e.rarity, tier: e.tier });
+	for (const p of POISON_LIST) {
+		if (isDevProductItem(p.id)) continue;
+		pool.push({ itemId: p.id, rarity: p.rarity, tier: p.tier });
+	}
+	for (const e of ELIXIR_LIST) {
+		if (isDevProductItem(e.id)) continue;
+		pool.push({ itemId: e.id, rarity: e.rarity, tier: e.tier });
+	}
 
 	if (pool.size() === 0) return [];
 
@@ -135,11 +160,17 @@ function buildBlackMarketInventory(): ShopItem[] {
 /**
  * Return the items a shop of `shopType` should sell.
  * Static types read from SHOP_TYPE_POOLS. The "black_market" type rebuilds
- * a fresh random inventory each call.
+ * a fresh random inventory each call. Dev-product items are stripped from
+ * every result -- random vendors never sell Robux-only content.
  */
 export function buildShopInventory(shopType: ShopType): ShopItem[] {
-	if (shopType === "black_market") return buildBlackMarketInventory();
-	return SHOP_TYPE_POOLS[shopType] ?? [];
+	const raw = shopType === "black_market" ? buildBlackMarketInventory() : (SHOP_TYPE_POOLS[shopType] ?? []);
+	const filtered: ShopItem[] = [];
+	for (const entry of raw) {
+		if (isDevProductItem(entry.itemId)) continue;
+		filtered.push(entry);
+	}
+	return filtered;
 }
 
 /**
