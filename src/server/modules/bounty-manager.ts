@@ -3,6 +3,7 @@ import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
 import { isNPCKillable } from "shared/config/npcs";
+import { getSpawnedNPCNames } from "./npc-spawner";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
 	getBountyAssignedRemote,
@@ -107,8 +108,12 @@ function getRouteForNPC(npcName: string): string | undefined {
 }
 
 function buildNewNPCBounty(): NPCBountyPayload {
-	const names = MEDIEVAL_NPC_NAMES.filter((n) => isNPCKillable(n));
-	const npcName = names[math.random(0, names.size() - 1)];
+	// Only assign targets that are actually spawned in the world right now,
+	// otherwise the player can't find them and the hunter's-sight elixir
+	// has nothing to highlight.
+	const spawned = getSpawnedNPCNames().filter((n) => isNPCKillable(n) && MEDIEVAL_NPCS[n] !== undefined);
+	const pool = spawned.size() > 0 ? spawned : MEDIEVAL_NPC_NAMES.filter((n) => isNPCKillable(n));
+	const npcName = pool[math.random(0, pool.size() - 1)];
 	const npcData = MEDIEVAL_NPCS[npcName];
 	const route = getRouteForNPC(npcName);
 

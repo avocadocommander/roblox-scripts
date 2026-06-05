@@ -19,6 +19,18 @@ import { getReservedMerchantNames } from "./merchant-handler";
 const ROUTABLE_RESPAWN_DELAY = 5;
 const FIXED_RESPAWN_DELAY = 30;
 
+// Module-scoped so other systems (e.g. bounty-manager) can query which NPCs
+// are currently alive in the world. Populated by initializeNpcSpawner and
+// kept in sync by spawn/respawn/death callbacks via the shared reference.
+const spawnAssignments: Map<string, Assignment> = new Map();
+
+/** Names of NPCs currently spawned (alive) in the world. */
+export function getSpawnedNPCNames(): string[] {
+	const out: string[] = [];
+	spawnAssignments.forEach((a) => out.push(a.npc.model.Name));
+	return out;
+}
+
 function getNPCSpawnPoints(): Attachment[] {
 	const spawnPoints = CollectionService.GetTagged("NPCSpawnPoint").filter((spawnPoint): spawnPoint is Attachment => {
 		return spawnPoint.IsA("Attachment");
@@ -227,7 +239,7 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
  */
 export function initializeNpcSpawner(): void {
 	print("[NPC-SPAWNER] Initial spawn started");
-	const assigned: Map<string, Assignment> = new Map();
+	const assigned = spawnAssignments;
 	const npcRoutes = getNPCRoutes();
 	const routesByName = new Map<string, Folder>();
 	for (const route of npcRoutes) {
