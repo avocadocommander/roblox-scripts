@@ -16,7 +16,6 @@ function sc(base: number): number {
 let feedbackLabel: TextLabel | undefined;
 let panelRoot: Frame | undefined;
 let panelOpen = false;
-let hintLabel: TextLabel | undefined;
 
 // -- Admin check --------------------------------------------------------------
 
@@ -51,9 +50,6 @@ function setPanelOpen(open: boolean): void {
 	if (open === panelOpen) return;
 	panelOpen = open;
 	panelRoot.Visible = open;
-	if (hintLabel) {
-		hintLabel.Text = open ? "[ `  close debug ]" : "[ `  debug ]";
-	}
 }
 
 function togglePanel(): void {
@@ -190,38 +186,9 @@ function getDropdowns(): DropdownDef[] {
 function buildAdminHUD(screenGui: ScreenGui): void {
 	const dropdowns = getDropdowns();
 
-	// ── Settings-style button next to the top-left character banner ─────────
-	// Banner lives at (sc(20), sc(40)) with width sc(320); slot it just to
-	// the right with a small gap. Square, grey, equip-slot styling.
-	const SLOT = sc(50);
-	const hintButton = new Instance("TextButton");
-	hintButton.Name = "AdminHint";
-	hintButton.Size = new UDim2(0, SLOT, 0, SLOT);
-	hintButton.AnchorPoint = new Vector2(0, 0);
-	hintButton.Position = new UDim2(0, sc(20) + sc(320) + sc(8), 0, sc(40));
-	hintButton.BackgroundColor3 = UI_THEME.bg;
-	hintButton.BackgroundTransparency = UI_THEME.bgTransparency;
-	hintButton.AutoButtonColor = false;
-	hintButton.Text = "*";
-	hintButton.TextColor3 = UI_THEME.textMuted;
-	hintButton.Font = UI_THEME.fontBody;
-	hintButton.TextSize = sc(22);
-	hintButton.BorderSizePixel = 0;
-	hintButton.ZIndex = 31;
-	hintButton.Parent = screenGui;
-
-	const hintCorner = new Instance("UICorner");
-	hintCorner.CornerRadius = new UDim(0, 6);
-	hintCorner.Parent = hintButton;
-
-	const hintStroke = new Instance("UIStroke");
-	hintStroke.Color = UI_THEME.textMuted;
-	hintStroke.Thickness = 1;
-	hintStroke.Transparency = 0.5;
-	hintStroke.Parent = hintButton;
-
-	hintButton.Activated.Connect(() => togglePanel());
-	hintLabel = hintButton as unknown as TextLabel;
+	// Debug panel is keyboard-only: Ctrl + `. There is intentionally no
+	// on-screen button so it cannot be opened on mobile/console builds and
+	// stays invisible to non-admin players.
 
 	// ── Root popup (hidden by default) ─────────────────────────────────────
 	const root = new Instance("Frame");
@@ -277,7 +244,7 @@ function buildAdminHUD(screenGui: ScreenGui): void {
 	closeHint.Size = new UDim2(0.3, 0, 1, 0);
 	closeHint.Position = new UDim2(0.7, 0, 0, 0);
 	closeHint.BackgroundTransparency = 1;
-	closeHint.Text = "press ` to close";
+	closeHint.Text = "press Ctrl+` to close";
 	closeHint.TextColor3 = UI_THEME.textMuted;
 	closeHint.Font = UI_THEME.fontBody;
 	closeHint.TextSize = sc(12);
@@ -438,11 +405,15 @@ onPlayerInitialized(() => {
 
 	buildAdminHUD(screenGui);
 
-	// Toggle with backtick (`) — same key on US layouts for the console feel.
+	// Toggle with Ctrl + ` (backquote). Keyboard-only -- not reachable on
+	// mobile/console which have no Ctrl key. Same combo on Windows and macOS.
 	UserInputService.InputBegan.Connect((input, processed) => {
 		if (processed) return;
-		if (input.KeyCode === Enum.KeyCode.Backquote) {
-			togglePanel();
-		}
+		if (input.KeyCode !== Enum.KeyCode.Backquote) return;
+		const ctrlHeld =
+			UserInputService.IsKeyDown(Enum.KeyCode.LeftControl) ||
+			UserInputService.IsKeyDown(Enum.KeyCode.RightControl);
+		if (!ctrlHeld) return;
+		togglePanel();
 	});
 });
