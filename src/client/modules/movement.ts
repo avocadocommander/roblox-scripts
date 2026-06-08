@@ -54,6 +54,10 @@ function setupMovementInput() {
 	const humanoid = character.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 
+	// Kill Roblox's auto-jump-near-obstacle behaviour. We want jumps to
+	// happen only when the player explicitly taps our mobile jump button.
+	humanoid.AutoJumpEnabled = false;
+
 	// Reset air jump when player touches ground
 	humanoid.StateChanged.Connect((oldState, newState) => {
 		if (newState === Enum.HumanoidStateType.Running || newState === Enum.HumanoidStateType.Landed) {
@@ -70,6 +74,11 @@ function initializeMovementSystem() {
 	if (!player) return;
 
 	log("[MOVEMENT] Initializing movement system");
+
+	// Disable Roblox's auto-jump default for any future-spawned characters.
+	// `setupMovementInput()` also sets this on the live humanoid, but this
+	// covers the very first character before our hook attaches.
+	player.AutoJumpEnabled = false;
 
 	// Setup for initial character
 	if (player.Character) {

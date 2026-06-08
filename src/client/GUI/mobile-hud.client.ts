@@ -1,4 +1,4 @@
-import { Players, RunService, StarterGui, TweenService, UserInputService } from "@rbxts/services";
+import { Players, RunService, TweenService, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import {
@@ -172,17 +172,10 @@ function makeButton(
 // -- Build the HUD ------------------------------------------------------------
 
 function buildMobileHUD(screenGui: ScreenGui): void {
-	// Disable Roblox's built-in jump button — we replace it entirely
-	task.spawn(() => {
-		const coreGui = StarterGui as unknown as { SetCore: (key: string, value: boolean) => void };
-		for (let attempt = 0; attempt < 20; attempt++) {
-			const [ok] = pcall(() => coreGui.SetCore("SetJumpEnabled", false));
-			if (ok) break;
-			task.wait(0.5);
-		}
-	});
-
-	// Also hide the TouchGui jump button if it was already created
+	// Hide the Roblox touch JumpButton. We deliberately do NOT call
+	// `StarterGui:SetCore("SetJumpEnabled", false)` -- that flag both hides
+	// the button AND blocks `Humanoid.Jump = true`, which would break our
+	// custom mobile jump button.
 	task.spawn(() => {
 		const playerGui = Players.LocalPlayer.WaitForChild("PlayerGui") as PlayerGui;
 		for (let attempt = 0; attempt < 30; attempt++) {
@@ -193,6 +186,7 @@ function buildMobileHUD(screenGui: ScreenGui): void {
 					const jumpBtn = frame.FindFirstChild("JumpButton") as GuiButton | undefined;
 					if (jumpBtn) {
 						jumpBtn.Visible = false;
+						jumpBtn.Active = false;
 						break;
 					}
 				}
