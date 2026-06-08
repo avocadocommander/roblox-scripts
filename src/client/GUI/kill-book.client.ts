@@ -1,6 +1,7 @@
 import { Players, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { registerKillBookToggle } from "../modules/ui-toggles";
+import { getOrCreateUIEventRemote, UI_OPEN_EVENTS } from "shared/remotes/ui-event-remote";
 import {
 	getKillBookDataRemote,
 	KillBookData,
@@ -889,6 +890,7 @@ function toggleBook(): void {
 	isOpen = !isOpen;
 	bookGui.Enabled = isOpen;
 	if (isOpen) {
+		getOrCreateUIEventRemote().FireServer(UI_OPEN_EVENTS.KillBook);
 		fetchAndRender(activeTab);
 	} else {
 		// Clear "new" indicators across all tabs when the book closes.

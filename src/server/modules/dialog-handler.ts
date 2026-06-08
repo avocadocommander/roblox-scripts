@@ -11,11 +11,13 @@
 import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
+import { trackEvent, trackItemPurchased, trackMerchantVisited } from "./analytics-tracker";
+import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { ITEMS } from "shared/inventory";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npcs";
 import { pickRandom } from "shared/config/npc-shops";
-import { getMerchantShop } from "./merchant-handler";
+import { getMerchantShop, getMerchantShopType } from "./merchant-handler";
 import { factionForNPC } from "shared/config/factions";
 import { levelFromXP } from "shared/config/factions";
 import {
@@ -209,6 +211,12 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	givePlayerItem(player, itemId, 1);
 
 	awardAchievement(player, "FIRST_PURCHASE");
+
+	// Analytics: ItemPurchased — label with the merchant's shop type
+	// (dynamic) or "fixed" for hand-authored static-shop NPCs.
+	const purchaseDynamicShopType = getMerchantShopType(npcName);
+	trackItemPurchased(player, purchaseDynamicShopType !== undefined ? purchaseDynamicShopType : "fixed");
+
 	log("[DIALOG] " + player.Name + " purchased " + itemDef.name + " from " + npcName + " for " + shopItem.price + "g");
 
 	return [true, "Purchased " + itemDef.name + " for " + shopItem.price + " gold."];
@@ -256,6 +264,15 @@ export function initializeDialogHandler(): void {
 		activeDialog.set(player, npcName);
 		dialogPayloadRemote.FireClient(player, payload);
 		log("[DIALOG] " + player.Name + " opened dialog with " + npcName);
+
+		// Analytics: MerchantVisited fires once per dialog-open whenever the
+		// payload actually contains a shop. Dynamic merchants supply the
+		// ShopType directly; static-shop NPCs (Zabud, etc.) get labelled "fixed".
+		if (payload.hasShop) {
+			const dynamicShopType = getMerchantShopType(npcName);
+			const shopType = dynamicShopType !== undefined ? dynamicShopType : "fixed";
+			trackMerchantVisited(player, shopType);
+		}
 
 		// Tutorial: first conversation with any Guildmaster unlocks MET_GUILD_LEADER
 		// and grants the Dagger (step 2 reward) so the inventory pulse fires.
@@ -310,6 +327,10 @@ export function initializeDialogHandler(): void {
 			if (faction !== undefined) {
 				addFactionXP(player, faction, result.totalXP);
 			}
+
+			// One ScrollTurnedIn event per turn-in batch (not per scroll) keeps
+			// the event count proportional to player intent, not inventory size.
+			trackEvent(player, ANALYTICS_EVENTS.ScrollTurnedIn);
 
 			const factionTag = faction !== undefined ? " (" + faction + ")" : "";
 			log(

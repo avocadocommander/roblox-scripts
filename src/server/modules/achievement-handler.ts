@@ -28,6 +28,7 @@ import {
 	addExperience,
 } from "shared/player-state";
 import { unlockTitle } from "shared/player-state";
+import { trackTutorialStepForAchievement } from "./analytics-tracker";
 
 // Lazy import to avoid circular dependency:
 //   inventory-handler -> effect-handler -> achievement-handler -> inventory-handler
@@ -123,6 +124,9 @@ export function awardAchievement(player: Player, achievementId: string): boolean
 
 	// Notify client for toast popup
 	getAchievementUnlockedRemote().FireClient(player, achievementId);
+
+	// Tutorial funnel bridge — no-op for non-onboarding achievements.
+	trackTutorialStepForAchievement(player, achievementId);
 
 	return true;
 }

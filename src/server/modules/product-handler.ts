@@ -11,6 +11,7 @@ import { log } from "shared/helpers";
 import { DEV_PRODUCTS } from "shared/config/dev-products";
 import { getPromptProductPurchaseRemote } from "shared/remotes/product-remote";
 import { givePlayerItem } from "./inventory-handler";
+import { trackPurchaseMade, trackPurchasePromptShown } from "./analytics-tracker";
 
 const promptRemote = getPromptProductPurchaseRemote();
 
@@ -57,6 +58,7 @@ export function initializeProductHandler(): void {
 				productDef.grantItemId +
 				")",
 		);
+		trackPurchaseMade(player, "developerProduct");
 
 		return Enum.ProductPurchaseDecision.PurchaseGranted;
 	};
@@ -68,6 +70,7 @@ export function initializeProductHandler(): void {
 		if (!KNOWN_PRODUCT_IDS.has(productId)) return;
 
 		log("[PRODUCT] " + player.Name + " requested product purchase prompt for " + productId);
+		trackPurchasePromptShown(player, "developerProduct");
 		MarketplaceService.PromptProductPurchase(player, productId);
 	});
 

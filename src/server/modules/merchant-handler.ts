@@ -43,7 +43,8 @@ import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
 
 /** npcName -> items this merchant sells. */
 const merchantShops = new Map<string, ShopItem[]>();
-
+/** npcName -> the ShopType this merchant was spawned as (for analytics breakdowns). */
+const merchantShopTypes = new Map<string, ShopType>();
 /** Names already claimed by the merchant system (skip in route spawning). */
 const reservedNames = new Set<string>();
 
@@ -474,6 +475,7 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Record shop items
 	merchantShops.set(npcName, shopItems);
+	merchantShopTypes.set(npcName, shopType);
 	reservedNames.add(npcName);
 
 	// Apply sign from the same ShopSite
@@ -493,6 +495,7 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 		if (!parent) {
 			log("[MERCHANT] " + npcName + " (merchant) died -- respawn in 30s");
 			merchantShops.delete(npcName);
+			merchantShopTypes.delete(npcName);
 			task.delay(30, () => {
 				// Re-roll inventory each respawn so black-market merchants get a
 				// fresh random selection. Static shop types return their stable pool.
@@ -510,6 +513,11 @@ export function getMerchantShop(npcName: string): ShopItem[] | undefined {
 	return merchantShops.get(npcName);
 }
 
+/** Returns the ShopType this merchant was spawned as, or undefined for non-dynamic NPCs. */
+export function getMerchantShopType(npcName: string): ShopType | undefined {
+	return merchantShopTypes.get(npcName);
+}
+
 /** Register an NPC name + item list with the merchant shop system. */
 export function registerMerchantShop(npcName: string, items: ShopItem[]): void {
 	merchantShops.set(npcName, items);
@@ -519,6 +527,7 @@ export function registerMerchantShop(npcName: string, items: ShopItem[]): void {
 /** Unregister an NPC name from the merchant shop system. */
 export function unregisterMerchantShop(npcName: string): void {
 	merchantShops.delete(npcName);
+	merchantShopTypes.delete(npcName);
 	reservedNames.delete(npcName);
 }
 

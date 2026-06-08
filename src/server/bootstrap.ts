@@ -20,6 +20,7 @@ import { initializeProductHandler } from "./modules/product-handler";
 import { initializePremiumOfferHandler } from "./modules/premium-offer-handler";
 import { initializeNpcSpawner } from "./modules/npc-spawner";
 import { initializeTravelingMerchantSystem } from "./modules/traveling-merchant-handler";
+import { initializeAnalyticsTracker } from "./modules/analytics-tracker";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -27,6 +28,7 @@ Players.CharacterAutoLoads = false;
 export async function bootstrapServer() {
 	// load assets / systems
 	//task.wait(5);
+	initializeAnalyticsTracker();
 	initializeMovementSystem();
 
 	initializeAssassinationHandler();

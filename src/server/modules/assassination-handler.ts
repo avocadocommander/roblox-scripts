@@ -27,6 +27,13 @@ import {
 import { transferBountyScrolls, addPlayerBountyScroll, addBountyScrollFromKill } from "./inventory-handler";
 import { MEDIEVAL_NPCS, Status } from "shared/module";
 import { awardAchievement } from "./achievement-handler";
+import {
+	setPendingDeathReason,
+	trackEvent,
+	trackTargetFound,
+	weaponTypeFromId,
+} from "./analytics-tracker";
+import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { isNPCKillable } from "shared/config/npcs";
 import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
 
@@ -148,6 +155,16 @@ function initializeAssassinationHandler() {
 		// Perform the assassination
 		log(`[ASSASSINATION] ${player.Name} assassinated ${npcName}!`);
 
+		// Analytics: KillAttempted fires for every validated, in-range attempt
+		// (after weapon + distance checks pass, before delivery). TargetFound
+		// fires at most once per assigned bounty when the engaged NPC matches.
+		const attemptWeaponType = weaponTypeFromId(getPlayerEquippedWeapon(player));
+		const attemptedBounty = getPlayerNPCBounty(player);
+		if (attemptedBounty !== undefined && attemptedBounty.npcName === npcName) {
+			trackTargetFound(player);
+		}
+		trackEvent(player, ANALYTICS_EVENTS.KillAttempted, { weaponType: attemptWeaponType });
+
 		// Resolve kill: poison ALWAYS does the killing blow.
 		// No poison = weapon handles everything.
 		// With poison = weapon delivery, then poison's death effect.
@@ -212,6 +229,7 @@ function initializeAssassinationHandler() {
 
 			addBountyScrollFromKill(player, npcName, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
+			trackEvent(player, ANALYTICS_EVENTS.ScrollCollected);
 			awardAchievement(player, "FIRST_CONTRACT");
 			// Only a legal bounty kill produces a scroll -- award the onboarding
 			// achievement here so the tutorial's "turn in" step is always
@@ -231,6 +249,7 @@ function initializeAssassinationHandler() {
 			const wantedGold = WANTED_GOLD_BY_STATUS[npcStatus] ?? 300;
 			const decree = DECREE_BY_STATUS[npcStatus] ?? "Committed murder — by royal decree";
 			setPlayerWanted(player, wantedGold, decree);
+			trackEvent(player, ANALYTICS_EVENTS.WrongKill, { weaponType: attemptWeaponType });
 			awardAchievement(player, "A_COSTLY_MISTAKE");
 			print("[WANTED CHECK] " + player.Name + " is now WANTED for " + wantedGold + "g by decree of the king");
 		}
@@ -240,6 +259,8 @@ function initializeAssassinationHandler() {
 		if (npcData !== undefined) {
 			addKill(player, npcName, { status: npcData.status, race: npcData.race }, wasLegalKill);
 		}
+
+		trackEvent(player, ANALYTICS_EVENTS.KillSucceeded, { weaponType: attemptWeaponType });
 
 		// ── Achievement checks ─────────────────────────────────────────────────
 		if (poisonDef) {
@@ -291,6 +312,10 @@ function initializeAssassinationHandler() {
 
 		// Kill the wanted player
 		log("[ASSASSINATION] " + killer.Name + " assassinated wanted player " + targetPlayer.Name + "!");
+		// Tag the upcoming Humanoid.Died so the global PlayerDied event records
+		// the PvP kill correctly. trackPlayerDied (fired from network-lifecycles)
+		// consumes the reason and clears it.
+		setPendingDeathReason(targetPlayer, "PvP");
 		const targetHumanoid = targetModel.FindFirstChildOfClass("Humanoid");
 		if (targetHumanoid) {
 			targetHumanoid.Health = 0;
@@ -306,6 +331,10 @@ function initializeAssassinationHandler() {
 		// Track PvP stats
 		addPlayerKill(killer);
 		addPlayerDeath(targetPlayer);
+
+		trackEvent(killer, ANALYTICS_EVENTS.KillSucceeded, {
+			weaponType: weaponTypeFromId(getPlayerEquippedWeapon(killer)),
+		});
 
 		// Achievement: Player Slayer
 		awardAchievement(killer, "PLAYER_SLAYER");

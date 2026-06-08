@@ -11,6 +11,7 @@ import { log } from "shared/helpers";
 import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
 import { ALL_GAME_PASS_IDS, GAME_PASSES, getGamePassByPassId } from "shared/config/game-passes";
 import { givePlayerItem } from "./inventory-handler";
+import { trackPurchaseMade, trackPurchasePromptShown } from "./analytics-tracker";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,7 @@ export function initializePassHandler(): void {
 		if (!ALL_PASS_IDS.has(passId)) return;
 
 		log("[PASS] " + player.Name + " requested pass purchase prompt for " + passId);
+		trackPurchasePromptShown(player, "gamepass");
 		MarketplaceService.PromptGamePassPurchase(player, passId);
 	});
 
@@ -104,6 +106,7 @@ export function initializePassHandler(): void {
 	MarketplaceService.PromptGamePassPurchaseFinished.Connect((player: Player, passId: number, purchased: boolean) => {
 		if (!purchased) return;
 		log("[PASS] " + player.Name + " purchased pass " + passId);
+		trackPurchaseMade(player, "gamepass");
 
 		const cache = getOrCreateCache(player);
 		cache.add(passId);

@@ -1,6 +1,8 @@
 import { Players, SoundService, TweenService, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
+import { trackBountyAssigned, trackEvent } from "./analytics-tracker";
+import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
 import { isNPCKillable } from "shared/config/npcs";
 import { getSpawnedNPCNames } from "./npc-spawner";
@@ -147,6 +149,7 @@ export function assignNewNPCBounty(player: Player): NPCBountyPayload {
 	const bounty = buildNewNPCBounty();
 	playerNPCBounties.set(player, bounty);
 	getBountyAssignedRemote().FireClient(player, bounty);
+	trackBountyAssigned(player);
 	log(
 		"[BOUNTY] " + player.Name + " -> mark: " + bounty.npcName + " (" + bounty.gold + "g | " + npcName(bounty) + ")",
 	);
@@ -213,6 +216,7 @@ export function setPlayerWanted(player: Player, gold: number, reason: string): v
 		log("[BOUNTY] " + player.DisplayName + " bounty increased to " + newGold + "g (+" + gold + "g)");
 	} else {
 		awardAchievement(player, "MARKED_BY_THE_REALM");
+		trackEvent(player, ANALYTICS_EVENTS.BecameWanted);
 		playWantedAlertSound();
 		log("[BOUNTY] " + player.DisplayName + " is WANTED -- " + newGold + 'g -- "' + newReason + '"');
 	}

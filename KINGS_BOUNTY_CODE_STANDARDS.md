@@ -199,3 +199,63 @@ breaks core systems. They are not negotiable.
 - If the user's request seems to conflict with these standards, ask before
   inventing a workaround. The standards exist so the codebase stays
   navigable; bypassing them silently makes future work harder.
+
+---
+
+## 12. Palantir — Observability Standard
+
+All analytics — funnel steps, gameplay events, conversion tracking — go
+through **one module**: `src/server/modules/analytics-tracker.ts`. Naming and
+schema live in `src/shared/config/analytics-events.ts`. Together they are the
+Palantir: the only stones we look into.
+
+**Hard rules:**
+
+1. **Never call `AnalyticsService` outside the tracker.** Gameplay code calls
+   `trackXxx(...)` helpers. The tracker is the only file that imports
+   `AnalyticsService`.
+2. **Never send high-cardinality values.** No player names, NPC names, item
+   IDs, exact coords, scroll IDs, raw numbers. Every field draws from the
+   `AnalyticsField` union, and every value is either a closed string union or
+   a bucket label (`levelBucket`, `sessionMinuteBucket`, `remainingTimeBucket`).
+   Roblox caps the experience at 8000 unique field-value combos — blowing this
+   silently destroys your dashboards.
+3. **Max 3 custom fields per event.** Schema is per-event in `EVENT_FIELD_SLOTS`.
+4. **Wrap every call in `safe()` (pcall).** Analytics failure must never break
+   gameplay.
+5. **Server-authoritative only.** Clients can hint via the `UIEvent` remote,
+   but the server validates and fires. Never trust raw event names from the
+   client.
+
+**Adding a new event (3 steps, never more):**
+
+1. Add a name to `ANALYTICS_EVENTS` in `analytics-events.ts`.
+2. Add its slot layout (1–3 fields) to `EVENT_FIELD_SLOTS`.
+3. Add a thin typed `trackXxxYyy(player, ...)` helper in `analytics-tracker.ts`
+   that closes over the literal event name. Gameplay code calls only the helper.
+
+**Adding a new field:**
+
+1. Add the field name to the `AnalyticsField` union.
+2. If it's bucketed, add a `xxxBucket(value)` helper.
+3. If it's a derived value, add a private resolver (e.g. `poisonRarity(id)`)
+   that reads from the config — never inline the lookup at the call site.
+
+**Resilience contract (must hold for every new event):**
+
+Adding a new weapon, poison, elixir, game pass, dev product, vendor item,
+shop type, or NPC must require **zero** edits to the analytics layer. Helpers
+read derived fields (rarity, weaponType, shopType) from the config maps. If
+a new content item ever requires a tracker edit, the tracker is wrong — fix
+the resolver, not the call sites.
+
+**Funnels vs. custom events:**
+
+- True Roblox Funnels (`LogOnboardingFunnelStepEvent`, `LogFunnelStepEvent`)
+  are reserved for one-shot lifetime sequences with a defined start and end.
+  We use them only for tutorial.
+- Everything else is a custom event. Conversion ratios (prompt → purchase,
+  visit → buy) are computed in the dashboard, not by chaining funnel APIs.
+
+If you find yourself wanting metrics in three files, you want one event
+emitted in three places — not three events. Reuse the existing schema.

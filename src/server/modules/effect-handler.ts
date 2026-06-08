@@ -134,11 +134,25 @@ export function getActivePoison(player: Player): string | undefined {
 	return effects.poisonId;
 }
 
+/** Seconds left on the active poison (0 if none / expired). */
+export function getActivePoisonRemainingSecs(player: Player): number {
+	const effects = PLAYER_EFFECTS.get(player);
+	if (!effects || effects.poisonRemainingSecs <= 0) return 0;
+	return effects.poisonRemainingSecs;
+}
+
 /** Get the currently active elixir ID for `player` (undefined if none/expired). */
 export function getActiveElixir(player: Player): string | undefined {
 	const effects = PLAYER_EFFECTS.get(player);
 	if (!effects || effects.elixirRemainingSecs <= 0) return undefined;
 	return effects.elixirId;
+}
+
+/** Seconds left on the active elixir (0 if none / expired). */
+export function getActiveElixirRemainingSecs(player: Player): number {
+	const effects = PLAYER_EFFECTS.get(player);
+	if (!effects || effects.elixirRemainingSecs <= 0) return 0;
+	return effects.elixirRemainingSecs;
 }
 
 /** Clear the active poison for `player`. */

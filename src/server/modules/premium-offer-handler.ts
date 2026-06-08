@@ -21,6 +21,7 @@ import {
 	PremiumOfferPayload,
 } from "shared/remotes/premium-offer-remote";
 import { playerOwnsPass } from "./pass-handler";
+import { trackPurchasePromptShown } from "./analytics-tracker";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -105,10 +106,12 @@ export function initializePremiumOfferHandler(): void {
 				return;
 			}
 			log("[PREMIUM] Prompting Game Pass purchase for " + player.Name + ": " + offer.productId);
+			trackPurchasePromptShown(player, "gamepass");
 			MarketplaceService.PromptGamePassPurchase(player, offer.productId);
 		} else {
 			// Developer Product — always purchasable
 			log("[PREMIUM] Prompting Developer Product purchase for " + player.Name + ": " + offer.productId);
+			trackPurchasePromptShown(player, "developerProduct");
 			MarketplaceService.PromptProductPurchase(player, offer.productId);
 		}
 	});

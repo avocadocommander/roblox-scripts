@@ -1,6 +1,7 @@
 import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { registerInventoryToggle } from "../modules/ui-toggles";
+import { getOrCreateUIEventRemote, UI_OPEN_EVENTS } from "shared/remotes/ui-event-remote";
 import {
 	getActivateItemRemote,
 	getInventorySyncRemote,
@@ -952,6 +953,7 @@ function toggleInventory(): void {
 	inventoryOpen = !inventoryOpen;
 
 	if (inventoryOpen) {
+		getOrCreateUIEventRemote().FireServer(UI_OPEN_EVENTS.Inventory);
 		refreshFilterButtons();
 		refreshActiveStatusBar();
 		refreshItemGrid();

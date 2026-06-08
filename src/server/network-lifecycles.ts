@@ -2,6 +2,7 @@ import { Players, SoundService } from "@rbxts/services";
 import { setReadyPlayerStatus } from "./player-state";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import { respawnPlayerAtCampfire, loadPlayerCampfireFromStorage } from "./modules/campfire-handler";
+import { trackPlayerDied } from "./modules/analytics-tracker";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
@@ -25,6 +26,11 @@ Players.PlayerAdded.Connect((player) => {
 		}
 
 		humanoid.Died.Connect(() => {
+			// Analytics: one PlayerDied per death, pulling any reason set by the
+			// killer (e.g. "PvP" from assassination-handler). Defaults to
+			// "Unknown" for fall damage / environment / unattributed deaths.
+			trackPlayerDied(player);
+
 			// Play custom death sound from the character's position
 			const hrp = character.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
 			if (hrp) {

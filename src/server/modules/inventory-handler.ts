@@ -16,7 +16,20 @@ import {
 	getTurnInBountyRemote,
 } from "shared/remotes/inventory-remote";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, Status } from "shared/module";
-import { activatePoison as effectActivatePoison, activateElixir as effectActivateElixir } from "./effect-handler";
+import {
+	activatePoison as effectActivatePoison,
+	activateElixir as effectActivateElixir,
+	getActivePoison,
+	getActivePoisonRemainingSecs,
+	getActiveElixir,
+	getActiveElixirRemainingSecs,
+} from "./effect-handler";
+import {
+	trackEquippedWeapon,
+	trackConsumedElixir,
+	trackConsumedPoison,
+	trackActiveConsumableReplaced,
+} from "./analytics-tracker";
 import { getGamePassForItem } from "shared/config/game-passes";
 import { onPlayerStateLoaded, setInventoryState, getInventoryState } from "shared/player-state";
 
@@ -174,6 +187,7 @@ function handleActivateItem(player: Player, itemId: string): void {
 		} else {
 			inv.equippedWeapon = itemId;
 			log(`[INVENTORY] ${player.Name} equipped weapon: ${itemDef.name}`);
+			trackEquippedWeapon(player, itemId);
 			// Tutorial: first time equipping any real weapon.
 			awardAchievementLazy(player, "EQUIPPED_DAGGER");
 		}
@@ -183,12 +197,18 @@ function handleActivateItem(player: Player, itemId: string): void {
 			log(`[INVENTORY] ${player.Name} tried to use poison on cooldown`);
 			return;
 		}
+		// Detect wipe: existing active poison with time left being replaced by a different one
+		const previousPoisonId = getActivePoison(player);
+		if (previousPoisonId !== undefined && previousPoisonId !== itemId) {
+			trackActiveConsumableReplaced(player, "poison", previousPoisonId, getActivePoisonRemainingSecs(player));
+		}
 		// Activate poison (replaces current active poison, consumes 1)
 		inv.activePoison = itemId;
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
 		effectActivatePoison(player, itemId);
 		stampConsumableCooldown(player);
+		trackConsumedPoison(player, itemId);
 		log(`[INVENTORY] ${player.Name} activated poison: ${itemDef.name}`);
 	} else if (itemDef.category === "elixir") {
 		// Consumable cooldown check
@@ -196,12 +216,18 @@ function handleActivateItem(player: Player, itemId: string): void {
 			log(`[INVENTORY] ${player.Name} tried to use elixir on cooldown`);
 			return;
 		}
+		// Detect wipe: existing active elixir with time left being replaced by a different one
+		const previousElixirId = getActiveElixir(player);
+		if (previousElixirId !== undefined && previousElixirId !== itemId) {
+			trackActiveConsumableReplaced(player, "elixir", previousElixirId, getActiveElixirRemainingSecs(player));
+		}
 		// Activate elixir (replaces current active elixir — max 1 at a time, consumes 1)
 		inv.activeElixirs = [itemId];
 		inv.owned.set(itemId, ownedCount - 1);
 		if (ownedCount - 1 <= 0) inv.owned.delete(itemId);
 		effectActivateElixir(player, itemId);
 		stampConsumableCooldown(player);
+		trackConsumedElixir(player, itemId);
 		log(`[INVENTORY] ${player.Name} activated elixir: ${itemDef.name}`);
 	}
 
