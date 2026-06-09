@@ -4,7 +4,7 @@ import { awardAchievement } from "./achievement-handler";
 import { trackBountyAssigned, trackEvent } from "./analytics-tracker";
 import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS, SATIRICAL_BOUNTY_OFFENSES, Status } from "shared/module";
-import { isNPCKillable } from "shared/config/npcs";
+import { isNPCKillable, isBountyEligibleRace, NPC_REGISTRY } from "shared/config/npcs";
 import { getSpawnedNPCNames } from "./npc-spawner";
 import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
 import {
@@ -112,9 +112,14 @@ function getRouteForNPC(npcName: string): string | undefined {
 function buildNewNPCBounty(): NPCBountyPayload {
 	// Only assign targets that are actually spawned in the world right now,
 	// otherwise the player can't find them and the hunter's-sight elixir
-	// has nothing to highlight.
-	const spawned = getSpawnedNPCNames().filter((n) => isNPCKillable(n) && MEDIEVAL_NPCS[n] !== undefined);
-	const pool = spawned.size() > 0 ? spawned : MEDIEVAL_NPC_NAMES.filter((n) => isNPCKillable(n));
+	// has nothing to highlight. Gnomes are excluded -- they are never valid
+	// bounty marks (see BOUNTY_ELIGIBLE_RACES).
+	const isBountyEligible = (n: string): boolean => {
+		const def = NPC_REGISTRY[n];
+		return def !== undefined && isNPCKillable(n) && isBountyEligibleRace(def.race);
+	};
+	const spawned = getSpawnedNPCNames().filter((n) => isBountyEligible(n) && MEDIEVAL_NPCS[n] !== undefined);
+	const pool = spawned.size() > 0 ? spawned : MEDIEVAL_NPC_NAMES.filter(isBountyEligible);
 	const npcName = pool[math.random(0, pool.size() - 1)];
 	const npcData = MEDIEVAL_NPCS[npcName];
 	const route = getRouteForNPC(npcName);

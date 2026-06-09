@@ -64,7 +64,7 @@ function getRouteSocialClass(route: Folder): SocialClass | undefined {
 	return canon as SocialClass;
 }
 
-const VALID_RACES: ReadonlySet<string> = new Set<string>(["Human", "Goblin", "Gnome"]);
+const VALID_RACES: ReadonlySet<string> = new Set<string>(["Human", "Goblin", "Gnome", "Pirate"]);
 
 /** Read the Race attribute off a route folder. Returns undefined for
  *  unset / "any" / "x" / unrecognised values (meaning: accept any race). */
@@ -186,6 +186,13 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 		let availableNames = ROUTABLE_NPC_NAMES.filter(
 			(name: string) => !takenNames.includes(name) && !reservedMerchants.has(name),
 		);
+
+		// Gnomes only ever populate routes that explicitly opt in via Race=Gnome
+		// (or via fixedRouteId on the NPC entry). Otherwise they would flood the
+		// general pool and steal slots from Humans/Goblins/Pirates.
+		if (routeRace !== "Gnome") {
+			availableNames = availableNames.filter((n) => NPC_REGISTRY[n].race !== "Gnome");
+		}
 
 		// Gnomes can't be guards.
 		if (routeConfig?.position === "Guard") {

@@ -32,7 +32,19 @@
 
 export type SocialClass = "Serf" | "Commoner" | "Merchant" | "Nobility" | "Royalty";
 export type Gender = "M" | "F";
-export type Race = "Human" | "Goblin" | "Gnome";
+export type Race = "Human" | "Goblin" | "Gnome" | "Pirate";
+
+/**
+ * Races that participate in the random bounty pool. Gnomes are deliberately
+ * excluded -- they only ever appear in the world via fixed-route assignment
+ * or routes explicitly tagged `Race=Gnome`, so they should never be handed
+ * out as a player's mark.
+ */
+export const BOUNTY_ELIGIBLE_RACES: ReadonlySet<Race> = new Set<Race>(["Human", "Goblin", "Pirate"]);
+
+export function isBountyEligibleRace(race: Race): boolean {
+	return BOUNTY_ELIGIBLE_RACES.has(race);
+}
 
 /**
  * Player-facing system behaviour.
@@ -163,7 +175,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		},
 	},
 	"Veyra Ashenmaw": {
-		...std("Veyra Ashenmaw", "F", "Gnome", "Merchant", "Merchant"),
+		...std("Veyra Ashenmaw", "F", "Human", "Merchant", "Merchant"),
 		dialog: {
 			greetings: [
 				"Another errand runner. Show me what you have.",
@@ -305,48 +317,69 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Geoffrey Saltmarsh": std("Geoffrey Saltmarsh", "M", "Human", "Merchant", "Merchant"),
 	"Alinor Fairholt": std("Alinor Fairholt", "F", "Human", "Commoner"),
 
-	// ── Gnomes (formerly Elves — names kept, race re-skinned) ─────────────────
-	"Faelanis Windglen": std("Faelanis Windglen", "F", "Gnome", "Serf"),
-	"Thalion Brightshade": std("Thalion Brightshade", "M", "Gnome", "Serf"),
-	"Elandriel Moonvale": std("Elandriel Moonvale", "M", "Gnome", "Serf"),
-	"Caerwyn Duskwhisper": std("Caerwyn Duskwhisper", "M", "Gnome", "Commoner"),
-	"Aerendyl Silversong": std("Aerendyl Silversong", "F", "Gnome", "Royalty"),
-	"Thessaly Nywen": {
-		...std("Thessaly Nywen", "F", "Gnome", "Merchant", "Merchant"),
+	// ── Gnomes ────────────────────────────────────────────────────────────
+	// Gnomes are excluded from the random bounty pool and from random route
+	// assignment. They only appear on routes with a `Race=Gnome` attribute
+	// (or via a `fixedRouteId` on the NPC entry below).
+	Eustace: std("Eustace", "M", "Gnome", "Serf"),
+	Maudlin: std("Maudlin", "F", "Gnome", "Serf"),
+	Bartholomew: std("Bartholomew", "M", "Gnome", "Serf"),
+	Wystan: std("Wystan", "M", "Gnome", "Commoner"),
+	Adelinda: std("Adelinda", "F", "Gnome", "Royalty"),
+	Hildegard: {
+		...std("Hildegard", "F", "Gnome", "Merchant", "Merchant"),
 		dialog: {
 			greetings: [
-				"An outsider. How... quaint. What do you seek?",
-				"Elven craft at human prices. You will not find a better deal.",
-				"The forest provides. For a fee.",
+				"A big-folk customer! Mind your boots -- those are my best bottles.",
+				"Gnomish craft at human prices. Trinkets, tonics, trouble.",
+				"The mushroom-folk provide. For a fee.",
 			],
 			chatLines: [
-				"Elven poisons are an art. Human poisons are... enthusiastic.",
-				"I have lived three of your lifetimes. Trust my expertise.",
-				"The Phantom Venom was my grandmother's recipe. She was terrifying.",
-				"Do not mistake my patience for weakness.",
+				"A gnome's poison whispers. A human's poison shouts.",
+				"I've cobbled potions since before you were a thought. Trust the recipe.",
+				"The Phantom Venom was my grandmother's. She was terrifying. And tiny.",
+				"Do not mistake my patience for weakness, big-foot.",
 			],
-			farewells: ["Walk softly, short-lived one.", "The forest watches. As do I.", "Until the next moon."],
+			farewells: [
+				"Walk softly, big-foot. The toadstools are listening.",
+				"The forest watches. As do I.",
+				"Until the next mushroom moon.",
+			],
 		},
 	},
-	"Varethion Hollowmantle": std("Varethion Hollowmantle", "M", "Gnome", "Nobility", "Noble"),
-	"Seraphina Duskwillow": std("Seraphina Duskwillow", "F", "Gnome", "Nobility", "Noble"),
-	"Tamsin Silmare": std("Tamsin Silmare", "F", "Gnome", "Royalty"),
-	"Yseldra Nightbloom": std("Yseldra Nightbloom", "F", "Gnome", "Nobility", "Noble"),
-	"Elira Frostbrook": std("Elira Frostbrook", "F", "Gnome", "Commoner"),
-	"Fiora Thistlewynd": std("Fiora Thistlewynd", "F", "Gnome", "Merchant", "Merchant"),
-	"Selara Moonpetal": std("Selara Moonpetal", "F", "Gnome", "Commoner"),
-	"Fenriel Duskbranch": std("Fenriel Duskbranch", "M", "Gnome", "Merchant", "Merchant"),
-	"Aeloria Silvercrest": std("Aeloria Silvercrest", "F", "Gnome", "Nobility", "Noble"),
-	"Lorien Blackvale": std("Lorien Blackvale", "F", "Gnome", "Serf"),
-	"Maelis Stormgrove": std("Maelis Stormgrove", "F", "Gnome", "Royalty"),
-	"Ithariel Dawnsong": std("Ithariel Dawnsong", "M", "Gnome", "Nobility", "Noble"),
-	"Sylwen Starbrook": std("Sylwen Starbrook", "F", "Gnome", "Commoner"),
-	"Vaelion Greenmantle": std("Vaelion Greenmantle", "M", "Gnome", "Merchant", "Merchant"),
-	"Orendis Whisperglen": std("Orendis Whisperglen", "M", "Gnome", "Serf"),
-	"Nythera Frostpetal": std("Nythera Frostpetal", "F", "Gnome", "Commoner"),
-	"Thalindra Emberglen": std("Thalindra Emberglen", "F", "Gnome", "Merchant", "Merchant"),
-	"Corenith Leafwhisper": std("Corenith Leafwhisper", "M", "Gnome", "Serf"),
-	"Elvandar Duskpetal": std("Elvandar Duskpetal", "M", "Gnome", "Nobility", "Noble"),
+	Cuthbert: std("Cuthbert", "M", "Gnome", "Nobility", "Noble"),
+	Winifred: std("Winifred", "F", "Gnome", "Nobility", "Noble"),
+	Mabel: std("Mabel", "F", "Gnome", "Royalty"),
+	Beatrix: std("Beatrix", "F", "Gnome", "Nobility", "Noble"),
+	Petronel: std("Petronel", "F", "Gnome", "Commoner"),
+	Tilde: std("Tilde", "F", "Gnome", "Merchant", "Merchant"),
+	Mildred: std("Mildred", "F", "Gnome", "Commoner"),
+	Osbert: std("Osbert", "M", "Gnome", "Merchant", "Merchant"),
+	Edwina: std("Edwina", "F", "Gnome", "Nobility", "Noble"),
+	Goodwin: std("Goodwin", "F", "Gnome", "Serf"),
+	Drusilla: std("Drusilla", "F", "Gnome", "Royalty"),
+	Percival: std("Percival", "M", "Gnome", "Nobility", "Noble"),
+	Bess: std("Bess", "F", "Gnome", "Commoner"),
+	Algernon: std("Algernon", "M", "Gnome", "Merchant", "Merchant"),
+	Bartram: std("Bartram", "M", "Gnome", "Serf"),
+	Prudence: std("Prudence", "F", "Gnome", "Commoner"),
+	Constance: std("Constance", "F", "Gnome", "Merchant", "Merchant"),
+	Aldous: std("Aldous", "M", "Gnome", "Serf"),
+	Reginald: std("Reginald", "M", "Gnome", "Nobility", "Noble"),
+	Crispin: std("Crispin", "M", "Gnome", "Nobility", "Noble"),
+	Hester: std("Hester", "F", "Gnome", "Commoner"),
+	Ambrose: std("Ambrose", "M", "Gnome", "Merchant", "Merchant"),
+	Wulfric: std("Wulfric", "M", "Gnome", "Serf"),
+	Temperance: std("Temperance", "F", "Gnome", "Commoner"),
+	Millicent: std("Millicent", "F", "Gnome", "Merchant", "Merchant"),
+	Tobias: std("Tobias", "M", "Gnome", "Serf"),
+	Humphrey: std("Humphrey", "M", "Gnome", "Nobility", "Noble"),
+	Agatha: std("Agatha", "F", "Gnome", "Merchant", "Merchant"),
+	Cornelius: std("Cornelius", "M", "Gnome", "Serf"),
+	Rosamund: std("Rosamund", "F", "Gnome", "Commoner"),
+	Mirabel: std("Mirabel", "F", "Gnome", "Merchant", "Merchant"),
+	Quentin: std("Quentin", "M", "Gnome", "Serf"),
+	Thaddeus: std("Thaddeus", "M", "Gnome", "Nobility", "Noble"),
 
 	// ── Goblins ───────────────────────────────────────────────────────────
 	"Aldruk Ravensnarl": std("Aldruk Ravensnarl", "M", "Goblin", "Nobility", "Noble"),
@@ -372,6 +405,29 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Krilla Tallowtongue": std("Krilla Tallowtongue", "F", "Goblin", "Merchant", "Merchant"),
 	"Mograt Splinterjaw": std("Mograt Splinterjaw", "M", "Goblin", "Serf"),
 	"Prixa Coalbriar": std("Prixa Coalbriar", "F", "Goblin", "Commoner"),
+
+	// ── Pirates ───────────────────────────────────────────────────────────
+	// Treated identically to Humans/Goblins for spawning and bounty pools.
+	"Salty Jack Bilge": std("Salty Jack Bilge", "M", "Pirate", "Serf"),
+	"Redbeard Calloway": std("Redbeard Calloway", "M", "Pirate", "Commoner"),
+	"One-Eye Mortimer": std("One-Eye Mortimer", "M", "Pirate", "Serf"),
+	"Hook-Hand Bess": std("Hook-Hand Bess", "F", "Pirate", "Serf"),
+	"Captain Grimsby": std("Captain Grimsby", "M", "Pirate", "Nobility", "Noble"),
+	"Black Mary Saltgrove": std("Black Mary Saltgrove", "F", "Pirate", "Commoner"),
+	"Skiv Tarsdaughter": std("Skiv Tarsdaughter", "F", "Pirate", "Serf"),
+	"Brig Halloran": std("Brig Halloran", "M", "Pirate", "Merchant", "Merchant"),
+	"Briny Wynn": std("Briny Wynn", "F", "Pirate", "Serf"),
+	"Greycoat Tarsen": std("Greycoat Tarsen", "M", "Pirate", "Serf"),
+	"Marlow Tideborn": std("Marlow Tideborn", "M", "Pirate", "Commoner"),
+	"Cutlass Kate": std("Cutlass Kate", "F", "Pirate", "Commoner"),
+	"Squall Magreve": std("Squall Magreve", "M", "Pirate", "Serf"),
+	"Lash Coppermouth": std("Lash Coppermouth", "M", "Pirate", "Merchant", "Merchant"),
+	"Rigger Tom Greysea": std("Rigger Tom Greysea", "M", "Pirate", "Serf"),
+	"Talon Sablewake": std("Talon Sablewake", "F", "Pirate", "Nobility", "Noble"),
+	"Wreck Hannigan": std("Wreck Hannigan", "M", "Pirate", "Serf"),
+	"Doxa Quill": std("Doxa Quill", "F", "Pirate", "Royalty"),
+	"Plankwalker Jeb": std("Plankwalker Jeb", "M", "Pirate", "Serf"),
+	"Spar Tannock": std("Spar Tannock", "M", "Pirate", "Commoner"),
 };
 
 // ── Derived helpers ───────────────────────────────────────────────────────────

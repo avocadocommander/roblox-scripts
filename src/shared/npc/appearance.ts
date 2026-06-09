@@ -28,6 +28,13 @@ const RACE_SKIN_TONES: Record<Race, Color3[]> = {
 		Color3.fromRGB(90, 90, 90), // slate gray
 		Color3.fromRGB(50, 70, 50), // dark green
 	],
+	Pirate: [
+		Color3.fromRGB(210, 168, 124), // weathered tan
+		Color3.fromRGB(184, 138, 96), // deep sun-browned
+		Color3.fromRGB(158, 110, 72), // salt-burnt
+		Color3.fromRGB(124, 84, 52), // mahogany
+		Color3.fromRGB(96, 64, 40), // brine-darkened
+	],
 };
 
 function getRaceSkinTones(race: Race): Color3[] {
@@ -379,6 +386,14 @@ function randomizeBodyShape(npcDescription: HumanoidDescription, seed: () => num
 			head: [0.9, 1.05],
 			bodyType: [0.25, 0.55],
 			proportion: [0.4, 0.6],
+		},
+		Pirate: {
+			height: [0.95, 1.05],
+			width: [0.95, 1.08],
+			depth: [0.95, 1.05],
+			head: [0.9, 1.1],
+			bodyType: [0.35, 0.75],
+			proportion: [0.45, 0.65],
 		},
 	};
 
