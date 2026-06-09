@@ -140,7 +140,6 @@ function getDropdowns(): DropdownDef[] {
 						showFeedback("Turned in bounty scroll");
 					},
 				},
-				{ label: "Reset All", color: UI_THEME.danger, action: () => runCommand("resetAll") },
 				{
 					label: "Trigger Special Event",
 					color: Color3.fromRGB(200, 140, 60),
@@ -156,6 +155,24 @@ function getDropdowns(): DropdownDef[] {
 					color: Color3.fromRGB(180, 80, 80),
 					action: () => runCommand("stopTravelingMerchant"),
 				},
+			],
+		},
+		{
+			id: "reset",
+			label: "Reset",
+			color: UI_THEME.danger,
+			buttons: [
+				{
+					label: "Reset Spawn",
+					color: Color3.fromRGB(210, 130, 60),
+					action: () => runCommand("resetSpawn"),
+				},
+				{
+					label: "Reset Achievements",
+					color: Color3.fromRGB(180, 100, 60),
+					action: () => runCommand("resetAchievements"),
+				},
+				{ label: "Reset All", color: UI_THEME.danger, action: () => runCommand("resetAll") },
 			],
 		},
 		{

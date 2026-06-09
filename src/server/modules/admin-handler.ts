@@ -11,6 +11,7 @@ import {
 import { assignNewNPCBounty } from "./bounty-manager";
 import { syncAchievementsToClient } from "./achievement-handler";
 import { givePlayerItem } from "./inventory-handler";
+import { clearPlayerCampfire } from "./campfire-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
 import { startTravelingMerchantEvent, stopTravelingMerchantEvent } from "./traveling-merchant-handler";
@@ -120,12 +121,18 @@ export function initializeAdminHandler(): void {
 			return "Traveling merchant event stopped";
 		}
 
+		if (command === "resetSpawn") {
+			clearPlayerCampfire(player);
+			return "Campfire cleared -- will spawn at default location";
+		}
+
 		if (command === "resetAll") {
 			resetAchievementsAndTitles(player);
 			resetFactionData(player);
+			clearPlayerCampfire(player);
 			syncAchievementsToClient(player);
 			task.spawn(() => savePlayerData(player));
-			return "Reset all: achievements, titles, and faction data";
+			return "Reset all: achievements, titles, faction data, and spawn";
 		}
 
 		return "Unknown command: " + command;

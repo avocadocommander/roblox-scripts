@@ -76,6 +76,27 @@ export function respawnPlayerAtCampfire(player: Player): boolean {
 }
 
 /**
+ * Destroy the player's in-world campfire, clear it from the runtime map, and
+ * wipe the DataStore entry so they spawn at the default SpawnLocation next time.
+ */
+export function clearPlayerCampfire(player: Player): void {
+	const data = playerCampfires.get(player);
+	if (data) {
+		data.campfire.Destroy();
+		playerCampfires.delete(player);
+	}
+	task.spawn(() => {
+		const [ok] = pcall(() => {
+			dataStore.RemoveAsync(tostring(player.UserId));
+		});
+		if (!ok) {
+			log(`[CAMPFIRE] Failed to clear campfire DataStore entry for ${player.Name}`, "ERROR");
+		}
+	});
+	log(`[CAMPFIRE] Cleared spawn campfire for ${player.Name}`);
+}
+
+/**
  * Load a player's saved campfire from DataStore and create it in the world.
  * Runs asynchronously via task.spawn. onLoaded is called (on the same thread)
  * when the DataStore request completes — whether or not data was found.
