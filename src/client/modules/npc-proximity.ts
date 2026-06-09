@@ -1,8 +1,8 @@
 import { Players, RunService, TweenService, Workspace, CollectionService, UserInputService } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { getOrCreateAssassinationRemote } from "shared/remotes/assassination-remote";
-import { UI_THEME, STATUS_RARITY, scaleUI } from "shared/ui-theme";
-import { MEDIEVAL_NPCS } from "shared/module";
+import { UI_THEME, scaleUI } from "shared/ui-theme";
+import { getNPCDisplay } from "shared/npc-display";
 import { isNPCKillable, getNPCInteraction, hasNPCDialog } from "shared/config/npcs";
 import { getInspectDef } from "shared/config/inspectables";
 import { TITLES } from "shared/config/titles";
@@ -21,18 +21,9 @@ import {
 } from "shared/remotes/bounty-remote";
 
 // ── Status → rarity colour mapping ───────────────────────────────────────────
-function getNPCStatusColor(npcName: string): Color3 {
-	const data = MEDIEVAL_NPCS[npcName];
-	if (!data) return UI_THEME.textPrimary;
-	const rarity = STATUS_RARITY[data.status];
-	return rarity ? rarity.color : UI_THEME.textPrimary;
-}
-
-function getNPCStatus(npcName: string): string {
-	const data = MEDIEVAL_NPCS[npcName];
-	if (!data) return "";
-	return data.status;
-}
+// All NPC presentation goes through `getNPCDisplay` in shared/npc-display.ts.
+// That helper knows gnomes have no social status and returns a neutral
+// colour for them.
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const IS_MOBILE = UserInputService.TouchEnabled && !UserInputService.KeyboardEnabled;
@@ -200,8 +191,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	billboard.Parent = npc;
 
 	const npcName = getNPCModelName(npc);
-	const statusColor = getNPCStatusColor(npcName);
-	const statusText = getNPCStatus(npcName);
+	const display = getNPCDisplay(npcName);
 
 	// Outer card frame
 	const card = new Instance("Frame");
@@ -218,7 +208,7 @@ function createNPCBillboard(npc: Model): BillboardGui {
 	cardCorner.Parent = card;
 
 	const cardStroke = new Instance("UIStroke");
-	cardStroke.Color = statusColor;
+	cardStroke.Color = display.color;
 	cardStroke.Thickness = 1.2;
 	cardStroke.Parent = card;
 

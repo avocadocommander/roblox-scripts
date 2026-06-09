@@ -10,7 +10,8 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
-import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
+import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { getNPCDisplay } from "shared/npc-display";
 import { RARITY_COLORS } from "shared/inventory";
 import {
 	BoardBodyContent,
@@ -513,18 +514,23 @@ function renderContractBody(bounty: NPCBountyPayload | undefined): void {
 	}
 
 	const npcData = MEDIEVAL_NPCS[bounty.npcName] as NPCData | undefined;
-	const rarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
+	const display = getNPCDisplay(bounty.npcName);
 
 	if (markNameLabel) {
 		markNameLabel.Text = bounty.npcName;
-		markNameLabel.TextColor3 = rarity ? rarity.color : UI_THEME.textPrimary;
+		markNameLabel.TextColor3 = display.color;
 	}
 	if (markGoldLabel) markGoldLabel.Text = bounty.gold + "g";
 	if (markClassLabel) {
-		const status = npcData ? npcData.status : "Unknown";
-		const rarityLabel = rarity ? rarity.label : "";
-		markClassLabel.Text = status + (rarityLabel !== "" ? " -- " + rarityLabel : "");
-		markClassLabel.TextColor3 = rarity ? rarity.color : UI_THEME.textMuted;
+		// Gnomes are excluded from the bounty pool, but be defensive: when an
+		// NPC has no displayable status fall back to the race, then to "Unknown".
+		if (display.showStatus) {
+			markClassLabel.Text = display.statusText + (display.rarityLabel !== "" ? " -- " + display.rarityLabel : "");
+			markClassLabel.TextColor3 = display.color;
+		} else {
+			markClassLabel.Text = npcData ? npcData.race : "Unknown";
+			markClassLabel.TextColor3 = UI_THEME.textMuted;
+		}
 	}
 	if (markOffenceLabel) markOffenceLabel.Text = bounty.offence !== "" ? '"' + bounty.offence + '"' : "";
 }
@@ -569,12 +575,9 @@ function renderBody(content: BoardBodyContent): void {
 	}
 	if (guidanceFooterLabel) {
 		const stepText = "Step " + (content.stepIndex + 1) + " of " + content.totalSteps;
-		const baseText =
-			showBountyCard ? stepText + "  --  " + content.step.objective : stepText;
+		const baseText = showBountyCard ? stepText + "  --  " + content.step.objective : stepText;
 		guidanceFooterLabel.Text =
-			content.step.hint !== undefined && !showBountyCard
-				? baseText + "  --  " + content.step.hint
-				: baseText;
+			content.step.hint !== undefined && !showBountyCard ? baseText + "  --  " + content.step.hint : baseText;
 	}
 }
 

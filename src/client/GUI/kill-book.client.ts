@@ -13,7 +13,8 @@ import { ITEMS } from "shared/inventory";
 import { getEquipTitleRemote } from "shared/remotes/title-remote";
 import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { NPCKillRecord } from "shared/kill-log";
-import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
+import { UI_THEME, getUIScale } from "shared/ui-theme";
+import { getNPCDisplay } from "shared/npc-display";
 import { FACTIONS, FACTION_IDS, FactionId, levelFromXP, totalXPFromFactions, overallLevelFromFactions } from "shared/config/factions";
 import { hasAnyNew, isNew, markNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
 
@@ -291,7 +292,10 @@ function renderBestiaryTab(data: KillBookData): void {
 			const kills = record?.count ?? 0;
 			const bountyKills = record?.bountyKills ?? 0;
 			const discovered = kills > 0;
-			const rarity = STATUS_RARITY[npcData.status];
+			// Single source of truth for status / rarity rendering. Gnomes
+			// return showStatus=false and a neutral colour with no bgColor.
+			const display = getNPCDisplay(name);
+			const hasRarity = display.bgColor !== undefined;
 			const isExpanded = bestiaryExpanded.has(name);
 
 			const CARD_COLLAPSED = 56;
@@ -302,7 +306,7 @@ function renderBestiaryTab(data: KillBookData): void {
 			const card = new Instance("TextButton");
 			card.Name = "Card_" + name;
 			card.Size = new UDim2(1, 0, 0, cardHeight);
-			card.BackgroundColor3 = discovered && rarity ? rarity.bgColor : UI_THEME.bg;
+			card.BackgroundColor3 = discovered && hasRarity ? (display.bgColor as Color3) : UI_THEME.bg;
 			card.BackgroundTransparency = discovered ? 0.15 : 0.6;
 			card.BorderSizePixel = 0;
 			card.Text = "";
@@ -315,10 +319,10 @@ function renderBestiaryTab(data: KillBookData): void {
 			rc.CornerRadius = new UDim(0, 5);
 			rc.Parent = card;
 
-			// Rarity stroke on discovered cards
-			if (discovered && rarity) {
+			// Rarity stroke on discovered cards (skipped for gnomes -- no tier)
+			if (discovered && hasRarity) {
 				const cardStroke = new Instance("UIStroke");
-				cardStroke.Color = rarity.color;
+				cardStroke.Color = display.color;
 				cardStroke.Thickness = 0.8;
 				cardStroke.Parent = card;
 			}
@@ -326,12 +330,12 @@ function renderBestiaryTab(data: KillBookData): void {
 			// New-since-last-view dot
 			setDotVisible(card, isNew("killbook:bestiary", name));
 
-			// Rarity accent bar (left edge)
-			if (rarity) {
+			// Rarity accent bar (left edge) -- skipped for gnomes (no tier)
+			if (hasRarity) {
 				const accent = new Instance("Frame");
 				accent.Size = new UDim2(0, 4, 1, 0);
 				accent.Position = new UDim2(0, 0, 0, 0);
-				accent.BackgroundColor3 = discovered ? rarity.color : UI_THEME.textMuted;
+				accent.BackgroundColor3 = discovered ? display.color : UI_THEME.textMuted;
 				accent.BackgroundTransparency = discovered ? 0 : 0.6;
 				accent.BorderSizePixel = 0;
 				accent.Parent = card;
@@ -346,7 +350,7 @@ function renderBestiaryTab(data: KillBookData): void {
 			nameLbl.Size = new UDim2(1, -52, 0, 22);
 			nameLbl.Position = new UDim2(0, 14, 0, 6);
 			nameLbl.BackgroundTransparency = 1;
-			nameLbl.TextColor3 = discovered && rarity ? rarity.color : UI_THEME.textMuted;
+			nameLbl.TextColor3 = discovered ? display.color : UI_THEME.textMuted;
 			nameLbl.Font = UI_THEME.fontBold;
 			nameLbl.TextSize = 13;
 			nameLbl.Text = discovered ? name : "???";
@@ -364,14 +368,20 @@ function renderBestiaryTab(data: KillBookData): void {
 			chevron.Parent = card;
 
 			// ── Sub-row: Status + kill stats ────────────────────────────────
+			// Gnomes have no social status -- show the race alone instead.
+			const subText = discovered
+				? display.showStatus
+					? display.statusText + " (" + display.rarityLabel + ")"
+					: npcData.race
+				: "--";
 			const statusLbl = new Instance("TextLabel");
 			statusLbl.Size = new UDim2(0.45, 0, 0, 16);
 			statusLbl.Position = new UDim2(0, 14, 0, 30);
 			statusLbl.BackgroundTransparency = 1;
-			statusLbl.TextColor3 = rarity ? rarity.color : UI_THEME.textMuted;
+			statusLbl.TextColor3 = discovered ? display.color : UI_THEME.textMuted;
 			statusLbl.Font = UI_THEME.fontBody;
 			statusLbl.TextSize = 11;
-			statusLbl.Text = discovered ? npcData.status + " (" + (rarity?.label ?? "") + ")" : "--";
+			statusLbl.Text = subText;
 			statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
 			statusLbl.Parent = card;
 
@@ -417,19 +427,24 @@ function renderBestiaryTab(data: KillBookData): void {
 				genderLbl.TextXAlignment = Enum.TextXAlignment.Right;
 				genderLbl.Parent = card;
 
-				const bountyVal = rarity
-					? [100, 200, 350, 600, 1200][math.clamp(rarity.order, 0, 4)]
-					: 0;
-				const rewardLbl = new Instance("TextLabel");
-				rewardLbl.Size = new UDim2(1, -28, 0, 18);
-				rewardLbl.Position = new UDim2(0, 14, 0, 82);
-				rewardLbl.BackgroundTransparency = 1;
-				rewardLbl.TextColor3 = UI_THEME.gold;
-				rewardLbl.Font = UI_THEME.fontBold;
-				rewardLbl.TextSize = 11;
-				rewardLbl.Text = "Bounty value: " + bountyVal + "g";
-				rewardLbl.TextXAlignment = Enum.TextXAlignment.Left;
-				rewardLbl.Parent = card;
+				const bountyVal =
+					display.rarityOrder !== undefined
+						? [100, 200, 350, 600, 1200][math.clamp(display.rarityOrder, 0, 4)]
+						: 0;
+				// Gnomes are excluded from the bounty pool -- omit the misleading
+				// "Bounty value: 0g" line entirely for them.
+				if (display.rarityOrder !== undefined) {
+					const rewardLbl = new Instance("TextLabel");
+					rewardLbl.Size = new UDim2(1, -28, 0, 18);
+					rewardLbl.Position = new UDim2(0, 14, 0, 82);
+					rewardLbl.BackgroundTransparency = 1;
+					rewardLbl.TextColor3 = UI_THEME.gold;
+					rewardLbl.Font = UI_THEME.fontBold;
+					rewardLbl.TextSize = 11;
+					rewardLbl.Text = "Bounty value: " + bountyVal + "g";
+					rewardLbl.TextXAlignment = Enum.TextXAlignment.Left;
+					rewardLbl.Parent = card;
+				}
 			}
 
 			// ── Tap to expand/collapse ──────────────────────────────────────

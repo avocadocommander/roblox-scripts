@@ -12,7 +12,14 @@
  *
  *   - callback registered BEFORE init  --> queued, dispatched when init fires
  *   - callback registered AFTER  init  --> fires immediately via task.spawn
+ *
+ * Cross-container bridge: scripts in ReplicatedFirst (e.g. the loading
+ * screen) cannot share this module's state because they live in a different
+ * container. To let them detect "client ready" we mirror the latch onto
+ * `LocalPlayer:SetAttribute("ClientInitialized", true)`.
  */
+
+import { Players } from "@rbxts/services";
 
 let initialized = false;
 const pending: Array<() => void> = [];
@@ -21,6 +28,8 @@ const pending: Array<() => void> = [];
 export function markPlayerInitialized(): void {
 	if (initialized) return;
 	initialized = true;
+	// Cross-container bridge for ReplicatedFirst scripts (loading screen).
+	Players.LocalPlayer.SetAttribute("ClientInitialized", true);
 	print("[CLIENT-INIT] Player initialized -- dispatching " + pending.size() + " pending callbacks");
 	for (const cb of pending) {
 		task.spawn(cb);

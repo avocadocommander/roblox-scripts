@@ -321,13 +321,23 @@ export const NPC_REGISTRY: NPCRegistry = {
 	// Gnomes are excluded from the random bounty pool and from random route
 	// assignment. They only appear on routes with a `Race=Gnome` attribute
 	// (or via a `fixedRouteId` on the NPC entry below).
-	Eustace: std("Eustace", "M", "Gnome", "Serf"),
-	Maudlin: std("Maudlin", "F", "Gnome", "Serf"),
-	Bartholomew: std("Bartholomew", "M", "Gnome", "Serf"),
-	Wystan: std("Wystan", "M", "Gnome", "Commoner"),
-	Adelinda: std("Adelinda", "F", "Gnome", "Royalty"),
-	Hildegard: {
-		...std("Hildegard", "F", "Gnome", "Merchant", "Merchant"),
+	// Naming convention: surnames (Tanner, Hawthorne, Crowe...) -- distinct
+	// from human first-name style so gnomes read as their own people.
+	Tanner: std("Tanner", "M", "Gnome", "Serf"),
+	Fletcher: std("Fletcher", "M", "Gnome", "Serf"),
+	Mercer: std("Mercer", "M", "Gnome", "Merchant", "Merchant"),
+	Abbott: std("Abbott", "M", "Gnome", "Nobility", "Noble"),
+	Bishop: std("Bishop", "M", "Gnome", "Nobility", "Noble"),
+	Ward: std("Ward", "M", "Gnome", "Commoner"),
+	Graves: std("Graves", "F", "Gnome", "Commoner"),
+	Locke: std("Locke", "M", "Gnome", "Commoner"),
+	Carrow: std("Carrow", "F", "Gnome", "Serf"),
+	Whitlock: std("Whitlock", "F", "Gnome", "Merchant", "Merchant"),
+	Blackwell: std("Blackwell", "M", "Gnome", "Royalty"),
+	Hawthorne: {
+		// Carries the flavour dialog the previous gnome-merchant roster had --
+		// preserved here so the gnome shop voice doesn't get lost.
+		...std("Hawthorne", "F", "Gnome", "Merchant", "Merchant"),
 		dialog: {
 			greetings: [
 				"A big-folk customer! Mind your boots -- those are my best bottles.",
@@ -347,39 +357,12 @@ export const NPC_REGISTRY: NPCRegistry = {
 			],
 		},
 	},
-	Cuthbert: std("Cuthbert", "M", "Gnome", "Nobility", "Noble"),
-	Winifred: std("Winifred", "F", "Gnome", "Nobility", "Noble"),
-	Mabel: std("Mabel", "F", "Gnome", "Royalty"),
-	Beatrix: std("Beatrix", "F", "Gnome", "Nobility", "Noble"),
-	Petronel: std("Petronel", "F", "Gnome", "Commoner"),
-	Tilde: std("Tilde", "F", "Gnome", "Merchant", "Merchant"),
-	Mildred: std("Mildred", "F", "Gnome", "Commoner"),
-	Osbert: std("Osbert", "M", "Gnome", "Merchant", "Merchant"),
-	Edwina: std("Edwina", "F", "Gnome", "Nobility", "Noble"),
-	Goodwin: std("Goodwin", "F", "Gnome", "Serf"),
-	Drusilla: std("Drusilla", "F", "Gnome", "Royalty"),
-	Percival: std("Percival", "M", "Gnome", "Nobility", "Noble"),
-	Bess: std("Bess", "F", "Gnome", "Commoner"),
-	Algernon: std("Algernon", "M", "Gnome", "Merchant", "Merchant"),
-	Bartram: std("Bartram", "M", "Gnome", "Serf"),
-	Prudence: std("Prudence", "F", "Gnome", "Commoner"),
-	Constance: std("Constance", "F", "Gnome", "Merchant", "Merchant"),
-	Aldous: std("Aldous", "M", "Gnome", "Serf"),
-	Reginald: std("Reginald", "M", "Gnome", "Nobility", "Noble"),
-	Crispin: std("Crispin", "M", "Gnome", "Nobility", "Noble"),
-	Hester: std("Hester", "F", "Gnome", "Commoner"),
-	Ambrose: std("Ambrose", "M", "Gnome", "Merchant", "Merchant"),
-	Wulfric: std("Wulfric", "M", "Gnome", "Serf"),
-	Temperance: std("Temperance", "F", "Gnome", "Commoner"),
-	Millicent: std("Millicent", "F", "Gnome", "Merchant", "Merchant"),
-	Tobias: std("Tobias", "M", "Gnome", "Serf"),
-	Humphrey: std("Humphrey", "M", "Gnome", "Nobility", "Noble"),
-	Agatha: std("Agatha", "F", "Gnome", "Merchant", "Merchant"),
-	Cornelius: std("Cornelius", "M", "Gnome", "Serf"),
-	Rosamund: std("Rosamund", "F", "Gnome", "Commoner"),
-	Mirabel: std("Mirabel", "F", "Gnome", "Merchant", "Merchant"),
-	Quentin: std("Quentin", "M", "Gnome", "Serf"),
-	Thaddeus: std("Thaddeus", "M", "Gnome", "Nobility", "Noble"),
+	Ashford: std("Ashford", "M", "Gnome", "Nobility", "Noble"),
+	Marlow: std("Marlow", "F", "Gnome", "Commoner"),
+	Crowe: std("Crowe", "M", "Gnome", "Serf"),
+	Briar: std("Briar", "F", "Gnome", "Royalty"),
+	Vance: std("Vance", "M", "Gnome", "Merchant", "Merchant"),
+	Tolliver: std("Tolliver", "M", "Gnome", "Nobility", "Noble"),
 
 	// ── Goblins ───────────────────────────────────────────────────────────
 	"Aldruk Ravensnarl": std("Aldruk Ravensnarl", "M", "Goblin", "Nobility", "Noble"),

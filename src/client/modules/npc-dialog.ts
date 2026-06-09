@@ -18,8 +18,9 @@ import {
 	ShopItemPayload,
 } from "shared/remotes/dialog-remote";
 import { RARITY_COLORS, RARITY_LABELS, RARITY_BG_COLORS } from "shared/inventory";
-import { UI_THEME, STATUS_RARITY, getUIScale } from "shared/ui-theme";
+import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
+import { getNPCDisplay } from "shared/npc-display";
 import { formatDuration } from "shared/helpers";
 import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
 import { spawnFloatingText } from "./npc-floating-text";
@@ -1162,14 +1163,14 @@ function openDialog(payload: DialogPayload): void {
 	if (npcNameLabel) npcNameLabel.Text = payload.npcName;
 
 	const npcData = MEDIEVAL_NPCS[payload.npcName];
-	const statusRarity = npcData ? STATUS_RARITY[npcData.status] : undefined;
-	const statusColor = statusRarity ? statusRarity.color : UI_THEME.textPrimary;
+	const display = getNPCDisplay(payload.npcName);
 
-	if (npcNameLabel) npcNameLabel.TextColor3 = statusColor;
+	if (npcNameLabel) npcNameLabel.TextColor3 = display.color;
 
 	const statusSub = dialogRoot?.FindFirstChild("TopRow")?.FindFirstChild("NPCStatus") as TextLabel | undefined;
 	if (statusSub && npcData) {
-		statusSub.Text = npcData.status + " " + npcData.race;
+		// Gnomes deliberately have no social status -- show race alone.
+		statusSub.Text = display.showStatus ? display.statusText + " " + npcData.race : npcData.race;
 		statusSub.TextColor3 = UI_THEME.textMuted;
 	}
 
