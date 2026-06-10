@@ -31,8 +31,8 @@ import { ShopItem } from "shared/config/npcs";
 import { ITEMS, RARITY_COLORS } from "shared/inventory";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
-import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import { registerMerchantShop, unregisterMerchantShop } from "./merchant-handler";
+import { broadcastBoardMessage, clearBoardServerEvent, setBoardServerEvent } from "./board-event-bus";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +75,7 @@ const DEPART_TWEEN_SECS = 3.5;
  * with rare goods" fantasy and keeps the event feeling different every time.
  */
 const TRAVELING_MERCHANT_SHOP_TYPE: ShopType = "black_market";
+const BOARD_EVENT_KEY = "traveling_merchant";
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 
@@ -278,10 +279,10 @@ export function startTravelingMerchantEvent(): void {
 	eventActive = true;
 
 	// Set the persistent server-event banner for all clients.
-	getBoardBroadcastRemote().FireAllClients("event", "Traveling Merchant is here! Visit before they depart!");
+	setBoardServerEvent(BOARD_EVENT_KEY, "Traveling Merchant is here! Visit before they depart!");
 
 	// Arrival transient notification.
-	getBoardBroadcastRemote().FireAllClients("info", "A Traveling Merchant has arrived!");
+	broadcastBoardMessage("info", "A Traveling Merchant has arrived!");
 
 	// Clone the template and start it in the sky above the chosen attachment.
 	const cart = spawnCart()!;
@@ -326,9 +327,9 @@ export function stopTravelingMerchantEvent(): void {
 	eventActive = false;
 
 	// Clear the persistent server-event banner.
-	getBoardBroadcastRemote().FireAllClients("event", "");
+	clearBoardServerEvent(BOARD_EVENT_KEY);
 	// Departure transient notification.
-	getBoardBroadcastRemote().FireAllClients("info", "The Traveling Merchant has departed.");
+	broadcastBoardMessage("info", "The Traveling Merchant has departed.");
 
 	// Remove the NPC immediately before the cart lifts off.
 	despawnNPC();

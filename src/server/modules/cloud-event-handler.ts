@@ -1,6 +1,6 @@
 import { CollectionService, Workspace } from "@rbxts/services";
-import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import { log } from "shared/helpers";
+import { clearBoardServerEvent, setBoardServerEvent } from "./board-event-bus";
 
 interface BeamDefaults {
 	enabled: boolean;
@@ -42,6 +42,7 @@ const WALL_TORCH_NAME = "Wall Torch";
 const FIREFLY_MODEL_NAME = "FireFlys";
 const SCHEDULE_INTERVAL_SECS = 30 * 60;
 const SCHEDULED_EVENT_DURATION_SECS = 4 * 60;
+const BOARD_EVENT_KEY = "dream_clouds";
 const NORMAL_COLOR = new ColorSequence([
 	new ColorSequenceKeypoint(0, Color3.fromRGB(232, 237, 240)),
 	new ColorSequenceKeypoint(0.55, Color3.fromRGB(214, 226, 235)),
@@ -363,7 +364,7 @@ export function startDreamCloudEvent(): string {
 	dreamCloudsActive = true;
 	const beamCount = applyCloudBeamState(true);
 	const envCount = applyDreamEnvironmentState(true);
-	getBoardBroadcastRemote().FireAllClients("event", "Dream clouds are racing overhead.");
+	setBoardServerEvent(BOARD_EVENT_KEY, "Dream clouds are racing overhead.");
 	return `Dream cloud event started (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
 }
 
@@ -373,7 +374,7 @@ export function stopDreamCloudEvent(): string {
 	dreamCloudsActive = false;
 	const beamCount = applyCloudBeamState(false);
 	const envCount = applyDreamEnvironmentState(false);
-	getBoardBroadcastRemote().FireAllClients("event", "");
+	clearBoardServerEvent(BOARD_EVENT_KEY);
 	return `Dream cloud event stopped (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
 }
 

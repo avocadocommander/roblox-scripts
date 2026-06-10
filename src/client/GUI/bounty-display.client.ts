@@ -134,6 +134,7 @@ const MESSAGE_MAX_VISIBLE = 3;
 const MESSAGE_LIFETIME = 6; // seconds before a message fades out on its own
 const MESSAGE_ROW_HEIGHT = 22;
 const MESSAGE_ROW_GAP = 4;
+const MESSAGE_RESERVED_HEIGHT = MESSAGE_ROW_HEIGHT * MESSAGE_MAX_VISIBLE + MESSAGE_ROW_GAP * (MESSAGE_MAX_VISIBLE - 1);
 let messageLayoutCounter = 0;
 interface MessageEntry {
 	frame: Frame;
@@ -199,10 +200,8 @@ function buildMessageStack(wrapper: Frame): void {
 	const container = new Instance("Frame");
 	container.Name = "MessageStack";
 	container.LayoutOrder = -1; // always above mission card
-	// Height is driven by child rows — container takes zero space when empty
-	// so the mission card sits flush at the top of the wrapper.
-	container.Size = new UDim2(1, 0, 0, 0);
-	container.AutomaticSize = Enum.AutomaticSize.Y;
+	// Reserve this space at all times so new messages never push the board down.
+	container.Size = new UDim2(1, 0, 0, sc(MESSAGE_RESERVED_HEIGHT));
 	container.BackgroundTransparency = 1;
 	container.Parent = wrapper;
 
@@ -210,7 +209,7 @@ function buildMessageStack(wrapper: Frame): void {
 	layout.FillDirection = Enum.FillDirection.Vertical;
 	layout.SortOrder = Enum.SortOrder.LayoutOrder;
 	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom;
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
 	layout.Padding = new UDim(0, sc(MESSAGE_ROW_GAP));
 	layout.Parent = container;
 
@@ -708,7 +707,7 @@ function pushMessage(message: BoardMessage): void {
 	label.TextColor3 = palette.text;
 	label.Font = UI_THEME.fontBold;
 	label.TextSize = sc(12);
-	label.TextXAlignment = Enum.TextXAlignment.Center;
+	label.TextXAlignment = Enum.TextXAlignment.Left;
 	label.TextTruncate = Enum.TextTruncate.AtEnd;
 	label.TextTransparency = 1;
 	label.Parent = row;

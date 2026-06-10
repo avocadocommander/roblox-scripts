@@ -36,8 +36,10 @@ import {
 import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { isNPCKillable } from "shared/config/npcs";
 import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
+import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
+const boardBroadcastRemote = getBoardBroadcastRemote();
 
 /** Base rewards granted for every assassination regardless of bounty. */
 const BASE_SCORE = 100;
@@ -73,11 +75,16 @@ function isNPCModelKillable(model: Model): boolean {
 	return isNPCKillable(getNPCModelName(model));
 }
 
+function broadcastBoardMessage(messageType: "info" | "warning" | "unlock", text: string): void {
+	boardBroadcastRemote.FireAllClients(messageType, text);
+}
+
 function initializeAssassinationHandler() {
 	log("[ASSASSINATION] Initializing assassination handler");
 
 	// Eagerly create the feedback remote so clients don't infinite-yield on WaitForChild
 	getAssassinationFeedbackRemote();
+	getBoardBroadcastRemote();
 
 	assassinationRemote.OnServerEvent.Connect((player: Player, npcModel: unknown) => {
 		const model = npcModel as Model;
@@ -241,6 +248,7 @@ function initializeAssassinationHandler() {
 					npcName +
 					" (scroll added to inventory)",
 			);
+			broadcastBoardMessage("info", "Bounty claimed: " + player.DisplayName + " assassinated " + npcName + ".");
 		} else {
 			// Illegal kill — no reward, become wanted
 			const npcData2 = MEDIEVAL_NPCS[npcName];
@@ -248,6 +256,10 @@ function initializeAssassinationHandler() {
 			const wantedGold = WANTED_GOLD_BY_STATUS[npcStatus] ?? 300;
 			const decree = DECREE_BY_STATUS[npcStatus] ?? "Committed murder — by royal decree";
 			setPlayerWanted(player, wantedGold, decree);
+			broadcastBoardMessage(
+				"warning",
+				"Royal decree: " + player.DisplayName + " murdered " + npcName + ". Bounty: " + wantedGold + "g.",
+			);
 			trackEvent(player, ANALYTICS_EVENTS.WrongKill, { weaponType: attemptWeaponType });
 			awardAchievement(player, "A_COSTLY_MISTAKE");
 			print("[WANTED CHECK] " + player.Name + " is now WANTED for " + wantedGold + "g by decree of the king");
@@ -326,6 +338,16 @@ function initializeAssassinationHandler() {
 		addScore(killer, wantedGold);
 		addExperience(killer, math.floor(wantedGold * 1.5));
 		log("[ASSASSINATION] " + killer.Name + " earned " + wantedGold + "g for killing " + targetPlayer.Name);
+		broadcastBoardMessage(
+			"info",
+			"Wanted claimed: " +
+				killer.DisplayName +
+				" assassinated " +
+				targetPlayer.DisplayName +
+				" for " +
+				wantedGold +
+				"g.",
+		);
 
 		// Track PvP stats
 		addPlayerKill(killer);

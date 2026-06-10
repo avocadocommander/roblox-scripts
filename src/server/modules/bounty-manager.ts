@@ -19,6 +19,7 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 import { getPlayerScrollRarities } from "./inventory-handler";
+import { syncBoardServerEvent } from "./board-event-bus";
 
 // ─── Wanted alert sound ──────────────────────────────────────────────────────
 
@@ -297,6 +298,7 @@ export function initializeBountyManager(): void {
 			const npcBounty = assignNewNPCBounty(player);
 			// Send full current state: their NPC mark + everyone who is wanted
 			getBountyListSyncRemote().FireClient(player, npcBounty, buildWantedList());
+			syncBoardServerEvent(player);
 		}
 	});
 
