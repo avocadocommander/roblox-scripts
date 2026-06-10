@@ -9,9 +9,15 @@ import { Players, RunService, SoundService, TweenService } from "@rbxts/services
 import { log } from "shared/helpers";
 import { MUSIC_PLAYLIST, MUSIC_SHUFFLE, MUSIC_FADE_TIME } from "shared/config/music";
 import { MAP_LOCATIONS } from "shared/config/map-locations";
+import { getDreamCloudEventRemote } from "shared/remotes/dream-cloud-remote";
 import { onPlayerInitialized } from "../modules/client-init";
 
 const TAG = "[MUSIC]";
+const DREAM_CLOUD_TRACK = {
+	name: "Dream Clouds",
+	soundId: "rbxassetid://124810894588434",
+	volume: 0.28,
+};
 
 function shuffleArray<T>(arr: T[]): T[] {
 	const out = [...arr];
@@ -49,11 +55,18 @@ function startMusicLoop(): void {
 	let index = 0;
 	let currentSound: Sound | undefined;
 	let currentTargetVolume = 0.3;
+	let playlistToken = 0;
+	let dreamCloudActive = false;
+	let dreamCloudSound: Sound | undefined;
 	let ducked = false;
 
 	// ── Ducking: lower music when near a map location with ambient sounds ──
 	const DUCK_MULTIPLIER = 0.1; // 10% of normal volume when ducked
 	const DUCK_TWEEN = new TweenInfo(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+	const getEffectiveVolume = (targetVolume: number): number => {
+		return ducked ? targetVolume * DUCK_MULTIPLIER : targetVolume;
+	};
 
 	// Pre-compute which map locations have sounds and their max rolloff
 	const soundLocations = MAP_LOCATIONS.filter((loc) => loc.sounds !== undefined && loc.sounds.size() > 0).map(
@@ -91,18 +104,21 @@ function startMusicLoop(): void {
 				}
 			}
 
+			const activeSound = dreamCloudSound ?? currentSound;
+			const activeTargetVolume = dreamCloudSound ? DREAM_CLOUD_TRACK.volume : currentTargetVolume;
+
 			if (nearAmbient && !ducked) {
 				ducked = true;
-				if (currentSound && currentSound.IsPlaying) {
-					TweenService.Create(currentSound, DUCK_TWEEN, {
-						Volume: currentTargetVolume * DUCK_MULTIPLIER,
+				if (activeSound && activeSound.IsPlaying) {
+					TweenService.Create(activeSound, DUCK_TWEEN, {
+						Volume: activeTargetVolume * DUCK_MULTIPLIER,
 					}).Play();
 				}
 			} else if (!nearAmbient && ducked) {
 				ducked = false;
-				if (currentSound && currentSound.IsPlaying) {
-					TweenService.Create(currentSound, DUCK_TWEEN, {
-						Volume: currentTargetVolume,
+				if (activeSound && activeSound.IsPlaying) {
+					TweenService.Create(activeSound, DUCK_TWEEN, {
+						Volume: activeTargetVolume,
 					}).Play();
 				}
 			}
@@ -110,6 +126,9 @@ function startMusicLoop(): void {
 	}
 
 	const playNext = (): void => {
+		if (dreamCloudActive) return;
+		playlistToken++;
+		const token = playlistToken;
 		const track = tracks[index % tracks.size()];
 		index++;
 
@@ -131,15 +150,48 @@ function startMusicLoop(): void {
 		}
 
 		// If currently ducked, fade in at the reduced volume
-		const startVolume = ducked ? targetVolume * DUCK_MULTIPLIER : targetVolume;
+		const startVolume = getEffectiveVolume(targetVolume);
 		fadeIn(sound, startVolume, MUSIC_FADE_TIME);
 		currentSound = sound;
 
 		// When the track ends, play the next one
 		sound.Ended.Once(() => {
-			playNext();
+			if (token === playlistToken && currentSound === sound && !dreamCloudActive) {
+				playNext();
+			}
 		});
 	};
+
+	const setDreamCloudMusic = (active: boolean): void => {
+		if (active === dreamCloudActive) return;
+		dreamCloudActive = active;
+		playlistToken++;
+
+		if (active) {
+			log(`${TAG} Dream Clouds override starting`);
+			const previousSound = currentSound;
+			currentSound = undefined;
+			if (previousSound) fadeOut(previousSound, MUSIC_FADE_TIME);
+
+			const sound = new Instance("Sound");
+			sound.Name = "Music_DreamClouds";
+			sound.SoundId = DREAM_CLOUD_TRACK.soundId;
+			sound.Looped = true;
+			sound.Parent = SoundService;
+			fadeIn(sound, getEffectiveVolume(DREAM_CLOUD_TRACK.volume), MUSIC_FADE_TIME);
+			dreamCloudSound = sound;
+		} else {
+			log(`${TAG} Dream Clouds override ending`);
+			const previousDreamSound = dreamCloudSound;
+			dreamCloudSound = undefined;
+			if (previousDreamSound) fadeOut(previousDreamSound, MUSIC_FADE_TIME);
+			playNext();
+		}
+	};
+
+	getDreamCloudEventRemote().OnClientEvent.Connect((active: unknown) => {
+		setDreamCloudMusic(active === true);
+	});
 
 	playNext();
 }

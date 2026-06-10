@@ -1,6 +1,8 @@
-import { CollectionService, Workspace } from "@rbxts/services";
+import { CollectionService, TweenService, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { clearBoardServerEvent, setBoardServerEvent } from "./board-event-bus";
+import { getOrCreateLifecycleRemote } from "shared/remotes/lifecycle-remote";
+import { getDreamCloudEventRemote } from "shared/remotes/dream-cloud-remote";
 
 interface BeamDefaults {
 	enabled: boolean;
@@ -43,6 +45,8 @@ const FIREFLY_MODEL_NAME = "FireFlys";
 const SCHEDULE_INTERVAL_SECS = 30 * 60;
 const SCHEDULED_EVENT_DURATION_SECS = 4 * 60;
 const BOARD_EVENT_KEY = "dream_clouds";
+const EFFECT_FADE_SECS = 2;
+const EFFECT_FADE_INFO = new TweenInfo(EFFECT_FADE_SECS, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut);
 const NORMAL_COLOR = new ColorSequence([
 	new ColorSequenceKeypoint(0, Color3.fromRGB(232, 237, 240)),
 	new ColorSequenceKeypoint(0.55, Color3.fromRGB(214, 226, 235)),
@@ -297,6 +301,18 @@ function restoreFire(fire: Fire, defaults: FireDefaults): void {
 	fire.Size = defaults.size;
 }
 
+function tweenLight(light: Light, color: Color3, brightness: number, range: number): void {
+	TweenService.Create(light, EFFECT_FADE_INFO, {
+		Color: color,
+		Brightness: brightness,
+	}).Play();
+	if (light.IsA("PointLight") || light.IsA("SpotLight") || light.IsA("SurfaceLight")) {
+		TweenService.Create(light, EFFECT_FADE_INFO, {
+			Range: range,
+		}).Play();
+	}
+}
+
 function applyCloudBeamState(isDreaming: boolean): number {
 	const beams = getCloudBeams();
 	if (beams.size() === 0) {
@@ -308,6 +324,54 @@ function applyCloudBeamState(isDreaming: boolean): number {
 		const defaults = rememberBeamDefaults(beam);
 		if (isDreaming) applyDreamBeam(beam, defaults);
 		else applyNormalBeam(beam, defaults);
+	}
+
+	return beams.size();
+}
+
+function transitionCloudBeamState(isDreaming: boolean): number {
+	const beams = getCloudBeams();
+	if (beams.size() === 0) {
+		warn("[CLOUDS] No Workspace Beam instances found under cloud-named models/folders.");
+		return 0;
+	}
+
+	for (const beam of beams) {
+		const defaults = rememberBeamDefaults(beam);
+		const baseSpeed = signedSpeed(defaults.textureSpeed, 0.18);
+		const normalLightInfluence = math.max(defaults.lightInfluence, 0.75);
+		const normalTargets = {
+			LightEmission: 0.04,
+			LightInfluence: normalLightInfluence,
+			TextureSpeed: baseSpeed * 0.045,
+			Width0: defaults.width0 * 0.72,
+			Width1: defaults.width1 * 0.72,
+		};
+
+		if (isDreaming) {
+			const speedSign = signedSpeed(defaults.textureSpeed, 1) < 0 ? -1 : 1;
+			const eventSpeed = math.max(math.abs(defaults.textureSpeed) * 0.35, 0.42) * speedSign;
+			beam.Enabled = true;
+			beam.Color = DREAM_COLOR;
+			beam.Transparency = DREAM_TRANSPARENCY;
+			beam.LightEmission = normalTargets.LightEmission;
+			beam.LightInfluence = normalTargets.LightInfluence;
+			beam.TextureSpeed = normalTargets.TextureSpeed;
+			beam.Width0 = normalTargets.Width0;
+			beam.Width1 = normalTargets.Width1;
+			TweenService.Create(beam, EFFECT_FADE_INFO, {
+				LightEmission: 0.24,
+				LightInfluence: 0.03,
+				TextureSpeed: eventSpeed,
+				Width0: defaults.width0 * 1.18,
+				Width1: defaults.width1 * 1.18,
+			}).Play();
+		} else {
+			TweenService.Create(beam, EFFECT_FADE_INFO, normalTargets).Play();
+			task.delay(EFFECT_FADE_SECS, () => {
+				if (beam.Parent !== undefined) applyNormalBeam(beam, defaults);
+			});
+		}
 	}
 
 	return beams.size();
@@ -359,12 +423,120 @@ function applyDreamEnvironmentState(isDreaming: boolean): { torches: number; fir
 	return { torches, fireflies };
 }
 
+function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number; fireflies: number } {
+	let torches = 0;
+	let fireflies = 0;
+
+	for (const descendant of Workspace.GetDescendants()) {
+		const inTorch = isInsideNamedAncestor(descendant, WALL_TORCH_NAME);
+		const inFireflies = isInsideNamedAncestor(descendant, FIREFLY_MODEL_NAME);
+		if (!inTorch && !inFireflies) continue;
+
+		if (descendant.IsA("Light")) {
+			const defaults = rememberLightDefaults(descendant);
+			descendant.Enabled = true;
+			if (isDreaming) {
+				if (inTorch) {
+					tweenLight(
+						descendant,
+						Color3.fromRGB(40, 82, 190),
+						math.max(defaults.brightness * 0.62, 0.75),
+						math.max(defaults.range, 14),
+					);
+				}
+				if (inFireflies) {
+					tweenLight(
+						descendant,
+						Color3.fromRGB(92, 180, 255),
+						math.max(defaults.brightness * 2.35, 1.45),
+						math.max(defaults.range * 1.35, 12),
+					);
+				}
+			} else {
+				tweenLight(descendant, defaults.color, defaults.brightness, defaults.range);
+				task.delay(EFFECT_FADE_SECS, () => {
+					if (descendant.Parent !== undefined) restoreLight(descendant, defaults);
+				});
+			}
+			if (inTorch) torches++;
+			if (inFireflies) fireflies++;
+			continue;
+		}
+
+		if (descendant.IsA("ParticleEmitter")) {
+			const defaults = rememberEmitterDefaults(descendant);
+			descendant.Enabled = true;
+			if (isDreaming) {
+				if (inTorch) {
+					descendant.Color = MOON_FLAME_COLOR;
+					TweenService.Create(descendant, EFFECT_FADE_INFO, {
+						Brightness: math.max(defaults.brightness * 0.8, 0.55),
+						Rate: math.max(defaults.rate * 0.75, 8),
+						LightEmission: 0.35,
+						LightInfluence: 0.12,
+					}).Play();
+				}
+				if (inFireflies) {
+					descendant.Color = FIREFLY_DREAM_COLOR;
+					TweenService.Create(descendant, EFFECT_FADE_INFO, {
+						Brightness: math.max(defaults.brightness * 2.1, 1.45),
+						Rate: math.max(defaults.rate * 2.5, 18),
+						LightEmission: 0.72,
+						LightInfluence: 0.02,
+					}).Play();
+				}
+			} else {
+				descendant.Color = defaults.color;
+				TweenService.Create(descendant, EFFECT_FADE_INFO, {
+					Brightness: defaults.brightness,
+					Rate: defaults.rate,
+					LightEmission: defaults.lightEmission,
+					LightInfluence: defaults.lightInfluence,
+				}).Play();
+				task.delay(EFFECT_FADE_SECS, () => {
+					if (descendant.Parent !== undefined) restoreEmitter(descendant, defaults);
+				});
+			}
+			if (inTorch) torches++;
+			if (inFireflies) fireflies++;
+			continue;
+		}
+
+		if (descendant.IsA("Fire") && inTorch) {
+			const defaults = rememberFireDefaults(descendant);
+			descendant.Enabled = true;
+			if (isDreaming) {
+				TweenService.Create(descendant, EFFECT_FADE_INFO, {
+					Color: Color3.fromRGB(28, 70, 190),
+					SecondaryColor: Color3.fromRGB(102, 156, 255),
+					Heat: defaults.heat * 0.65,
+					Size: math.max(defaults.size * 0.85, 2.5),
+				}).Play();
+			} else {
+				TweenService.Create(descendant, EFFECT_FADE_INFO, {
+					Color: defaults.color,
+					SecondaryColor: defaults.secondaryColor,
+					Heat: defaults.heat,
+					Size: defaults.size,
+				}).Play();
+				task.delay(EFFECT_FADE_SECS, () => {
+					if (descendant.Parent !== undefined) restoreFire(descendant, defaults);
+				});
+			}
+			torches++;
+		}
+	}
+
+	return { torches, fireflies };
+}
+
 export function startDreamCloudEvent(): string {
 	if (dreamCloudsActive) return "Dream cloud event already active";
 	dreamCloudsActive = true;
-	const beamCount = applyCloudBeamState(true);
-	const envCount = applyDreamEnvironmentState(true);
+	const beamCount = transitionCloudBeamState(true);
+	const envCount = transitionDreamEnvironmentState(true);
 	setBoardServerEvent(BOARD_EVENT_KEY, "Dream clouds are racing overhead.");
+	getDreamCloudEventRemote().FireAllClients(true);
 	return `Dream cloud event started (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
 }
 
@@ -372,9 +544,10 @@ export function stopDreamCloudEvent(): string {
 	if (!dreamCloudsActive) return "Dream cloud event is not active";
 	scheduledEventToken++;
 	dreamCloudsActive = false;
-	const beamCount = applyCloudBeamState(false);
-	const envCount = applyDreamEnvironmentState(false);
+	const beamCount = transitionCloudBeamState(false);
+	const envCount = transitionDreamEnvironmentState(false);
 	clearBoardServerEvent(BOARD_EVENT_KEY);
+	getDreamCloudEventRemote().FireAllClients(false);
 	return `Dream cloud event stopped (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
 }
 
@@ -429,8 +602,20 @@ function startDreamCloudScheduler(): void {
 export function initializeCloudEventSystem(): void {
 	if (initialized) return;
 	initialized = true;
+	getDreamCloudEventRemote();
 
 	const beamCount = applyCloudBeamState(false);
+
+	getOrCreateLifecycleRemote().OnServerEvent.Connect((player, message: unknown) => {
+		if (message === "ClientReady") {
+			getDreamCloudEventRemote().FireClient(player, dreamCloudsActive);
+			task.delay(1, () => {
+				if (player.Parent !== undefined) {
+					getDreamCloudEventRemote().FireClient(player, dreamCloudsActive);
+				}
+			});
+		}
+	});
 
 	Workspace.DescendantAdded.Connect((instance) => {
 		task.defer(() => {
