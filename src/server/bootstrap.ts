@@ -21,6 +21,7 @@ import { initializePremiumOfferHandler } from "./modules/premium-offer-handler";
 import { initializeNpcSpawner } from "./modules/npc-spawner";
 import { initializeTravelingMerchantSystem } from "./modules/traveling-merchant-handler";
 import { initializeAnalyticsTracker } from "./modules/analytics-tracker";
+import { initializeCloudEventSystem } from "./modules/cloud-event-handler";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -40,6 +41,7 @@ export async function bootstrapServer() {
 	initializeProductHandler();
 	initializeInventorySystem();
 	initializeEffectHandler();
+	initializeCloudEventSystem();
 	initializeTitleHandler();
 	initializeDialogHandler();
 	initializeMerchantSystem();

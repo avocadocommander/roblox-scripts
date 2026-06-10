@@ -1,9 +1,9 @@
 import { NPC } from "./npc/main";
-import { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "./config/npcs";
+import { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES } from "./config/npcs";
 
 // Re-export the canonical types and data from config/npcs
 export type { NPCDef, NPCRegistry } from "./config/npcs";
-export { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES } from "./config/npcs";
+export { NPC_REGISTRY, NPC_NAMES, ROUTABLE_NPC_NAMES } from "./config/npcs";
 
 // ── Backward-compatible aliases ───────────────────────────────────────────────
 // These let existing code keep compiling while it migrates to the new names.

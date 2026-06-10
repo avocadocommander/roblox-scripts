@@ -18,7 +18,7 @@ import { MEDIEVAL_NPCS } from "shared/module";
 import { hasNPCDialog, getNPCInteraction, NPC_REGISTRY } from "shared/config/npcs";
 import { pickRandom } from "shared/config/npc-shops";
 import { getMerchantShop, getMerchantShopType } from "./merchant-handler";
-import { factionForNPC } from "shared/config/factions";
+import { factionForNPC, FACTIONS } from "shared/config/factions";
 import { levelFromXP } from "shared/config/factions";
 import {
 	getOpenDialogRemote,
@@ -64,9 +64,13 @@ const lastQuipTime = new Map<Player, number>();
 
 function buildDialogPayload(npcName: string, player: Player): DialogPayload | undefined {
 	const def = NPC_REGISTRY[npcName];
-	// Dynamic merchant assignment takes precedence over static shop data
-	const merchantItems = getMerchantShop(npcName);
-	const shop = merchantItems !== undefined ? { shopItems: merchantItems } : def?.shop;
+	// TurnIn NPCs (guild leaders) must never be treated as merchants, even if a
+	// ShopSite in Studio accidentally has their name pinned via the NPCName attribute.
+	const isTurnInNPC = def?.interaction === "TurnIn";
+	// Dynamic merchant assignment takes precedence over static shop data,
+	// but only for non-TurnIn NPCs.
+	const merchantItems = isTurnInNPC ? undefined : getMerchantShop(npcName);
+	const shop = merchantItems !== undefined ? { shopItems: merchantItems } : isTurnInNPC ? undefined : def?.shop;
 	const dlg = def?.dialog;
 	const hasShop = shop !== undefined;
 	const isMerchant = merchantItems !== undefined;
@@ -304,28 +308,31 @@ export function initializeDialogHandler(): void {
 	turnInRemote.OnServerInvoke = (player: Player): unknown => {
 		const currentNPC = activeDialog.get(player);
 		if (currentNPC === undefined) {
-			return { success: false, totalGold: 0, totalXP: 0, count: 0 };
+			return { success: false, totalGold: 0, totalXP: 0, count: 0, factionId: undefined, guildName: undefined };
 		}
 		// Verify the NPC is actually a TurnIn type
 		const npcInteraction = getNPCInteraction(currentNPC);
 		if (npcInteraction !== "TurnIn") {
 			log("[DIALOG] " + player.Name + " tried to turn in at non-TurnIn NPC " + currentNPC, "WARN");
-			return { success: false, totalGold: 0, totalXP: 0, count: 0 };
+			return { success: false, totalGold: 0, totalXP: 0, count: 0, factionId: undefined, guildName: undefined };
 		}
 
-		// Determine which faction this NPC belongs to
+		// Determine which faction this NPC belongs to (Bertram = Dawn, Thorne = Night)
 		const faction = factionForNPC(currentNPC);
+		const guildName = faction !== undefined ? FACTIONS[faction].name : undefined;
 
 		const result = turnInBountyScrolls(player);
 		if (result.count > 0) {
-			// Award gold, XP, score
+			// Award gold and score
 			addCoins(player, result.totalGold);
-			addExperience(player, result.totalXP);
 			addScore(player, result.totalGold);
 
-			// Credit faction XP
+			// Award guild XP (this also derives and updates overall experience).
+			// If the NPC somehow has no faction, fall back to general XP.
 			if (faction !== undefined) {
 				addFactionXP(player, faction, result.totalXP);
+			} else {
+				addExperience(player, result.totalXP);
 			}
 
 			// One ScrollTurnedIn event per turn-in batch (not per scroll) keeps
@@ -343,11 +350,13 @@ export function initializeDialogHandler(): void {
 					factionTag +
 					" for " +
 					result.totalGold +
-					"g",
+					"g + " +
+					result.totalXP +
+					" guild xp",
 			);
 		}
 
-		return { success: true, ...result };
+		return { success: true, ...result, factionId: faction, guildName };
 	};
 
 	// Player closes dialog

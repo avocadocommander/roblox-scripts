@@ -1,7 +1,7 @@
 import { CollectionService, Workspace } from "@rbxts/services";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
-import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, FIXED_ROUTE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
+import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getConfigFromRoute } from "shared/npc-manager";
 import { getReservedMerchantNames } from "./merchant-handler";
@@ -242,6 +242,7 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 		}
 
 		npc.model.PivotTo(new CFrame(spawnPosition));
+		npc.model.SetAttribute("RouteName", npcRoute.Name);
 
 		assignNpcToRoute(npc, routePoints, routeConfig, setState);
 
@@ -293,6 +294,7 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		}
 
 		npc.model.PivotTo(new CFrame(spawnPosition));
+		npc.model.SetAttribute("RouteName", npcRoute.Name);
 
 		assignNpcToRoute(npc, routePoints, routeConfig, setState);
 
@@ -331,32 +333,36 @@ export function initializeNpcSpawner(): void {
 	print("[NPC-SPAWNER] Initial spawn started");
 	const assigned = spawnAssignments;
 	const npcRoutes = getNPCRoutes();
-	const routesByName = new Map<string, Folder>();
+	const reservedMerchants = getReservedMerchantNames();
+
+	// ── Phase 1: Spawn pinned NPCs first (Route folder has an NPCName attribute)
+	// This replaces the old fixedRouteId lookup. Any Route folder with an NPCName
+	// attribute will spawn exactly that NPC regardless of folder name.
+	const pinnedRoutes: Folder[] = [];
+	const routableRoutes: Folder[] = [];
 	for (const route of npcRoutes) {
-		routesByName.set(route.Name, route);
+		const pinned = route.GetAttribute("NPCName") as string | undefined;
+		if (pinned !== undefined && pinned !== "") pinnedRoutes.push(route);
+		else routableRoutes.push(route);
 	}
 
-	// ── Phase 1: Spawn fixed-route NPCs first
-	const reservedMerchants = getReservedMerchantNames();
-	for (const npcName of FIXED_ROUTE_NPC_NAMES) {
-		const def = NPC_REGISTRY[npcName];
-		if (!def || !def.fixedRouteId) continue;
-		if (reservedMerchants.has(npcName)) {
-			log(`[NPC-SPAWNER] Skipping fixed route for ${npcName} -- pinned to a merchant shop`);
+	for (const route of pinnedRoutes) {
+		const npcName = route.GetAttribute("NPCName") as string;
+		if (!NPC_REGISTRY[npcName]) {
+			log(`[NPC-SPAWNER] Pinned NPCName "${npcName}" on route ${route.Name} not in registry`, "WARN");
 			continue;
 		}
-		const route = routesByName.get(def.fixedRouteId);
-		if (!route) {
-			log(`[NPC-SPAWNER] Fixed route "${def.fixedRouteId}" not found for NPC ${npcName}`, "WARN");
+		if (reservedMerchants.has(npcName)) {
+			log(`[NPC-SPAWNER] Skipping pinned route for ${npcName} -- claimed by merchant shop`);
 			continue;
 		}
 		spawnFixedRouteNPC(npcName, route, assigned, true);
 	}
 
 	// ── Phase 2: Spawn random routable NPCs on remaining routes
-	//          Typed routes (SocialClass attribute set) first, untyped after,
+	//          Typed routes (SocialClass/Race attribute set) first, untyped after,
 	//          so a typed route can't be starved by an untyped pick.
-	const remainingRoutes = npcRoutes.filter((r) => !assigned.has(r.Name));
+	const remainingRoutes = routableRoutes.filter((r) => !assigned.has(r.Name));
 	const typedRoutes: Folder[] = [];
 	const untypedRoutes: Folder[] = [];
 	for (const r of remainingRoutes) {
@@ -371,7 +377,7 @@ export function initializeNpcSpawner(): void {
 		);
 	}
 	print(
-		`[NPC-SPAWNER] Routes: ${npcRoutes.size()} (${assigned.size()} fixed, ${typedRoutes.size()} typed, ${untypedRoutes.size()} any) | Routable NPCs: ${ROUTABLE_NPC_NAMES.size()}`,
+		`[NPC-SPAWNER] Routes: ${npcRoutes.size()} (${assigned.size()} pinned, ${typedRoutes.size()} typed, ${untypedRoutes.size()} any) | Routable NPCs: ${ROUTABLE_NPC_NAMES.size()}`,
 	);
 
 	const spawnFn = (npcRoute: Folder) => {

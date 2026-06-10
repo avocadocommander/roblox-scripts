@@ -34,7 +34,7 @@ import {
 	isExplicitOnlyShopType,
 } from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
-import { getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
+import { SHOP_OFFER_SLOTS, getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
@@ -52,6 +52,19 @@ const reservedNames = new Set<string>();
  *  synchronously at init so npc-spawner skips their fixed routes before the
  *  full merchant placement (which is deferred) runs. */
 const pinnedNames = new Set<string>();
+/** Generated premium offer displays by ShopSite, so respawns don't duplicate them. */
+const spawnedOfferModelsBySite = new Map<Model, Model[]>();
+
+const SHOP_OFFER_IDS: ReadonlySet<string> = (() => {
+	const ids = new Set<string>();
+	for (const [, offerIds] of pairs(SHOP_OFFER_SLOTS)) {
+		for (const offerId of offerIds) ids.add(offerId);
+	}
+	return ids;
+})();
+
+const OFFER_SLOT_FAR_WARNING_DISTANCE_FROM_SIGN = 36;
+const GENERATED_OFFERS_FOLDER_NAME = "GeneratedOffers";
 
 // ── Fallback route config (used when a Route folder has no Configuration child) ──
 
@@ -203,7 +216,7 @@ function applySignText(signPart: BasePart, shopType: ShopType, npcName: string):
  * Searches CollectionService tags, exact name matches, Sign models,
  * and case-insensitive fallbacks. Returns all unique matches.
  */
-function resolveSignParts(shopSite: Model): BasePart[] {
+function resolveSignParts(shopSite: Model, routeOrigin?: Vector3): BasePart[] {
 	const found = new Set<BasePart>();
 
 	// 1. CollectionService "Sign" tag on descendant BaseParts
@@ -238,6 +251,10 @@ function resolveSignParts(shopSite: Model): BasePart[] {
 
 	const results: BasePart[] = [];
 	found.forEach((part) => results.push(part));
+	if (routeOrigin !== undefined && results.size() > 1) {
+		results.sort((a, b) => a.Position.sub(routeOrigin).Magnitude < b.Position.sub(routeOrigin).Magnitude);
+		return [results[0]];
+	}
 	return results;
 }
 
@@ -248,33 +265,166 @@ function resolveSignParts(shopSite: Model): BasePart[] {
  * model for each, stamped with the matching `offerId` attribute.
  * The client picks these up via the existing premium-offer proximity system.
  */
-function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
+function clearSpawnedOfferSlots(shopSite: Model): void {
+	const existing = spawnedOfferModelsBySite.get(shopSite);
+	if (!existing) return;
+
+	for (const model of existing) {
+		if (model.Parent) model.Destroy();
+	}
+	spawnedOfferModelsBySite.delete(shopSite);
+}
+
+function isInsideGeneratedOffer(inst: Instance): boolean {
+	let ancestor = inst.Parent;
+	while (ancestor !== undefined) {
+		if (ancestor.IsA("Model") && ancestor.GetAttribute("GeneratedMerchantOffer") === true) return true;
+		ancestor = ancestor.Parent;
+	}
+	return false;
+}
+
+function cleanupLegacyShopOfferObjects(): void {
+	const doomed = new Set<Instance>();
+
+	for (const inst of Workspace.GetDescendants()) {
+		const offerId = inst.GetAttribute("offerId") as string | undefined;
+		if (offerId === undefined || !SHOP_OFFER_IDS.has(offerId)) continue;
+		if (inst.GetAttribute("GeneratedMerchantOffer") === true || isInsideGeneratedOffer(inst)) continue;
+
+		if (inst.IsA("Model")) {
+			doomed.add(inst);
+		} else {
+			const model = inst.FindFirstAncestorOfClass("Model");
+			if (model && model.GetAttribute("offerId") === offerId) {
+				doomed.add(model);
+			} else {
+				doomed.add(inst);
+			}
+		}
+	}
+
+	for (const inst of doomed) {
+		log("[MERCHANT] Removing legacy static shop offer object: " + inst.GetFullName());
+		inst.Destroy();
+	}
+}
+
+function cleanupGeneratedMerchantOfferObjects(): void {
+	for (const inst of Workspace.GetDescendants()) {
+		if (inst.IsA("Model") && inst.GetAttribute("GeneratedMerchantOffer") === true) {
+			log("[MERCHANT] Removing stale generated shop offer object: " + inst.GetFullName());
+			inst.Destroy();
+		}
+	}
+	spawnedOfferModelsBySite.clear();
+}
+
+function resolveOfferSearchRoot(shopSite: Model): Instance {
+	const shopContainer = shopSite.FindFirstChild("Shop");
+	return shopContainer ?? shopSite;
+}
+
+function getOrCreateGeneratedOffersFolder(offerSearchRoot: Instance): Folder {
+	let folder = offerSearchRoot.FindFirstChild(GENERATED_OFFERS_FOLDER_NAME) as Folder | undefined;
+	if (!folder || !folder.IsA("Folder")) {
+		folder = new Instance("Folder");
+		folder.Name = GENERATED_OFFERS_FOLDER_NAME;
+		folder.Parent = offerSearchRoot;
+	}
+	return folder;
+}
+
+function isInsideGeneratedOfferContainer(inst: Instance): boolean {
+	let ancestor = inst.Parent;
+	while (ancestor !== undefined) {
+		if (ancestor.Name === GENERATED_OFFERS_FOLDER_NAME) return true;
+		if (ancestor.IsA("Model") && ancestor.GetAttribute("GeneratedMerchantOffer") === true) return true;
+		ancestor = ancestor.Parent;
+	}
+	return false;
+}
+
+function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: Vector3): void {
+	clearSpawnedOfferSlots(shopSite);
+
 	const offerIds = getOfferSlotsForShopType(shopType);
 	if (offerIds.size() === 0) return;
+	const offerSearchRoot = resolveOfferSearchRoot(shopSite);
+	const generatedOffersFolder = getOrCreateGeneratedOffersFolder(offerSearchRoot);
 
 	// Collect slot positions: Models, BaseParts, or Attachments whose name
 	// starts with "offerslot" (case-insensitive). This accepts "OfferSlot",
 	// "OfferSlot1", "OfferSlot_Main", an OfferSlot Model wrapper, etc.
-	const slots: { position: Vector3 }[] = [];
+	const slots: { position: Vector3; fullName: string }[] = [];
 
-	for (const desc of shopSite.GetDescendants()) {
-		const nameLower = (desc.Name as string).lower();
-		if (!nameLower.sub(1, 9).match("offerslot")[0]) continue;
+	function isOfferSlotName(inst: Instance): boolean {
+		return (inst.Name as string).lower().sub(1, 9).match("offerslot")[0] !== undefined;
+	}
+
+	function firstOfferSlotAttachment(root: Instance): Attachment | undefined {
+		for (const child of root.GetDescendants()) {
+			if (child.IsA("Attachment") && isOfferSlotName(child)) return child;
+		}
+		return undefined;
+	}
+
+	function hasOfferSlotAncestor(inst: Instance): boolean {
+		let ancestor = inst.Parent;
+		while (ancestor !== undefined && ancestor !== shopSite) {
+			if ((ancestor.IsA("Model") || ancestor.IsA("BasePart")) && isOfferSlotName(ancestor)) return true;
+			ancestor = ancestor.Parent;
+		}
+		return false;
+	}
+
+	function resolveOfferSlotPosition(slot: Instance): Vector3 | undefined {
+		if (slot.IsA("Attachment")) return slot.WorldPosition;
+
+		// In the authored map, OfferSlot parts/models often contain a child
+		// Attachment also named OfferSlot. That attachment is the designer's
+		// exact placement point; the parent part/model may be offset or at an
+		// authored origin, which created stray premium offer displays.
+		const attachment = firstOfferSlotAttachment(slot);
+		if (attachment) return attachment.WorldPosition;
+
+		if (slot.IsA("BasePart")) return slot.Position;
+
+		if (slot.IsA("Model")) {
+			const primary = slot.PrimaryPart;
+			if (primary) return primary.Position;
+
+			const part = slot.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined;
+			if (part) return part.Position;
+		}
+
+		return undefined;
+	}
+
+	for (const desc of offerSearchRoot.GetDescendants()) {
+		if (isInsideGeneratedOfferContainer(desc)) continue;
+		if (!isOfferSlotName(desc)) continue;
 		if (desc.IsA("Model")) {
-			// Use the model's pivot for placement. Skip any inner Attachment so
-			// we don't double-count the same slot.
-			slots.push({ position: desc.GetPivot().Position });
+			// Resolve from actual geometry/attachments. An empty Model's pivot
+			// defaults to world origin, which would create a stray rotating offer.
+			const position = resolveOfferSlotPosition(desc);
+			if (position) {
+				slots.push({ position, fullName: desc.GetFullName() });
+			} else {
+				log("[MERCHANT] OfferSlot model has no BasePart/Attachment: " + desc.GetFullName(), "WARN");
+			}
 		} else if (desc.IsA("Attachment")) {
-			// Only count attachments inside a BasePart -- if they're inside an
-			// OfferSlot Model we already counted that model above.
-			if (
-				desc.Parent?.IsA("BasePart") &&
-				!desc.FindFirstAncestorOfClass("Model")?.Name.lower().sub(1, 9).match("offerslot")[0]
-			) {
-				slots.push({ position: desc.WorldPosition });
+			// If this attachment lives under an OfferSlot part/model, that parent
+			// already resolves to the attachment's WorldPosition. Don't double-count it.
+			if (desc.Parent?.IsA("BasePart") && !hasOfferSlotAncestor(desc)) {
+				slots.push({ position: desc.WorldPosition, fullName: desc.GetFullName() });
 			}
 		} else if (desc.IsA("BasePart")) {
-			slots.push({ position: desc.Position });
+			// Skip BaseParts inside an OfferSlot Model -- already counted by the model wrapper.
+			if (!hasOfferSlotAncestor(desc)) {
+				const position = resolveOfferSlotPosition(desc);
+				if (position) slots.push({ position, fullName: desc.GetFullName() });
+			}
 		}
 	}
 
@@ -293,8 +443,66 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 		return;
 	}
 
+	slots.sort((a, b) => {
+		return a.position.sub(placementOrigin).Magnitude < b.position.sub(placementOrigin).Magnitude;
+	});
+
+	// Log detected slot positions so designers can verify placement.
+	for (let si = 0; si < slots.size(); si++) {
+		const sp = slots[si].position;
+		const posStr = tostring(math.floor(sp.X)) + "," + tostring(math.floor(sp.Y)) + "," + tostring(math.floor(sp.Z));
+		const dist = math.floor(sp.sub(placementOrigin).Magnitude);
+		log(
+			"[MERCHANT] " +
+				shopSite.Name +
+				" OfferSlot[" +
+				si +
+				"] at pos=" +
+				posStr +
+				" dist=" +
+				dist +
+				" " +
+				slots[si].fullName,
+		);
+	}
+
+	const nearestDist = slots[0].position.sub(placementOrigin).Magnitude;
+	if (nearestDist > OFFER_SLOT_FAR_WARNING_DISTANCE_FROM_SIGN) {
+		log(
+			"[MERCHANT] OfferSlot for " +
+				shopSite.Name +
+				" (" +
+				shopType +
+				") is " +
+				tostring(math.floor(nearestDist * 10) / 10) +
+				" studs from selected sign/origin; using it anyway because it belongs to this shop: " +
+				slots[0].fullName,
+			"WARN",
+		);
+	}
+
+	// Warn if more offers are configured than there are physical slots.
+	if (offerIds.size() > slots.size()) {
+		const lost = offerIds.size() - slots.size();
+		log(
+			"[MERCHANT] OPPORTUNITY LOST: " +
+				shopSite.Name +
+				" has " +
+				slots.size() +
+				" slot(s) but " +
+				offerIds.size() +
+				" offer(s) for '" +
+				shopType +
+				"' -- " +
+				lost +
+				" will not display.",
+			"WARN",
+		);
+	}
+
 	// Fill slots with offer IDs (1-to-1; extra slots stay empty)
 	const count = math.min(slots.size(), offerIds.size());
+	const spawnedModels: Model[] = [];
 	for (let i = 0; i < count; i++) {
 		const offerId = offerIds[i];
 		const offer = getPremiumOffer(offerId);
@@ -338,9 +546,16 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 
 			if (displayClone) {
 				displayClone.Parent = model;
-				// Strip anything that would make this look or act like an NPC.
+				displayClone.SetAttribute("offerId", undefined);
+				displayClone.SetAttribute("inspectId", undefined);
+				// Strip anything that would make this look or act like an NPC,
+				// or that could fight against manual repositioning (welds, constraints).
+				// Accessories have AccessoryWeld/WeldConstraint on the Handle which must
+				// be removed or the part may resist CFrame changes when placed in workspace.
 				// Display models must be inert visuals only.
 				for (const inst of displayClone.GetDescendants()) {
+					inst.SetAttribute("offerId", undefined);
+					inst.SetAttribute("inspectId", undefined);
 					if (
 						inst.IsA("Humanoid") ||
 						inst.IsA("Script") ||
@@ -348,7 +563,11 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 						inst.IsA("ModuleScript") ||
 						inst.IsA("Tool") ||
 						inst.IsA("ProximityPrompt") ||
-						inst.IsA("ClickDetector")
+						inst.IsA("ClickDetector") ||
+						inst.IsA("WeldConstraint") ||
+						inst.IsA("Weld") ||
+						inst.IsA("Motor6D") ||
+						inst.IsA("Motor")
 					) {
 						inst.Destroy();
 					}
@@ -384,20 +603,27 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 		// Position the display clone at the slot: translate every BasePart so
 		// the model's bounding-box center lands exactly at slot.position. This
 		// ignores any (possibly wrong) authored WorldPivot/PrimaryPart on the
-		// source model.
+		// source model. Use visible parts for the center, since imported display
+		// models sometimes carry an invisible root part back at their authored
+		// Workspace position.
 		if (displayClone) {
 			const parts: BasePart[] = [];
+			const visibleParts: BasePart[] = [];
 			for (const desc of displayClone.GetDescendants()) {
-				if (desc.IsA("BasePart")) parts.push(desc);
+				if (desc.IsA("BasePart")) {
+					parts.push(desc);
+					if (desc.Transparency < 0.98) visibleParts.push(desc);
+				}
 			}
-			if (parts.size() > 0) {
+			const centerParts = visibleParts.size() > 0 ? visibleParts : parts;
+			if (centerParts.size() > 0) {
 				let minX = math.huge,
 					minY = math.huge,
 					minZ = math.huge;
 				let maxX = -math.huge,
 					maxY = -math.huge,
 					maxZ = -math.huge;
-				for (const p of parts) {
+				for (const p of centerParts) {
 					const c = p.Position;
 					if (c.X < minX) minX = c.X;
 					if (c.Y < minY) minY = c.Y;
@@ -415,7 +641,14 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 		}
 
 		model.SetAttribute("offerId", offerId);
-		model.Parent = Workspace;
+		model.SetAttribute("GeneratedMerchantOffer", true);
+		model.SetAttribute("ShopSite", shopSite.GetFullName());
+		model.SetAttribute("OfferSlotPosition", slot.position);
+		model.SetAttribute("OfferSlotSource", slot.fullName);
+		model.SetAttribute("OfferHasDisplayModel", displayClone !== undefined);
+		model.SetAttribute("OfferVisualReady", true);
+		model.Parent = generatedOffersFolder;
+		spawnedModels.push(model);
 
 		log(
 			"[MERCHANT] Spawned offer slot '" +
@@ -433,6 +666,9 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType): void {
 				"," +
 				tostring(math.floor(slot.position.Z)),
 		);
+	}
+	if (spawnedModels.size() > 0) {
+		spawnedOfferModelsBySite.set(shopSite, spawnedModels);
 	}
 }
 
@@ -466,6 +702,8 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Place NPC at the first route point
 	npc.model.PivotTo(new CFrame(routePoints[0].Position));
+	npc.model.SetAttribute("RouteName", routeFolder.Name);
+	npc.model.SetAttribute("ShopSite", shopSite.GetFullName());
 
 	// Tag model so the client can detect this is a shop NPC
 	npc.model.SetAttribute("Interaction", "Shop");
@@ -480,13 +718,14 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Apply sign from the same ShopSite
 	// Apply sign to all sign parts in the ShopSite
-	const signParts = resolveSignParts(shopSite);
+	const signParts = resolveSignParts(shopSite, routePoints[0].Position);
 	for (const signPart of signParts) {
 		applySignText(signPart, shopType, npcName);
 	}
+	const offerPlacementOrigin = signParts[0]?.Position ?? routePoints[0].Position;
 
 	// Spawn premium offer display items at OfferSlot attachments
-	spawnOfferSlots(shopSite, shopType);
+	spawnOfferSlots(shopSite, shopType, offerPlacementOrigin);
 
 	log("[MERCHANT] " + npcName + " placed as merchant at " + shopSite.Name);
 
@@ -539,13 +778,40 @@ export function getReservedMerchantNames(): Set<string> {
 	return combined;
 }
 
+const VALID_SHOP_TYPES: ReadonlySet<string> = new Set<string>([
+	"weapon",
+	"elixir",
+	"poison",
+	"rare",
+	"tavern",
+	"black_market",
+]);
+
+function hasDirectRoutesFolder(model: Model): boolean {
+	return model.FindFirstChild("Routes")?.IsA("Folder") === true;
+}
+
+function readShopTypeAttribute(site: Model): ShopType | undefined {
+	const raw = site.GetAttribute("ShopType") as string | undefined;
+	if (raw === undefined || raw === "") return undefined;
+	if (VALID_SHOP_TYPES.has(raw)) return raw as ShopType;
+
+	log("[MERCHANT] Ignoring invalid ShopType '" + raw + "' on " + site.Name + ".", "WARN");
+	return undefined;
+}
+
 function runMerchantInit(): void {
+	cleanupGeneratedMerchantOfferObjects();
+	cleanupLegacyShopOfferObjects();
+
 	// Collect shop sites: tagged "MerchantShop" + any Model named "Shop"
-	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => inst.IsA("Model"));
+	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => {
+		return inst.IsA("Model") && hasDirectRoutesFolder(inst);
+	});
 
 	const byName: Model[] = [];
 	for (const inst of game.GetService("Workspace").GetDescendants()) {
-		if (inst.IsA("Model") && inst.Name === "Shop") {
+		if (inst.IsA("Model") && inst.Name === "Shop" && hasDirectRoutesFolder(inst)) {
 			byName.push(inst);
 		}
 	}
@@ -587,6 +853,8 @@ function runMerchantInit(): void {
 		else unpinnedSites.push(site);
 	}
 
+	const assignedShopTypes = new Set<ShopType>();
+
 	for (const site of pinnedSites) {
 		const npcName = site.GetAttribute("NPCName") as string;
 		if (!NPC_REGISTRY[npcName]) {
@@ -598,7 +866,7 @@ function runMerchantInit(): void {
 			continue;
 		}
 
-		const attrType = site.GetAttribute("ShopType") as string | undefined;
+		const attrType = readShopTypeAttribute(site);
 		const npcDef = NPC_REGISTRY[npcName];
 
 		// NPC-level shop overrides the ShopType pool. Use "rare" as the recorded
@@ -628,52 +896,57 @@ function runMerchantInit(): void {
 		}
 
 		spawnMerchant(npcName, site, pinnedItems, pinnedType);
+		assignedShopTypes.add(pinnedType);
 	}
 
 	// ── Assign shop types ────────────────────────────────────────────────────
 	// Shuffle sites so type assignments are random each session
-	const shuffled = [...unpinnedSites];
-	for (let i = shuffled.size() - 1; i > 0; i--) {
-		const j = math.random(0, i);
-		const tmp = shuffled[i];
-		shuffled[i] = shuffled[j];
-		shuffled[j] = tmp;
+	const explicitSites: { site: Model; shopType: ShopType }[] = [];
+	const autoSites: Model[] = [];
+	for (const site of unpinnedSites) {
+		const attrType = readShopTypeAttribute(site);
+		if (attrType !== undefined) {
+			explicitSites.push({ site, shopType: attrType });
+		} else {
+			autoSites.push(site);
+		}
 	}
 
-	// Build the type-assignment list: required types first, then random extras.
-	// Explicit-only shop types (e.g. black_market) are excluded here — they must
-	// be placed via a ShopType attribute on the world model.
-	const typeAssignments: ShopType[] = [...REQUIRED_SHOP_TYPES];
-	const allTypes: ShopType[] = (
+	function shuffle<T>(items: T[]): void {
+		for (let i = items.size() - 1; i > 0; i--) {
+			const j = math.random(0, i);
+			const tmp = items[i];
+			items[i] = items[j];
+			items[j] = tmp;
+		}
+	}
+
+	shuffle(explicitSites);
+	shuffle(autoSites);
+
+	// Auto-assigned extras exclude explicit-only shop types. Required types are
+	// filled below after explicitly typed shops have been counted.
+	const allAutoTypes: ShopType[] = (
 		["weapon", "elixir", "poison", "rare", "tavern", "black_market"] as ShopType[]
 	).filter((t) => isExplicitOnlyShopType(t) === false);
-	for (let i = typeAssignments.size(); i < shuffled.size(); i++) {
-		typeAssignments.push(allTypes[math.random(0, allTypes.size() - 1)]);
-	}
 
 	// ── Build available NPC pool (skip any already reserved) ────────────────
 	const availablePool = MERCHANT_NPC_POOL.filter((name) => !reservedNames.has(name));
 
 	// ── Assign NPC + shop type to each ShopSite ───────────────────────────────
 	let poolIndex = 0;
-	for (let i = 0; i < shuffled.size(); i++) {
-		const shopSite = shuffled[i];
-		const shopType = typeAssignments[i] as ShopType;
+
+	function spawnDynamicMerchant(shopSite: Model, resolvedType: ShopType, sourceLabel: string): boolean {
 
 		if (poolIndex >= availablePool.size()) {
-			log("[MERCHANT] Ran out of NPC pool entries -- " + (shuffled.size() - i) + " shop(s) left unassigned.");
-			break;
+			log("[MERCHANT] Ran out of NPC pool entries -- cannot place " + shopSite.Name + ".", "WARN");
+			return false;
 		}
 
 		const npcName = availablePool[poolIndex];
 		poolIndex++;
 
-		// ShopType attribute on the ShopSite model overrides the auto-assigned type.
-		// Explicit-only types (e.g. black_market) MUST come from the attribute —
-		// if one somehow ended up in auto-assignment, fall back to a safe default.
-		const attrType = shopSite.GetAttribute("ShopType") as string | undefined;
-		let resolvedType: ShopType = (attrType as ShopType) ?? shopType;
-		if (attrType === undefined && isExplicitOnlyShopType(resolvedType)) {
+		if (sourceLabel === "auto-assigned" && isExplicitOnlyShopType(resolvedType)) {
 			log(
 				"[MERCHANT] Refused to auto-assign explicit-only ShopType '" +
 					resolvedType +
@@ -685,23 +958,45 @@ function runMerchantInit(): void {
 			resolvedType = "rare";
 		}
 
-		log(
-			"[MERCHANT] Site " +
-				shopSite.Name +
-				" -> type '" +
-				resolvedType +
-				"'" +
-				(attrType !== undefined ? " (from attribute)" : " (auto-assigned)"),
-		);
+		log("[MERCHANT] Site " + shopSite.Name + " -> type '" + resolvedType + "' (" + sourceLabel + ")");
 
 		const shopItems = buildShopInventory(resolvedType);
 		if (!shopItems || shopItems.size() === 0) {
 			log("[MERCHANT] Empty/unknown ShopType '" + resolvedType + "' on site " + shopSite.Name, "WARN");
 			poolIndex--;
-			continue;
+			return false;
 		}
 
 		spawnMerchant(npcName, shopSite, shopItems, resolvedType);
+		assignedShopTypes.add(resolvedType);
+		return true;
+	}
+
+	for (const entry of explicitSites) {
+		spawnDynamicMerchant(entry.site, entry.shopType, "from attribute");
+	}
+
+	const missingRequiredTypes = REQUIRED_SHOP_TYPES.filter((shopType) => !assignedShopTypes.has(shopType));
+	if (missingRequiredTypes.size() > autoSites.size()) {
+		log(
+			"[MERCHANT] Cannot guarantee required shop mix: missing " +
+				missingRequiredTypes.size() +
+				" required type(s) but only " +
+				autoSites.size() +
+				" auto-assignable shop site(s).",
+			"WARN",
+		);
+	}
+
+	const autoAssignments: ShopType[] = [...missingRequiredTypes];
+	for (let i = autoAssignments.size(); i < autoSites.size(); i++) {
+		autoAssignments.push(allAutoTypes[math.random(0, allAutoTypes.size() - 1)]);
+	}
+
+	for (let i = 0; i < autoSites.size(); i++) {
+		const shopType = autoAssignments[i];
+		if (shopType === undefined) break;
+		spawnDynamicMerchant(autoSites[i], shopType, "auto-assigned");
 	}
 
 	log("[MERCHANT] Initialized " + merchantShops.size() + " merchants across " + shopSites.size() + " shop site(s).");
@@ -713,10 +1008,12 @@ function runMerchantInit(): void {
  * Must run before initializeNpcSpawner so pinned NPCs don't double-spawn.
  */
 function reservePinnedMerchantNames(): void {
-	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => inst.IsA("Model"));
+	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => {
+		return inst.IsA("Model") && hasDirectRoutesFolder(inst);
+	});
 	const byName: Model[] = [];
 	for (const inst of Workspace.GetDescendants()) {
-		if (inst.IsA("Model") && inst.Name === "Shop") byName.push(inst);
+		if (inst.IsA("Model") && inst.Name === "Shop" && hasDirectRoutesFolder(inst)) byName.push(inst);
 	}
 	const seen = new Set<Model>();
 	for (const m of [...tagged, ...byName]) {

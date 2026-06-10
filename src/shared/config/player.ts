@@ -7,8 +7,6 @@
  * To adjust starting stats, economy, or limits — edit the values below.
  */
 
-import { FIXED_ROUTE_NPC_NAMES } from "./npcs";
-
 // ── Starting stats ────────────────────────────────────────────────────────────
 
 /** Gold the player starts with on first join. */

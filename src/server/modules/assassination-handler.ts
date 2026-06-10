@@ -230,7 +230,6 @@ function initializeAssassinationHandler() {
 			addBountyScrollFromKill(player, npcName, npcStat, scrollGold, scrollXP);
 			addScore(player, BASE_SCORE + personalBounty.gold);
 			trackEvent(player, ANALYTICS_EVENTS.ScrollCollected);
-			awardAchievement(player, "FIRST_CONTRACT");
 			// Only a legal bounty kill produces a scroll -- award the onboarding
 			// achievement here so the tutorial's "turn in" step is always
 			// reachable (illegal kills don't grant scrolls).

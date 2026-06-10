@@ -15,6 +15,7 @@ import { clearPlayerCampfire } from "./campfire-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
 import { startTravelingMerchantEvent, stopTravelingMerchantEvent } from "./traveling-merchant-handler";
+import { startDreamCloudEvent, stopDreamCloudEvent, toggleDreamCloudEvent } from "./cloud-event-handler";
 
 const adminRemote = getAdminCommandRemote();
 
@@ -119,6 +120,18 @@ export function initializeAdminHandler(): void {
 		if (command === "stopTravelingMerchant") {
 			stopTravelingMerchantEvent();
 			return "Traveling merchant event stopped";
+		}
+
+		if (command === "toggleDreamClouds") {
+			return toggleDreamCloudEvent();
+		}
+
+		if (command === "startDreamClouds") {
+			return startDreamCloudEvent();
+		}
+
+		if (command === "stopDreamClouds") {
+			return stopDreamCloudEvent();
 		}
 
 		if (command === "resetSpawn") {

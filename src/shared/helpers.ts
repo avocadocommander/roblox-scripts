@@ -1,4 +1,36 @@
+import { Workspace } from "@rbxts/services";
 import { Assignment } from "./module";
+
+export const NPC_FOLDER_NAME = "NPCs";
+
+export function getOrCreateWorkspaceFolder(name: string): Folder {
+	let folder = Workspace.FindFirstChild(name) as Folder | undefined;
+	if (!folder || !folder.IsA("Folder")) {
+		folder = new Instance("Folder");
+		folder.Name = name;
+		folder.Parent = Workspace;
+	}
+	return folder;
+}
+
+export function getNPCFolder(): Folder {
+	return getOrCreateWorkspaceFolder(NPC_FOLDER_NAME);
+}
+
+export function findWorkspaceModelByName(modelName: string): Model | undefined {
+	const direct = Workspace.FindFirstChild(modelName);
+	if (direct?.IsA("Model")) return direct;
+
+	const npcFolder = Workspace.FindFirstChild(NPC_FOLDER_NAME);
+	const npcModel = npcFolder?.FindFirstChild(modelName);
+	if (npcModel?.IsA("Model")) return npcModel;
+
+	for (const descendant of Workspace.GetDescendants()) {
+		if (descendant.IsA("Model") && descendant.Name === modelName) return descendant;
+	}
+
+	return undefined;
+}
 
 export function isArray(value: unknown): boolean {
 	if (typeOf(value) === "table") {

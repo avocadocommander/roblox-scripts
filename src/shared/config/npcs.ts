@@ -79,7 +79,6 @@ export interface NPCDef {
 	occupation: string;
 	interaction: Interaction;
 	killable: boolean;
-	fixedRouteId: string | undefined;
 	dialog: NPCDialogDef | undefined;
 	shop: NPCShopDef | undefined;
 	/**
@@ -110,7 +109,6 @@ function std(
 		occupation: occupation ?? socialClass,
 		interaction: interaction ?? "Ambient",
 		killable: true,
-		fixedRouteId: undefined,
 		dialog: undefined,
 		shop: undefined,
 	};
@@ -137,7 +135,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Bertram de Mere": {
 		...std("Bertram de Mere", "M", "Human", "Nobility", "Guildmaster"),
 		interaction: "TurnIn",
-		fixedRouteId: "Templar",
 		killable: false,
 		dialog: {
 			greetings: [
@@ -161,7 +158,6 @@ export const NPC_REGISTRY: NPCRegistry = {
 	"Thorne Æshgrave": {
 		...std("Thorne Æshgrave", "M", "Human", "Serf", "Guildmaster"),
 		interaction: "TurnIn",
-		fixedRouteId: "Thorne",
 		killable: false,
 		clothing: ["LightAssassinHood", "coat"],
 		dialog: {
@@ -427,14 +423,13 @@ function registryKeys(): string[] {
 /** Ordered list of all NPC names (mirrors the old MEDIEVAL_NPC_NAMES). */
 export const NPC_NAMES = registryKeys();
 
-/** All NPCs that can be randomly assigned to routes (killable, no fixed route, ambient-only). */
+/** All NPCs that can be randomly assigned to routes (killable, ambient-only). */
 export const ROUTABLE_NPC_NAMES = NPC_NAMES.filter((n) => {
 	const def = NPC_REGISTRY[n];
-	return def.killable && def.fixedRouteId === undefined && def.interaction === "Ambient";
+	// Exclude non-killable special NPCs (guild leaders, etc.) and any with a
+	// non-ambient interaction — they must be pinned via NPCName on a Route folder.
+	return def.killable && def.interaction === "Ambient";
 });
-
-/** All NPCs with a fixed route assignment. */
-export const FIXED_ROUTE_NPC_NAMES = NPC_NAMES.filter((n) => NPC_REGISTRY[n].fixedRouteId !== undefined);
 
 /** Returns true if `npcName` is killable (can be assassinated). */
 export function isNPCKillable(npcName: string): boolean {

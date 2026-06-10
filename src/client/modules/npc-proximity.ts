@@ -8,7 +8,7 @@ import { getInspectDef } from "shared/config/inspectables";
 import { TITLES } from "shared/config/titles";
 import { getTitleSyncRemote, getAllTitlesRemote } from "shared/remotes/title-remote";
 import { requestOpenDialog, requestOpenInspect, requestOpenPremiumOffer, isDialogOpen } from "./npc-dialog";
-import { getPremiumOffer } from "shared/config/premium-offers";
+import { SHOP_OFFER_SLOTS, getPremiumOffer } from "shared/config/premium-offers";
 import { getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
 import { pulseActionButton, pulseKillButton } from "./ui-toggles";
 import { setAssassinInRange } from "./tutorial-ui-pulse";
@@ -466,6 +466,42 @@ interface PremiumOfferUI {
 
 const premiumOfferUIMap = new Map<Model, PremiumOfferUI>();
 
+const SHOP_OFFER_IDS: ReadonlySet<string> = (() => {
+	const ids = new Set<string>();
+	for (const [, offerIds] of pairs(SHOP_OFFER_SLOTS)) {
+		for (const offerId of offerIds) ids.add(offerId);
+	}
+	return ids;
+})();
+
+function isNestedInsideGeneratedOffer(inst: Instance): boolean {
+	let ancestor = inst.Parent;
+	while (ancestor !== undefined) {
+		if (ancestor.IsA("Model") && ancestor.GetAttribute("GeneratedMerchantOffer") === true) {
+			return ancestor !== inst;
+		}
+		ancestor = ancestor.Parent;
+	}
+	return false;
+}
+
+function isAllowedOfferInstance(inst: Instance): boolean {
+	const offerId = inst.GetAttribute("offerId") as string | undefined;
+	if (offerId === undefined) return false;
+	if (!SHOP_OFFER_IDS.has(offerId)) return true;
+	return inst.IsA("Model") && inst.GetAttribute("GeneratedMerchantOffer") === true;
+}
+
+function findGeneratedOfferAnchor(model: Model): BasePart | undefined {
+	const directAnchor = model.FindFirstChild("Anchor");
+	if (directAnchor && directAnchor.IsA("BasePart")) return directAnchor;
+
+	const primary = model.PrimaryPart;
+	if (primary && primary.IsA("BasePart")) return primary;
+
+	return undefined;
+}
+
 // ── Client-side owned Game Pass tracking ────────────────────────────────────────
 const ownedPassIds = new Set<number>();
 
@@ -636,6 +672,26 @@ function createPremiumOfferPrompt(billboard: BillboardGui, model: Model): TextBu
 function setupPremiumOfferProximity(model: Model): void {
 	if (premiumOfferUIMap.has(model)) return;
 
+	const isGeneratedMerchantOffer = model.GetAttribute("GeneratedMerchantOffer") === true;
+	const anchorPart = isGeneratedMerchantOffer
+		? findGeneratedOfferAnchor(model)
+		: (model.PrimaryPart as BasePart | undefined);
+	const allParts = model.GetDescendants().filter((d): d is BasePart => d.IsA("BasePart"));
+	const displayParts = anchorPart ? allParts.filter((part) => part !== anchorPart) : allParts;
+	const visibleDisplayParts = displayParts.filter((part) => part.Transparency < 0.98);
+
+	// Generated merchant offers are assembled on the server, then replicated to
+	// the client. Sometimes the Model/attributes arrive a frame before its
+	// Anchor or display parts. If we initialize in that half-replicated state,
+	// the bob/rotate loop can lock onto the model origin. Just retry next scan.
+	if (isGeneratedMerchantOffer) {
+		const ready = model.GetAttribute("OfferVisualReady") === true;
+		const hasDisplayModel = model.GetAttribute("OfferHasDisplayModel") === true;
+		if (!ready || !anchorPart) return;
+		if (hasDisplayModel && visibleDisplayParts.size() === 0) return;
+		model.PrimaryPart = anchorPart;
+	}
+
 	const billboard = createPremiumOfferBillboard(model);
 	const nameLabel = billboard.FindFirstChild("TextLabel") as TextLabel;
 
@@ -646,20 +702,66 @@ function setupPremiumOfferProximity(model: Model): void {
 	});
 
 	// ── Ambient visual effects: bob, rotate, glow ───────────────────────
-	const pivot = model.GetPivot();
-
 	// Anchor every part so physics doesn't interfere
-	const allParts = model.GetDescendants().filter((d): d is BasePart => d.IsA("BasePart"));
 	for (const part of allParts) {
 		part.Anchored = true;
 	}
 
-	// Pick the largest visible part as the glow host so effects attach to the mesh
-	// rather than a tiny joint helper / invisible bbox part.
-	let glowHost: BasePart | undefined = model.PrimaryPart as BasePart | undefined;
-	if (!glowHost) {
+	// The server-created anchor Part is the PrimaryPart and sits exactly at
+	// the slot pivot. The billboard must track this Part directly (not the
+	// rotating model) so it never orbits. Reparent and use world-space offset.
+	if (anchorPart) {
+		const authoredSlotPosition = model.GetAttribute("OfferSlotPosition") as Vector3 | undefined;
+		if (authoredSlotPosition !== undefined) {
+			anchorPart.CFrame = new CFrame(authoredSlotPosition);
+		}
+
+		if (visibleDisplayParts.size() > 0) {
+			let minX = math.huge,
+				minY = math.huge,
+				minZ = math.huge;
+			let maxX = -math.huge,
+				maxY = -math.huge,
+				maxZ = -math.huge;
+
+			for (const part of visibleDisplayParts) {
+				const position = part.Position;
+				if (position.X < minX) minX = position.X;
+				if (position.Y < minY) minY = position.Y;
+				if (position.Z < minZ) minZ = position.Z;
+				if (position.X > maxX) maxX = position.X;
+				if (position.Y > maxY) maxY = position.Y;
+				if (position.Z > maxZ) maxZ = position.Z;
+			}
+
+			const visibleCenter = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+			const correction = anchorPart.Position.sub(visibleCenter);
+			if (correction.Magnitude > 0.05) {
+				for (const part of displayParts) {
+					part.CFrame = part.CFrame.add(correction);
+				}
+				if (correction.Magnitude > 8) {
+					warn(
+						"[PREMIUM] Recentered offer display '" +
+							model.Name +
+							"' by " +
+							math.floor(correction.Magnitude) +
+							" studs to match its server OfferSlot anchor.",
+					);
+				}
+			}
+		}
+
+		billboard.Parent = anchorPart;
+	}
+
+	// Glow host: prefer the largest VISIBLE (non-transparent) part so
+	// sparkles and lights sit on the display mesh, not the invisible anchor.
+	let glowHost: BasePart | undefined;
+	{
 		let bestVolume = -1;
 		for (const part of allParts) {
+			if (part.Transparency >= 0.99) continue; // skip invisible anchor
 			const v = part.Size.X * part.Size.Y * part.Size.Z;
 			if (v > bestVolume) {
 				bestVolume = v;
@@ -667,8 +769,12 @@ function setupPremiumOfferProximity(model: Model): void {
 			}
 		}
 	}
-	// Some offer "models" are marker-only (no BaseParts inside) — create an
-	// invisible anchor at the model's pivot so effects still appear at the spot.
+	// Fall back to the anchor if no visible parts exist (display-model-less offers)
+	if (!glowHost) {
+		glowHost = anchorPart;
+	}
+	// Last resort: create an invisible anchor at the model's pivot so effects
+	// still appear at the slot if the model has no parts at all.
 	if (!glowHost) {
 		const anchor = new Instance("Part");
 		anchor.Name = "OfferEffectsHost";
@@ -807,6 +913,8 @@ function setupPremiumOfferProximity(model: Model): void {
 
 	// Continuous bob + rotate via Heartbeat
 	let elapsed = 0;
+	const baseAnchorCF = anchorPart ? anchorPart.CFrame : undefined;
+	const baseModelPivot = model.GetPivot();
 	RunService.Heartbeat.Connect((dt) => {
 		if (!model.Parent) return;
 		elapsed += dt;
@@ -817,8 +925,16 @@ function setupPremiumOfferProximity(model: Model): void {
 		// Rotate: one full revolution every 8 seconds
 		const angle = (elapsed / 8) * math.pi * 2;
 
-		const newCF = pivot.mul(CFrame.Angles(0, angle, 0)).add(new Vector3(0, bobOffset, 0));
-		model.PivotTo(newCF);
+		if (anchorPart && baseAnchorCF) {
+			const newCF = baseAnchorCF.mul(CFrame.Angles(0, angle, 0)).add(new Vector3(0, bobOffset, 0));
+			const delta = newCF.mul(anchorPart.CFrame.Inverse());
+			for (const part of allParts) {
+				if (part.Parent) part.CFrame = delta.mul(part.CFrame);
+			}
+		} else {
+			const newCF = baseModelPivot.mul(CFrame.Angles(0, angle, 0)).add(new Vector3(0, bobOffset, 0));
+			model.PivotTo(newCF);
+		}
 	});
 }
 
@@ -1050,6 +1166,8 @@ function updateNPCProximityUI() {
 		const offerSet = new Set<Model>();
 		for (const inst of Workspace.GetDescendants()) {
 			if (inst.GetAttribute("offerId") === undefined) continue;
+			if (isNestedInsideGeneratedOffer(inst)) continue;
+			if (!isAllowedOfferInstance(inst)) continue;
 			if (inst.IsA("Model")) {
 				offerSet.add(inst);
 				continue;

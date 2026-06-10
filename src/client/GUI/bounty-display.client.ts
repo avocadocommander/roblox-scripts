@@ -1,4 +1,4 @@
-import { Players, TweenService, UserInputService, Workspace } from "@rbxts/services";
+import { Players, RunService, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import {
 	getBountyAssignedRemote,
@@ -37,15 +37,96 @@ let cardHeaderLabel: TextLabel | undefined;
 let contractBody: Frame | undefined;
 let guidanceBody: Frame | undefined;
 
+// Tutorial-glow refs — pulsed during guidance mode
+let missionCard: Frame | undefined;
+let cardStrokeRef: UIStroke | undefined;
+let guidancePulseThread: thread | undefined;
+let isGuidancePulseActive = false;
+let stepPulseElapsed = 0;
+
+// Guidance-mode refs — declared here so the Heartbeat closure below captures
+// them as Lua upvalues (not globals). Must be above the Heartbeat.Connect call.
+let guidanceObjectiveLabel: TextLabel | undefined;
+let guidanceFooterLabel: TextLabel | undefined;
+
+const GLOW_COLOR = Color3.fromRGB(245, 200, 70);
+const DIM_COLOR = Color3.fromRGB(195, 182, 158); // UI_THEME.textPrimary
+const GLOW_CYCLE = 1.4; // seconds for one full pulse
+
+// Single always-running Heartbeat for the step-counter text pulse.
+// Using a persistent connection (rather than connect/disconnect per mode change)
+// avoids all race conditions with task.spawn and avoids missed connections.
+RunService.Heartbeat.Connect((dt) => {
+	if (!isGuidancePulseActive || guidanceFooterLabel === undefined) return;
+	stepPulseElapsed += dt;
+	// t oscillates 0 -> 1 -> 0 once per GLOW_CYCLE. At 1: bright gold, fully opaque.
+	const t = (math.sin((stepPulseElapsed / GLOW_CYCLE) * math.pi * 2 - math.pi / 2) + 1) / 2;
+	guidanceFooterLabel.TextColor3 = DIM_COLOR.Lerp(GLOW_COLOR, t);
+	guidanceFooterLabel.TextTransparency = 0.55 * (1 - t); // 0.55 at dim, 0 at peak
+});
+
+function startGuidancePulse(): void {
+	if (guidancePulseThread !== undefined) return;
+	if (!missionCard || !cardStrokeRef) return;
+	isGuidancePulseActive = true;
+	stepPulseElapsed = 0;
+	guidancePulseThread = task.spawn(() => {
+		while (guidancePulseThread !== undefined) {
+			// Fade card stroke to gold
+			TweenService.Create(
+				cardStrokeRef!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ Color: GLOW_COLOR, Thickness: sc(2.5), Transparency: 0 },
+			).Play();
+			TweenService.Create(
+				missionCard!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ BackgroundTransparency: 0.15 },
+			).Play();
+			task.wait(GLOW_CYCLE / 2);
+			if (guidancePulseThread === undefined) break;
+			// Fade back to normal
+			TweenService.Create(
+				cardStrokeRef!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ Color: UI_THEME.border, Thickness: UI_THEME.strokeThickness, Transparency: 0 },
+			).Play();
+			TweenService.Create(
+				missionCard!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ BackgroundTransparency: UI_THEME.bgTransparency },
+			).Play();
+			task.wait(GLOW_CYCLE / 2);
+		}
+	});
+}
+
+function stopGuidancePulse(): void {
+	if (guidancePulseThread === undefined) return;
+	isGuidancePulseActive = false;
+	guidancePulseThread = undefined;
+	if (!missionCard || !cardStrokeRef) return;
+	TweenService.Create(cardStrokeRef, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
+		Color: UI_THEME.border,
+		Thickness: UI_THEME.strokeThickness,
+		Transparency: 0,
+	}).Play();
+	TweenService.Create(missionCard, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
+		BackgroundTransparency: UI_THEME.bgTransparency,
+	}).Play();
+	if (guidanceFooterLabel) {
+		TweenService.Create(guidanceFooterLabel, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
+			TextColor3: UI_THEME.textMuted,
+			TextTransparency: 0,
+		}).Play();
+	}
+}
+
 // Contract-mode refs (filled when contract body is built)
 let markNameLabel: TextLabel | undefined;
 let markClassLabel: TextLabel | undefined;
 let markGoldLabel: TextLabel | undefined;
 let markOffenceLabel: TextLabel | undefined;
-
-// Guidance-mode refs
-let guidanceObjectiveLabel: TextLabel | undefined;
-let guidanceFooterLabel: TextLabel | undefined;
 
 // Message stack (rising FIFO above card)
 let messageStackContainer: Frame | undefined;
@@ -158,6 +239,8 @@ function buildMissionCard(wrapper: Frame): void {
 	cardStroke.Color = UI_THEME.border;
 	cardStroke.Thickness = UI_THEME.strokeThickness;
 	cardStroke.Parent = card;
+	missionCard = card;
+	cardStrokeRef = cardStroke;
 
 	const cardPad = new Instance("UIPadding");
 	cardPad.PaddingTop = new UDim(0, sc(10));
@@ -307,9 +390,10 @@ function buildGuidanceBody(card: Frame): Frame {
 	guidanceFooterLabel.Size = new UDim2(1, 0, 0, sc(16));
 	guidanceFooterLabel.BackgroundTransparency = 1;
 	guidanceFooterLabel.Text = "";
-	guidanceFooterLabel.TextColor3 = UI_THEME.textMuted;
+	guidanceFooterLabel.TextColor3 = UI_THEME.textPrimary;
+	guidanceFooterLabel.TextTransparency = 0.5;
 	guidanceFooterLabel.Font = UI_THEME.fontBold;
-	guidanceFooterLabel.TextSize = sc(12);
+	guidanceFooterLabel.TextSize = sc(13);
 	guidanceFooterLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	guidanceFooterLabel.Parent = body;
 
@@ -544,6 +628,7 @@ function clearNPCBounty(): void {
 
 function renderBody(content: BoardBodyContent): void {
 	if (content.mode === "contract") {
+		stopGuidancePulse();
 		if (cardHeaderLabel) {
 			cardHeaderLabel.Text = "YOUR MARK";
 			cardHeaderLabel.TextColor3 = UI_THEME.textSection;
@@ -553,6 +638,7 @@ function renderBody(content: BoardBodyContent): void {
 		renderContractBody(latestBounty);
 		return;
 	}
+	startGuidancePulse();
 
 	// Guidance mode
 	const showBountyCard = content.step.showBountyCard === true;

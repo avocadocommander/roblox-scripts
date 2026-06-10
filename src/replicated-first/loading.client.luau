@@ -19,7 +19,7 @@
 --     (a) game:IsLoaded() -- world assets have replicated
 --     (b) LocalPlayer:GetAttribute("ClientInitialized") == true -- our own
 --         client bootstrap finished (set by src/client/modules/client-init.ts)
---     (c) LOADING_MIN_DURATION_SECONDS have elapsed since this script started
+--     (c) LOADING_MIN_DURATION_SECONDS have elapsed since the UI is visible
 --
 
 local Players = game:GetService("Players")
@@ -31,7 +31,7 @@ print("[LOADING] Loading screen script started")
 
 -- ── Tunables ─────────────────────────────────────────────────────────────────
 
-local LOADING_MIN_DURATION_SECONDS = 7
+local LOADING_MIN_DURATION_SECONDS = 10
 local LOADING_FADE_OUT_SECONDS = 0.6
 
 -- ── Background images ───────────────────────────────────────────────────────
@@ -78,8 +78,6 @@ local LOADING_TIPS: { string } = {
 pcall(function()
 	ReplicatedFirst:RemoveDefaultLoadingScreen()
 end)
-
-local startTime = tick()
 
 -- ── 1. Resolve LocalPlayer ───────────────────────────────────────────────────
 -- ReplicatedFirst scripts can wake up before Players.LocalPlayer is assigned.
@@ -172,6 +170,8 @@ tipLabel.TextStrokeTransparency = 0.4
 tipLabel.Text = tipText
 tipLabel.Parent = root
 
+RunService.RenderStepped:Wait()
+local visibleStartTime = tick()
 print("[LOADING] UI built")
 
 -- ── 3. Wait for all dismiss conditions ───────────────────────────────────────
@@ -190,7 +190,7 @@ end
 print("[LOADING] ClientInitialized")
 
 -- (c) Minimum on-screen time.
-local elapsed = tick() - startTime
+local elapsed = tick() - visibleStartTime
 if elapsed < LOADING_MIN_DURATION_SECONDS then
 	task.wait(LOADING_MIN_DURATION_SECONDS - elapsed)
 end

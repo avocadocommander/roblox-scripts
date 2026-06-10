@@ -106,63 +106,63 @@ export const SIGN_COLORS: Record<ShopType, SignColorScheme> = {
 // The template chosen for a merchant is deterministic (same NPC always gets the same one).
 
 const WEAPON_TEMPLATES: string[] = [
+	"$surname Forge",
+	"$first's Ironworks",
+	"The Anvil & Blade",
+	"$surname Steel",
 	"$first's Armory",
-	"$surname Arms",
-	"The $surname Forge",
-	"$initials Steel",
-	"$first's Blades",
-	"$surname Weaponry",
-	"The $first Bladesmith",
+	"The Tempered Edge",
+	"$surname Hammerhall",
 ];
 
 const ELIXIR_TEMPLATES: string[] = [
-	"$first's Elixirs",
-	"$surname Brews",
-	"The $surname Alembic",
-	"$initials Tonic",
-	"$first's Potions",
-	"$surname Draught House",
-	"The $first Tinctures",
+	"$first's Apothecary",
+	"The Silver Alembic",
+	"$surname Tonics",
+	"$first's Draughts",
+	"The Moonlit Flask",
+	"$surname Remedies",
+	"The Green Glass",
 ];
 
 const POISON_TEMPLATES: string[] = [
-	"$first's Vials",
-	"$surname Toxins",
-	"The $surname Apothecary",
-	"$initials Venoms",
-	"$first's Dark Wares",
-	"$surname Poisons",
-	"The $first Venom Works",
+	"$surname Venoms",
+	"The Black Vial",
+	"$first's Quiet Work",
+	"$surname Nightshade",
+	"The Bitter Drop",
+	"$first's Toxins",
+	"The Wilted Herb",
 ];
 
 const RARE_TEMPLATES: string[] = [
-	"$first's Rarities",
-	"$surname Curiosities",
-	"The $surname Cache",
-	"$initials Rare Goods",
 	"$first's Curios",
-	"$surname Emporium",
-	"The $first Collection",
+	"The $surname Cabinet",
+	"$surname Relics",
+	"The Odd Shelf",
+	"$first's Keepsakes",
+	"The Gilded Cache",
+	"$surname Rare Goods",
 ];
 
 const TAVERN_TEMPLATES: string[] = [
-	"The $surname Flagon",
-	"$first's Tavern",
-	"The $surname Arms",
+	"The $surname Hearth",
 	"$first's Alehouse",
-	"The $surname Cask",
-	"$initials Taproom",
-	"The Rusty $surname",
+	"The Copper Cask",
+	"The Warm Flagon",
+	"$surname Taproom",
+	"The Hearth & Barrel",
+	"$first's Rest",
 ];
 
 const BLACK_MARKET_TEMPLATES: string[] = [
-	"$first's Back Door",
 	"The $surname Cellar",
-	"$initials Shadow Goods",
-	"$first's Hidden Stock",
-	"The $surname Underbelly",
 	"$first's Quiet Trade",
-	"The $surname Black Market",
+	"The Back Room",
+	"$surname Shadow Goods",
+	"The Locked Crate",
+	"$first's Hidden Stock",
+	"The Unmarked Stall",
 ];
 
 const TEMPLATES: Record<ShopType, string[]> = {

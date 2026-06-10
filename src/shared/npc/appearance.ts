@@ -149,9 +149,43 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
 
-	// Accessory or Hat: humanoid can equip directly.
-	if (template.IsA("Accessory") || template.IsA("Hat")) {
-		const accessory = template.Clone() as Accessory;
+	function sanitizeAccessoryClone(accessory: Accessory): void {
+		function weldTouchesOutsideAccessory(part0: BasePart | undefined, part1: BasePart | undefined): boolean {
+			return (
+				part0 === undefined ||
+				part1 === undefined ||
+				!part0.IsDescendantOf(accessory) ||
+				!part1.IsDescendantOf(accessory)
+			);
+		}
+
+		for (const desc of accessory.GetDescendants()) {
+			if (desc.IsA("BasePart")) {
+				desc.Anchored = false;
+				desc.CanCollide = false;
+				desc.CanTouch = false;
+				desc.CanQuery = false;
+				desc.Massless = true;
+			} else if (desc.IsA("Weld") && (desc.Name === "AccessoryWeld" || weldTouchesOutsideAccessory(desc.Part0, desc.Part1))) {
+				desc.Destroy();
+			} else if (desc.IsA("WeldConstraint") && weldTouchesOutsideAccessory(desc.Part0, desc.Part1)) {
+				desc.Destroy();
+			} else if (
+				desc.IsA("Motor") &&
+				(desc.Name === "AccessoryWeld" || weldTouchesOutsideAccessory(desc.Part0, desc.Part1))
+			) {
+				desc.Destroy();
+			} else if (
+				desc.IsA("Motor6D") &&
+				(desc.Name === "AccessoryWeld" || weldTouchesOutsideAccessory(desc.Part0, desc.Part1))
+			) {
+				desc.Destroy();
+			}
+		}
+	}
+
+	function equipAccessory(accessory: Accessory, logLabel: string): void {
+		sanitizeAccessoryClone(accessory);
 		if (humanoid) {
 			const [ok] = pcall(() => humanoid.AddAccessory(accessory));
 			if (!ok) {
@@ -161,7 +195,13 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 		} else {
 			accessory.Parent = npc;
 		}
-		log("[APPEARANCE] Attached accessory: " + accessoryName);
+		log(logLabel + accessoryName);
+	}
+
+	// Accessory or Hat: humanoid can equip directly.
+	if (template.IsA("Accessory") || template.IsA("Hat")) {
+		const accessory = template.Clone() as Accessory;
+		equipAccessory(accessory, "[APPEARANCE] Attached accessory: ");
 		return;
 	}
 
@@ -172,13 +212,7 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 			.find((d) => d.IsA("Accessory") || d.IsA("Hat")) as Accessory | undefined;
 		if (inner) {
 			const accessory = inner.Clone() as Accessory;
-			if (humanoid) {
-				const [ok] = pcall(() => humanoid.AddAccessory(accessory));
-				if (!ok) accessory.Parent = npc;
-			} else {
-				accessory.Parent = npc;
-			}
-			log("[APPEARANCE] Attached accessory from Model wrapper: " + accessoryName);
+			equipAccessory(accessory, "[APPEARANCE] Attached accessory from Model wrapper: ");
 			return;
 		}
 
@@ -192,13 +226,7 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 			const handleClone = handle.Clone();
 			handleClone.Name = "Handle";
 			handleClone.Parent = accessory;
-			if (humanoid) {
-				const [ok] = pcall(() => humanoid.AddAccessory(accessory));
-				if (!ok) accessory.Parent = npc;
-			} else {
-				accessory.Parent = npc;
-			}
-			log("[APPEARANCE] Attached accessory from Model+Handle: " + accessoryName);
+			equipAccessory(accessory, "[APPEARANCE] Attached accessory from Model+Handle: ");
 			return;
 		}
 	}

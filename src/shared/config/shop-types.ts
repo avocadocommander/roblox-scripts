@@ -183,12 +183,9 @@ export const MERCHANT_NPC_POOL: string[] = [
 	"Lyra Goldmead",
 	"Garrick Hallowmere",
 	"Rowena Brambleholt",
-	"Thessaly Nywen",
 	"Merek de Lowenford",
 	"Geoffrey Saltmarsh",
 	"Baldric Stonhelm",
 	"Edda Barleyroot",
 	"Aldon Brightforge",
-	"Thalindra Emberglen",
-	"Vaelion Greenmantle",
 ];

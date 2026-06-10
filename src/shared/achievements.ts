@@ -125,14 +125,6 @@ export const ACHIEVEMENTS: Record<string, AchievementDef> = {
 		sortOrder: 99,
 		reward: { titleId: "night_owl" },
 	},
-	FIRST_CONTRACT: {
-		id: "FIRST_CONTRACT",
-		title: "First Contract",
-		description: "A marked target yields reward. Contracts define purpose.",
-		icon: "C",
-		category: "combat",
-		sortOrder: 10,
-	},
 	A_COSTLY_MISTAKE: {
 		id: "A_COSTLY_MISTAKE",
 		title: "A Costly Mistake",

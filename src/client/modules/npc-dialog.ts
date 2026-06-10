@@ -21,7 +21,7 @@ import { RARITY_COLORS, RARITY_LABELS, RARITY_BG_COLORS } from "shared/inventory
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { MEDIEVAL_NPCS } from "shared/module";
 import { getNPCDisplay } from "shared/npc-display";
-import { formatDuration } from "shared/helpers";
+import { findWorkspaceModelByName, formatDuration } from "shared/helpers";
 import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
 import { spawnFloatingText } from "./npc-floating-text";
 import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
@@ -997,7 +997,7 @@ function setupHeadshot(npcName: string): void {
 	if (headshotViewport === undefined) return;
 	clearHeadshot();
 
-	const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
+	const npcModel = findWorkspaceModelByName(npcName);
 	if (!npcModel) return;
 
 	const clone = npcModel.Clone();
@@ -1265,13 +1265,24 @@ function handleTurnIn(): void {
 			totalGold: number;
 			totalXP: number;
 			count: number;
+			factionId: string | undefined;
+			guildName: string | undefined;
 		};
 
 		if (!dialogTextLabel || !currentPayload) return;
 
 		if (result && result.success && result.count > 0) {
-			dialogTextLabel.Text =
-				'"' + result.count + " bounties turned in. " + result.totalGold + "g and " + result.totalXP + ' XP."';
+			const guildPart = result.guildName !== undefined ? " " + result.guildName + " XP." : " XP.";
+			const feedback =
+				'"' +
+				result.count +
+				" bounties turned in. +" +
+				result.totalGold +
+				"g  +" +
+				result.totalXP +
+				guildPart +
+				'"';
+			dialogTextLabel.Text = feedback;
 			currentPayload.pendingBounties = 0;
 			// Refresh the options so the button updates
 			showMainOptions();
@@ -1421,7 +1432,7 @@ function openInspectDialog(payload: InspectPayload): void {
 	currentChatIndex = 0;
 
 	// Find the actual model in world for distance check + viewport render
-	inspectModelRef = Workspace.FindFirstChild(payload.modelName) as Model | undefined;
+	inspectModelRef = findWorkspaceModelByName(payload.modelName);
 
 	startInspectDistanceCheck();
 	setupInspectViewport(payload.modelName);
@@ -1469,7 +1480,7 @@ function setupInspectViewport(modelName: string): void {
 	if (headshotViewport === undefined) return;
 	clearHeadshot();
 
-	const worldModel = Workspace.FindFirstChild(modelName) as Model | undefined;
+	const worldModel = findWorkspaceModelByName(modelName);
 	if (!worldModel) return;
 
 	const clone = worldModel.Clone();

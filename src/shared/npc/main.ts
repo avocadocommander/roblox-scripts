@@ -1,5 +1,5 @@
-import { ReplicatedStorage, Workspace } from "@rbxts/services";
-import { log } from "../helpers";
+import { ReplicatedStorage } from "@rbxts/services";
+import { getNPCFolder, log } from "../helpers";
 import { NPCData, Race, useAssetId } from "../module";
 import { RouteConfig } from "../npc-manager";
 import { getHumanoidPace, assignNpcToRoute, navigate } from "./movement";
@@ -29,7 +29,7 @@ export function createNPCModelAndGenerateHumanoid(
 	modelClone.Name = name;
 	modelClone.SetAttribute("NPCName", name);
 	modelClone.SetAttribute("Killable", isNPCKillable(name));
-	modelClone.Parent = Workspace;
+	modelClone.Parent = getNPCFolder();
 
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;

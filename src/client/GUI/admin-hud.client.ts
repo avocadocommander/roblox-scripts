@@ -140,10 +140,22 @@ function getDropdowns(): DropdownDef[] {
 						showFeedback("Turned in bounty scroll");
 					},
 				},
+			],
+		},
+		{
+			id: "events",
+			label: "Events",
+			color: Color3.fromRGB(90, 170, 220),
+			buttons: [
 				{
 					label: "Trigger Special Event",
 					color: Color3.fromRGB(200, 140, 60),
 					action: () => runCommand("triggerSpecialEvent", "Royal Decree: A Special Event Has Begun"),
+				},
+				{
+					label: "Dream Clouds Toggle",
+					color: Color3.fromRGB(105, 185, 235),
+					action: () => runCommand("toggleDreamClouds"),
 				},
 				{
 					label: "Start Traveling Merchant",

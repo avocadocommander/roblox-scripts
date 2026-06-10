@@ -224,6 +224,7 @@ function spawnNPCForCart(cart: Model): ShopItem[] {
 
 	// Place the NPC at the first route waypoint.
 	npc.model.PivotTo(new CFrame(routePoints[0].Position));
+	npc.model.SetAttribute("RouteName", routeFolder.Name);
 	npc.model.SetAttribute("Interaction", "Shop");
 	// Traveling merchants cannot be assassinated.
 	npc.model.SetAttribute("Killable", false);

@@ -1,5 +1,5 @@
 import { Players, SoundService, TweenService, Workspace } from "@rbxts/services";
-import { log } from "shared/helpers";
+import { findWorkspaceModelByName, log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
 import { trackBountyAssigned, trackEvent } from "./analytics-tracker";
 import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
@@ -89,9 +89,11 @@ const wantedPlayers = new Map<Player, { gold: number; reason: string }>();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getRouteForNPC(npcName: string): string | undefined {
-	// Search Workspace for the NPC model by name
-	const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
+	const npcModel = findWorkspaceModelByName(npcName);
 	if (!npcModel) return undefined;
+
+	const routeName = npcModel.GetAttribute("RouteName") as string | undefined;
+	if (routeName !== undefined && routeName !== "") return routeName;
 
 	// Find the parent route folder (tagged with "Route" or in NPCRoutes)
 	let parent = npcModel.Parent;

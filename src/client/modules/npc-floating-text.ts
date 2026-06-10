@@ -8,6 +8,7 @@
  */
 
 import { Workspace, TweenService, RunService } from "@rbxts/services";
+import { findWorkspaceModelByName } from "shared/helpers";
 import { UI_THEME, scaleUI } from "shared/ui-theme";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ const activeFloaters = new Map<string, number>(); // npcName -> count
  * with sine-wave horizontal sway, then fades and self-destructs.
  */
 export function spawnFloatingText(npcName: string, message: string): void {
-	const npcModel = Workspace.FindFirstChild(npcName) as Model | undefined;
+	const npcModel = findWorkspaceModelByName(npcName);
 	if (!npcModel) return;
 
 	const head = npcModel.FindFirstChild("Head") as BasePart | undefined;
