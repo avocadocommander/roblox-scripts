@@ -23,6 +23,7 @@
 --
 
 local Players = game:GetService("Players")
+local ContentProvider = game:GetService("ContentProvider")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -31,8 +32,9 @@ print("[LOADING] Loading screen script started")
 
 -- ── Tunables ─────────────────────────────────────────────────────────────────
 
-local LOADING_MIN_DURATION_SECONDS = 10
+local LOADING_MIN_DURATION_SECONDS = 7
 local LOADING_FADE_OUT_SECONDS = 0.6
+local LOADING_IMAGE_LOAD_TIMEOUT_SECONDS = 5
 
 -- ── Background images ───────────────────────────────────────────────────────
 -- Add rbxassetid:// strings here. One is picked at random per load.
@@ -170,8 +172,28 @@ tipLabel.TextStrokeTransparency = 0.4
 tipLabel.Text = tipText
 tipLabel.Parent = root
 
+if backgroundImage then
+	local loadStartedAt = os.clock()
+	local preloadCompleted = false
+
+	task.spawn(function()
+		pcall(function()
+			ContentProvider:PreloadAsync({ backgroundImage })
+		end)
+		preloadCompleted = true
+	end)
+
+	while not preloadCompleted and not backgroundImage.IsLoaded and os.clock() - loadStartedAt < LOADING_IMAGE_LOAD_TIMEOUT_SECONDS do
+		task.wait(0.05)
+	end
+
+	if not backgroundImage.IsLoaded then
+		warn("[LOADING] background image did not load in time: " .. backgroundImage.Image)
+	end
+end
+
 RunService.RenderStepped:Wait()
-local visibleStartTime = tick()
+local visibleStartTime = os.clock()
 print("[LOADING] UI built")
 
 -- ── 3. Wait for all dismiss conditions ───────────────────────────────────────
@@ -190,7 +212,7 @@ end
 print("[LOADING] ClientInitialized")
 
 -- (c) Minimum on-screen time.
-local elapsed = tick() - visibleStartTime
+local elapsed = os.clock() - visibleStartTime
 if elapsed < LOADING_MIN_DURATION_SECONDS then
 	task.wait(LOADING_MIN_DURATION_SECONDS - elapsed)
 end
