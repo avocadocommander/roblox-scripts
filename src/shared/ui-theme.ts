@@ -116,10 +116,10 @@ export const STATUS_RARITY: Record<
 
 /**
  * Returns a uniform scale factor based on the current viewport relative to a
- * 1280x720 baseline (designed for mobile-first). Clamped so the UI never
- * becomes unreadably small on low-res phones or tablets.
+ * 1280x720 baseline. Clamped so the UI can shrink on phones without becoming
+ * unreadably tiny.
  */
-const MIN_SCALE = 1.0;
+const MIN_SCALE = 0.75;
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
