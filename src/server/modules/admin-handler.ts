@@ -1,5 +1,4 @@
 import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
-import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import {
 	addCoins,
 	addExperience,
@@ -16,6 +15,7 @@ import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
 import { startTravelingMerchantEvent, stopTravelingMerchantEvent } from "./traveling-merchant-handler";
 import { startDreamCloudEvent, stopDreamCloudEvent, toggleDreamCloudEvent } from "./cloud-event-handler";
+import { initializeBoardEventBus, setBoardServerEvent } from "./board-event-bus";
 
 const adminRemote = getAdminCommandRemote();
 
@@ -27,7 +27,7 @@ function isAdmin(player: Player): boolean {
 
 export function initializeAdminHandler(): void {
 	// Eagerly create the broadcast remote so clients don't infinite-yield on WaitForChild
-	getBoardBroadcastRemote();
+	initializeBoardEventBus();
 
 	adminRemote.OnServerInvoke = (player: Player, ...args: unknown[]): string => {
 		if (!isAdmin(player)) return "Not authorized";
@@ -108,7 +108,7 @@ export function initializeAdminHandler(): void {
 
 		if (command === "triggerSpecialEvent") {
 			const text = strValue !== "" ? strValue : "A Special Event Has Begun";
-			getBoardBroadcastRemote().FireAllClients("event", text);
+			setBoardServerEvent("admin", text);
 			return "Broadcast event: " + text;
 		}
 

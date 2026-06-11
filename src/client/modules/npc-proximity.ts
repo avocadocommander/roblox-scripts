@@ -20,6 +20,14 @@ import {
 	PlayerWantedPayload,
 } from "shared/remotes/bounty-remote";
 
+const JUMPABLE_STATES = new Set<Enum.HumanoidStateType>([
+	Enum.HumanoidStateType.Running,
+	Enum.HumanoidStateType.RunningNoPhysics,
+	Enum.HumanoidStateType.Landed,
+	Enum.HumanoidStateType.Climbing,
+	Enum.HumanoidStateType.Swimming,
+]);
+
 // ── Status → rarity colour mapping ───────────────────────────────────────────
 // All NPC presentation goes through `getNPCDisplay` in shared/npc-display.ts.
 // That helper knows gnomes have no social status and returns a neutral
@@ -1590,13 +1598,10 @@ export function fireCurrentAction(): void {
 		const humanoid = Players.LocalPlayer.Character?.FindFirstChildOfClass("Humanoid");
 		if (humanoid) {
 			const state = humanoid.GetState();
-			const grounded =
-				humanoid.FloorMaterial !== Enum.Material.Air &&
-				state !== Enum.HumanoidStateType.Freefall &&
-				state !== Enum.HumanoidStateType.Jumping &&
-				state !== Enum.HumanoidStateType.FallingDown;
-			if (grounded) {
+			const canJump = JUMPABLE_STATES.has(state) || humanoid.FloorMaterial !== Enum.Material.Air;
+			if (canJump) {
 				humanoid.Jump = true;
+				humanoid.ChangeState(Enum.HumanoidStateType.Jumping);
 			}
 		}
 	}

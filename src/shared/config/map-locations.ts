@@ -93,13 +93,13 @@ export const MAP_LOCATIONS: MapLocationDef[] = [
 	{
 		name: "Tavern talking",
 		position: [-77.791, 9.858, -20.077],
-		sounds: [{ soundId: "rbxassetid://926658585", volume: 0.6, rollOffMax: 100 }],
+		sounds: [{ soundId: "rbxassetid://926658585", volume: 0.35, rollOffMax: 55 }],
 		lights: [{ color: [255, 180, 80], brightness: 0.1, range: 30 }],
 	},
 	{
 		name: "Tavern Jig",
 		position: [-77.791, 9.858, -20.077],
-		sounds: [{ soundId: "rbxassetid://88538249467439", volume: 0.3, rollOffMax: 80 }],
+		sounds: [{ soundId: "rbxassetid://88538249467439", volume: 0.22, rollOffMax: 55 }],
 		lights: [{ color: [255, 180, 80], brightness: 0.1, range: 30 }],
 	},
 

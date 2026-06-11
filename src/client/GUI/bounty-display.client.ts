@@ -30,6 +30,16 @@ function sc(base: number): number {
 	return base * getUIScale();
 }
 
+function getViewportSize(): Vector2 {
+	const camera = Workspace.CurrentCamera;
+	return camera ? camera.ViewportSize : new Vector2(1280, 720);
+}
+
+function isCompactBoard(): boolean {
+	const viewport = getViewportSize();
+	return UserInputService.TouchEnabled || math.min(viewport.X, viewport.Y) <= 700;
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 // Mission card — dynamic header + two swappable bodies + footer
@@ -163,7 +173,6 @@ let markOffenceLabel: TextLabel | undefined;
 
 // Message stack (rising FIFO above card)
 let messageStackContainer: Frame | undefined;
-const MESSAGE_MAX_VISIBLE = 3;
 const MESSAGE_LIFETIME = 6; // seconds before a message fades out on its own
 const MESSAGE_ROW_HEIGHT = 22;
 const MESSAGE_ROW_GAP = 4;
@@ -200,13 +209,16 @@ const MESSAGE_COLORS: Record<BoardMessageType, { accent: Color3; text: Color3 }>
 // ── Builder ───────────────────────────────────────────────────────────────────
 
 function buildBountyCard(screenGui: ScreenGui): void {
-	const W = sc(320);
+	const compact = isCompactBoard();
+	const W = sc(compact ? 280 : 320);
+	const rightMargin = sc(compact ? 8 : 20);
+	const topMargin = sc(compact ? 4 : 8);
 
 	// ── Outer wrapper ────────────────────────────────────────────────────────
 	const wrapper = new Instance("Frame");
 	wrapper.Name = "BountyHUD";
 	wrapper.Size = new UDim2(0, W, 0, 0);
-	wrapper.Position = new UDim2(1, sc(-20) - W, 0, sc(8));
+	wrapper.Position = new UDim2(1, -rightMargin - W, 0, topMargin);
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
 	wrapper.BackgroundColor3 = GLOW_COLOR;
 	wrapper.BackgroundTransparency = 1;
@@ -242,13 +254,13 @@ function buildBountyCard(screenGui: ScreenGui): void {
 //  - no glow / no pulse — static subtle color-coded text
 // ═════════════════════════════════════════════════════════════════════════════
 function buildMessageStack(wrapper: Frame): void {
+	const maxVisible = isCompactBoard() ? 2 : 3;
+	const reservedHeight = MESSAGE_ROW_HEIGHT * maxVisible + MESSAGE_ROW_GAP * (maxVisible - 1);
 	const container = new Instance("Frame");
 	container.Name = "MessageStack";
 	container.LayoutOrder = -1; // always above mission card
-	// Height is driven by child rows — container takes zero space when empty
-	// so the mission card sits flush at the top of the wrapper.
-	container.Size = new UDim2(1, 0, 0, 0);
-	container.AutomaticSize = Enum.AutomaticSize.Y;
+	// Reserve this space at all times so new messages never push the board down.
+	container.Size = new UDim2(1, 0, 0, sc(reservedHeight));
 	container.BackgroundTransparency = 1;
 	container.Parent = wrapper;
 
@@ -256,7 +268,7 @@ function buildMessageStack(wrapper: Frame): void {
 	layout.FillDirection = Enum.FillDirection.Vertical;
 	layout.SortOrder = Enum.SortOrder.LayoutOrder;
 	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom;
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left;
 	layout.Padding = new UDim(0, sc(MESSAGE_ROW_GAP));
 	layout.Parent = container;
 
@@ -267,6 +279,7 @@ function buildMessageStack(wrapper: Frame): void {
 //  MISSION CARD  (state-driven: contract or guidance)
 // ═════════════════════════════════════════════════════════════════════════════
 function buildMissionCard(wrapper: Frame): void {
+	const compact = isCompactBoard();
 	const card = new Instance("Frame");
 	card.Name = "MissionCard";
 	card.LayoutOrder = 0;
@@ -289,10 +302,10 @@ function buildMissionCard(wrapper: Frame): void {
 	cardStrokeRef = cardStroke;
 
 	const cardPad = new Instance("UIPadding");
-	cardPad.PaddingTop = new UDim(0, sc(10));
-	cardPad.PaddingBottom = new UDim(0, sc(10));
-	cardPad.PaddingLeft = new UDim(0, sc(12));
-	cardPad.PaddingRight = new UDim(0, sc(12));
+	cardPad.PaddingTop = new UDim(0, sc(compact ? 7 : 10));
+	cardPad.PaddingBottom = new UDim(0, sc(compact ? 7 : 10));
+	cardPad.PaddingLeft = new UDim(0, sc(compact ? 9 : 12));
+	cardPad.PaddingRight = new UDim(0, sc(compact ? 9 : 12));
 	cardPad.Parent = card;
 
 	const cardLayout = new Instance("UIListLayout");
@@ -550,10 +563,11 @@ function buildWantedSections(wrapper: Frame): void {
 //  messages this persists until explicitly cleared.
 // ═════════════════════════════════════════════════════════════════════════════
 function buildServerEventBanner(wrapper: Frame): void {
+	const compact = isCompactBoard();
 	const frame = new Instance("Frame");
 	frame.Name = "ServerEvent";
 	frame.LayoutOrder = 3;
-	frame.Size = new UDim2(1, 0, 0, sc(38));
+	frame.Size = new UDim2(1, 0, 0, sc(compact ? 30 : 38));
 	frame.BackgroundColor3 = UI_THEME.bg;
 	frame.BackgroundTransparency = UI_THEME.bgTransparency;
 	frame.BorderSizePixel = 0;
@@ -570,10 +584,10 @@ function buildServerEventBanner(wrapper: Frame): void {
 	stroke.Parent = frame;
 
 	const pad = new Instance("UIPadding");
-	pad.PaddingTop = new UDim(0, sc(5));
-	pad.PaddingBottom = new UDim(0, sc(5));
-	pad.PaddingLeft = new UDim(0, sc(10));
-	pad.PaddingRight = new UDim(0, sc(10));
+	pad.PaddingTop = new UDim(0, sc(compact ? 3 : 5));
+	pad.PaddingBottom = new UDim(0, sc(compact ? 3 : 5));
+	pad.PaddingLeft = new UDim(0, sc(compact ? 8 : 10));
+	pad.PaddingRight = new UDim(0, sc(compact ? 8 : 10));
 	pad.Parent = frame;
 
 	const layout = new Instance("UIListLayout");
@@ -589,7 +603,7 @@ function buildServerEventBanner(wrapper: Frame): void {
 	headerLabel.Text = "SERVER EVENT";
 	headerLabel.TextColor3 = Color3.fromRGB(195, 155, 50);
 	headerLabel.Font = UI_THEME.fontBold;
-	headerLabel.TextSize = sc(9);
+	headerLabel.TextSize = sc(compact ? 8 : 9);
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	headerLabel.Parent = frame;
 
@@ -601,7 +615,7 @@ function buildServerEventBanner(wrapper: Frame): void {
 	bodyLabel.Text = "";
 	bodyLabel.TextColor3 = UI_THEME.textPrimary;
 	bodyLabel.Font = UI_THEME.fontBold;
-	bodyLabel.TextSize = sc(13);
+	bodyLabel.TextSize = sc(compact ? 11 : 13);
 	bodyLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	bodyLabel.TextTruncate = Enum.TextTruncate.AtEnd;
 	bodyLabel.Parent = frame;
@@ -754,7 +768,7 @@ function pushMessage(message: BoardMessage): void {
 	label.TextColor3 = palette.text;
 	label.Font = UI_THEME.fontBold;
 	label.TextSize = sc(12);
-	label.TextXAlignment = Enum.TextXAlignment.Center;
+	label.TextXAlignment = Enum.TextXAlignment.Left;
 	label.TextTruncate = Enum.TextTruncate.AtEnd;
 	label.TextTransparency = 1;
 	label.Parent = row;
@@ -767,7 +781,8 @@ function pushMessage(message: BoardMessage): void {
 	TweenService.Create(label, fadeIn, { TextTransparency: 0 }).Play();
 
 	// Trim oldest (lowest LayoutOrder) if over cap.
-	while (activeMessages.size() > MESSAGE_MAX_VISIBLE) {
+	const maxVisible = isCompactBoard() ? 2 : 3;
+	while (activeMessages.size() > maxVisible) {
 		let oldestIdx = 0;
 		for (let i = 1; i < activeMessages.size(); i++) {
 			if (activeMessages[i].layoutOrder < activeMessages[oldestIdx].layoutOrder) oldestIdx = i;

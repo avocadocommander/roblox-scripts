@@ -51,7 +51,8 @@ function setupMovementInput() {
 	const character = players?.Character;
 	if (!character) return;
 
-	const humanoid = character.FindFirstChildOfClass("Humanoid");
+	const humanoid =
+		character.FindFirstChildOfClass("Humanoid") ?? (character.WaitForChild("Humanoid", 5) as Humanoid | undefined);
 	if (!humanoid) return;
 
 	// Kill Roblox's auto-jump-near-obstacle behaviour. We want jumps to
