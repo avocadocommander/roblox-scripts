@@ -38,6 +38,8 @@ let contractBody: Frame | undefined;
 let guidanceBody: Frame | undefined;
 
 // Tutorial-glow refs — pulsed during guidance mode
+let bountyBoardWrapper: Frame | undefined;
+let bountyBoardGlowStroke: UIStroke | undefined;
 let missionCard: Frame | undefined;
 let cardStrokeRef: UIStroke | undefined;
 let guidancePulseThread: thread | undefined;
@@ -67,11 +69,22 @@ RunService.Heartbeat.Connect((dt) => {
 
 function startGuidancePulse(): void {
 	if (guidancePulseThread !== undefined) return;
-	if (!missionCard || !cardStrokeRef) return;
+	if (!bountyBoardWrapper || !bountyBoardGlowStroke || !missionCard || !cardStrokeRef) return;
 	isGuidancePulseActive = true;
 	stepPulseElapsed = 0;
 	guidancePulseThread = task.spawn(() => {
 		while (guidancePulseThread !== undefined) {
+			// Light the whole bounty-board stack while the tutorial is steering attention here.
+			TweenService.Create(
+				bountyBoardGlowStroke!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ Color: GLOW_COLOR, Thickness: sc(3), Transparency: 0.1 },
+			).Play();
+			TweenService.Create(
+				bountyBoardWrapper!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ BackgroundTransparency: 0.9 },
+			).Play();
 			// Fade card stroke to gold
 			TweenService.Create(
 				cardStrokeRef!,
@@ -86,6 +99,16 @@ function startGuidancePulse(): void {
 			task.wait(GLOW_CYCLE / 2);
 			if (guidancePulseThread === undefined) break;
 			// Fade back to normal
+			TweenService.Create(
+				bountyBoardGlowStroke!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ Color: GLOW_COLOR, Thickness: sc(1.5), Transparency: 0.75 },
+			).Play();
+			TweenService.Create(
+				bountyBoardWrapper!,
+				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+				{ BackgroundTransparency: 1 },
+			).Play();
 			TweenService.Create(
 				cardStrokeRef!,
 				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
@@ -105,6 +128,16 @@ function stopGuidancePulse(): void {
 	if (guidancePulseThread === undefined) return;
 	isGuidancePulseActive = false;
 	guidancePulseThread = undefined;
+	if (bountyBoardWrapper && bountyBoardGlowStroke) {
+		TweenService.Create(bountyBoardGlowStroke, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
+			Color: GLOW_COLOR,
+			Thickness: sc(1.5),
+			Transparency: 1,
+		}).Play();
+		TweenService.Create(bountyBoardWrapper, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
+			BackgroundTransparency: 1,
+		}).Play();
+	}
 	if (!missionCard || !cardStrokeRef) return;
 	TweenService.Create(cardStrokeRef, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
 		Color: UI_THEME.border,
@@ -175,8 +208,21 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	wrapper.Size = new UDim2(0, W, 0, 0);
 	wrapper.Position = new UDim2(1, sc(-20) - W, 0, sc(8));
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
+	wrapper.BackgroundColor3 = GLOW_COLOR;
 	wrapper.BackgroundTransparency = 1;
 	wrapper.Parent = screenGui;
+	bountyBoardWrapper = wrapper;
+
+	const wrapperCorner = new Instance("UICorner");
+	wrapperCorner.CornerRadius = UI_THEME.cornerRadius;
+	wrapperCorner.Parent = wrapper;
+
+	const wrapperGlowStroke = new Instance("UIStroke");
+	wrapperGlowStroke.Color = GLOW_COLOR;
+	wrapperGlowStroke.Thickness = sc(1.5);
+	wrapperGlowStroke.Transparency = 1;
+	wrapperGlowStroke.Parent = wrapper;
+	bountyBoardGlowStroke = wrapperGlowStroke;
 
 	const wrapLayout = new Instance("UIListLayout");
 	wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder;
