@@ -32,6 +32,8 @@ import {
 } from "./analytics-tracker";
 import { getGamePassForItem } from "shared/config/game-passes";
 import { onPlayerStateLoaded, setInventoryState, getInventoryState } from "shared/player-state";
+import { playSoundEffect } from "./sound-effect-bus";
+import { applyHeldWeaponVisual, applySheathedWeaponVisual, ensureCharacterWeaponAnchors } from "./weapon-visual-handler";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -183,9 +185,13 @@ function handleActivateItem(player: Player, itemId: string): void {
 		// Equip weapon (toggle — if already equipped, switch back to fists)
 		if (inv.equippedWeapon === itemId) {
 			inv.equippedWeapon = "fists";
+			playSoundEffect(player, "switchWeapon");
+			applySheathedWeaponVisual(player, itemId);
 			log(`[INVENTORY] ${player.Name} unequipped ${itemDef.name}, back to Fists`);
 		} else {
 			inv.equippedWeapon = itemId;
+			playSoundEffect(player, "switchWeapon");
+			applyHeldWeaponVisual(player, inv.equippedWeapon);
 			log(`[INVENTORY] ${player.Name} equipped weapon: ${itemDef.name}`);
 			trackEquippedWeapon(player, itemId);
 			// Tutorial: first time equipping any real weapon.
@@ -209,6 +215,7 @@ function handleActivateItem(player: Player, itemId: string): void {
 		effectActivatePoison(player, itemId);
 		stampConsumableCooldown(player);
 		trackConsumedPoison(player, itemId);
+		playSoundEffect(player, "consumePoison");
 		log(`[INVENTORY] ${player.Name} activated poison: ${itemDef.name}`);
 	} else if (itemDef.category === "elixir") {
 		// Consumable cooldown check
@@ -228,6 +235,7 @@ function handleActivateItem(player: Player, itemId: string): void {
 		effectActivateElixir(player, itemId);
 		stampConsumableCooldown(player);
 		trackConsumedElixir(player, itemId);
+		playSoundEffect(player, "consumeElixir");
 		log(`[INVENTORY] ${player.Name} activated elixir: ${itemDef.name}`);
 	}
 
@@ -334,6 +342,7 @@ export function turnInBountyScrolls(player: Player): { totalGold: number; totalX
 	notifyWantedScrollChange(player);
 
 	awardAchievementLazy(player, "FIRST_TURN_IN");
+	playSoundEffect(player, "bountyTurnIn");
 
 	log(
 		"[BOUNTY-SCROLL] " +
@@ -513,6 +522,13 @@ export function initializeInventorySystem(): void {
 	// Init inventory on player join then restore saved data once DataStore loads
 	Players.PlayerAdded.Connect((player) => {
 		initPlayerInventory(player);
+		player.CharacterAdded.Connect(() => {
+			task.defer(() => {
+				if (player.Character) ensureCharacterWeaponAnchors(player.Character);
+				const inv = PLAYER_INVENTORIES.get(player);
+				if (inv) applyHeldWeaponVisual(player, inv.equippedWeapon);
+			});
+		});
 
 		// Wait for the DataStore load to complete, then overwrite with saved data.
 		onPlayerStateLoaded(player, () => {
@@ -546,6 +562,7 @@ export function initializeInventorySystem(): void {
 			}
 
 			pushSync(player);
+			applyHeldWeaponVisual(player, inv.equippedWeapon);
 		});
 	});
 
@@ -554,6 +571,13 @@ export function initializeInventorySystem(): void {
 	for (const player of Players.GetPlayers()) {
 		if (!PLAYER_INVENTORIES.has(player)) {
 			initPlayerInventory(player);
+			player.CharacterAdded.Connect(() => {
+				task.defer(() => {
+					if (player.Character) ensureCharacterWeaponAnchors(player.Character);
+					const inv = PLAYER_INVENTORIES.get(player);
+					if (inv) applyHeldWeaponVisual(player, inv.equippedWeapon);
+				});
+			});
 			onPlayerStateLoaded(player, () => {
 				const inv = PLAYER_INVENTORIES.get(player);
 				if (!inv || player.Parent === undefined) return;
@@ -573,6 +597,7 @@ export function initializeInventorySystem(): void {
 					inv.equippedWeapon = saved.equippedWeapon;
 				}
 				pushSync(player);
+				applyHeldWeaponVisual(player, inv.equippedWeapon);
 			});
 		}
 	}
@@ -635,6 +660,7 @@ export function initializeInventorySystem(): void {
 		);
 		pushSync(player);
 		notifyWantedScrollChange(player);
+		playSoundEffect(player, "bountyTurnIn");
 	});
 
 	log("[INVENTORY] Inventory system initialised");

@@ -3,8 +3,14 @@ import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
 import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
-import { getConfigFromRoute } from "shared/npc-manager";
+import { getRouteEnchantment, getRouteRole, RouteRole } from "shared/npc-manager";
 import { getReservedMerchantNames } from "./merchant-handler";
+import {
+	applyHeldWeaponVisualToCharacter,
+	applySheathedWeaponVisualToCharacter,
+	ensureCharacterWeaponAnchors,
+} from "./weapon-visual-handler";
+import { applyEnchantmentVisualToCharacter } from "./enchantment-visual-handler";
 
 // ──────────────────────────────────────────────────────────────────────────
 // NPC Spawner
@@ -23,6 +29,19 @@ const FIXED_RESPAWN_DELAY = 30;
 // are currently alive in the world. Populated by initializeNpcSpawner and
 // kept in sync by spawn/respawn/death callbacks via the shared reference.
 const spawnAssignments: Map<string, Assignment> = new Map();
+
+function applyDefaultNPCWeaponVisual(npcModel: Model, race: Race, role: RouteRole | undefined): void {
+	ensureCharacterWeaponAnchors(npcModel);
+	if (role === "Dawnsworn") {
+		applyHeldWeaponVisualToCharacter(npcModel, "halberd");
+	} else if (role === "Nightbound") {
+		applySheathedWeaponVisualToCharacter(npcModel, "dagger");
+	} else if (role === "Chaplain") {
+		applyHeldWeaponVisualToCharacter(npcModel, "ornate_staff");
+	} else if (race === "Pirate") {
+		applySheathedWeaponVisualToCharacter(npcModel, "cutlass");
+	}
+}
 
 /** Names of NPCs currently spawned (alive) in the world. */
 export function getSpawnedNPCNames(): string[] {
@@ -170,7 +189,6 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			throw "No routePoints available under parent route folder";
 		}
 
-		const routeConfig = getConfigFromRoute(npcRoute);
 		const firstRoutePoint = routePoints[0];
 
 		const spawnPosition = resolveSpawnPosition(firstRoutePoint, isInitial);
@@ -194,8 +212,9 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			availableNames = availableNames.filter((n) => NPC_REGISTRY[n].race !== "Gnome");
 		}
 
-		// Gnomes can't be guards.
-		if (routeConfig?.position === "Guard") {
+		// Gnomes cannot serve as Dawnsworn/Nightbound route representatives.
+		const routeRole = getRouteRole(npcRoute);
+		if (routeRole !== undefined) {
 			availableNames = availableNames.filter((n) => NPC_REGISTRY[n].race !== "Gnome");
 		}
 
@@ -229,22 +248,24 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			throw `NPC name is invalid: ${npcName}`;
 		}
 
-		// Guards are always Commoners regardless of their name's status
+		// Dawnsworn/Nightbound representatives are always Commoners regardless of their name's status.
 		const npcData = { ...MEDIEVAL_NPCS[npcName] };
-		if (routeConfig?.position === "Guard") {
+		if (routeRole !== undefined) {
 			npcData.status = "Commoner";
 		}
 
-		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeConfig);
+		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, npcRoute);
 
 		if (!npc) {
 			throw "Not able to create NPC";
 		}
 
+		applyDefaultNPCWeaponVisual(npc.model, npcData.race as Race, routeRole);
+		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		npc.model.PivotTo(new CFrame(spawnPosition));
 		npc.model.SetAttribute("RouteName", npcRoute.Name);
 
-		assignNpcToRoute(npc, routePoints, routeConfig, setState);
+		assignNpcToRoute(npc, routePoints, npcRoute, setState, isInitial && routePoints.size() > 1 ? 1 : 0);
 
 		assigned.set(npcRoute.Name, { npc, route: npcRoute });
 		log(
@@ -276,17 +297,16 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		if (routePoints.size() === 0) {
 			throw `No routePoints under route folder ${npcRoute.Name}`;
 		}
-
-		const routeConfig = getConfigFromRoute(npcRoute);
-
 		const npcDef = NPC_REGISTRY[npcName];
 		if (!npcDef) throw `NPC ${npcName} not found in registry`;
 
 		const npcData = { gender: npcDef.gender, race: npcDef.race, status: npcDef.socialClass };
 
-		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeConfig);
+		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, npcRoute);
 		if (!npc) throw `Not able to create NPC ${npcName}`;
 
+		applyDefaultNPCWeaponVisual(npc.model, npcDef.race, getRouteRole(npcRoute));
+		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		const firstRoutePoint = routePoints[0];
 		const spawnPosition = resolveSpawnPosition(firstRoutePoint, isInitial);
 		if (!spawnPosition) {
@@ -296,7 +316,7 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		npc.model.PivotTo(new CFrame(spawnPosition));
 		npc.model.SetAttribute("RouteName", npcRoute.Name);
 
-		assignNpcToRoute(npc, routePoints, routeConfig, setState);
+		assignNpcToRoute(npc, routePoints, npcRoute, setState, isInitial && routePoints.size() > 1 ? 1 : 0);
 
 		assigned.set(npcRoute.Name, { npc, route: npcRoute });
 		log(

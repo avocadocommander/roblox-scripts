@@ -28,6 +28,14 @@ export interface WeaponDef {
 	knockbackLift?: number;
 	/** Seconds target stays ragdolled before death resolves (blunt weapons). Default 1. */
 	ragdollSecs?: number;
+	/** Model or MeshPart name under ReplicatedStorage/Weapons. */
+	heldModelName?: string;
+	/** Drives support/sheath behavior. One-handed weapons sheath at hip; two-handed weapons sheath on back. */
+	handedness?: "oneHanded" | "twoHanded";
+	/** Held pose behavior. Use oneHanded for staff-like two-handed weapons. Default follows handedness. */
+	heldGripStyle?: "oneHanded" | "twoHanded";
+	/** Optional effect spawned at BladeTipAttachment on the held weapon visual. */
+	bladeTipEffect?: "dawnsGuide";
 }
 
 /** Master weapon catalogue — keyed by weapon ID. */
@@ -51,6 +59,8 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		icon: "/",
 		rarity: "uncommon",
 		deliveryType: "dagger",
+		heldModelName: "Dagger",
+		handedness: "oneHanded",
 	},
 	warhammer: {
 		id: "warhammer",
@@ -61,9 +71,62 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		icon: "T",
 		rarity: "rare",
 		deliveryType: "warhammer",
+		heldModelName: "Warhammer",
+		handedness: "twoHanded",
 		knockbackForce: 55,
 		knockbackLift: 18,
 		ragdollSecs: 1,
+	},
+	shortsword: {
+		id: "shortsword",
+		name: "Short Sword",
+		description: "A compact sidearm, easy to draw in close quarters.",
+		effect: "+10 melee damage. Reliable and quick.",
+		weaponType: "Blade",
+		icon: "/",
+		rarity: "uncommon",
+		deliveryType: "dagger",
+		heldModelName: "ShortSword",
+		handedness: "oneHanded",
+	},
+	cutlass: {
+		id: "cutlass",
+		name: "Cutlass",
+		description: "A curved pirate blade made for close, ugly work.",
+		effect: "+10 melee damage. Reliable and quick.",
+		weaponType: "Blade",
+		icon: "/",
+		rarity: "uncommon",
+		deliveryType: "dagger",
+		heldModelName: "Cutlass",
+		handedness: "oneHanded",
+	},
+	halberd: {
+		id: "halberd",
+		name: "Halberd",
+		description: "A long guard polearm built to keep trouble at a distance.",
+		effect: "Heavy reach weapon. Used by guards.",
+		weaponType: "Polearm",
+		icon: "T",
+		rarity: "rare",
+		deliveryType: "dagger",
+		heldModelName: "Halberd",
+		handedness: "twoHanded",
+		heldGripStyle: "oneHanded",
+	},
+	ornate_staff: {
+		id: "ornate_staff",
+		name: "Ornate Staff",
+		description: "A ceremonial staff carried by church leaders.",
+		effect: "Holy staff with a guiding spirit glow.",
+		weaponType: "Staff",
+		icon: "T",
+		rarity: "rare",
+		deliveryType: "dagger",
+		heldModelName: "Ornate Staff",
+		handedness: "twoHanded",
+		heldGripStyle: "oneHanded",
+		bladeTipEffect: "dawnsGuide",
 	},
 };
 

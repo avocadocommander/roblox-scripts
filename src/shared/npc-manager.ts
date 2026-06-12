@@ -3,6 +3,7 @@ import { bountyService, Bounty } from "./bounty";
 import { getActiveNPCNames, log } from "./helpers";
 import { Assignment, MEDIEVAL_NPC_NAMES, MEDIEVAL_NPCS } from "./module";
 import { NPC, createNPCModelAndGenerateHumanoid } from "./npc/main";
+import { EnchantmentId, resolveEnchantmentId } from "./config/enchantments";
 
 import { getBountyTarget } from "./player-state";
 
@@ -610,41 +611,82 @@ export function addKillPrompt(npc: NPC) {
 }
 
 export type Pace = "Stationary" | "Slow" | "Medium" | "Fast";
-export type Position = "Guard";
+export type Position = "Dawnsworn" | "Nightbound" | "Chaplain" | "Dawn" | "Night" | "Guard";
+export type RouteRole = "Dawnsworn" | "Nightbound" | "Chaplain";
 export type Tempo = "Chill" | "Hurry" | "Gas";
-export type RouteConfig = Partial<RouteConfiguration>;
 
-interface RouteConfiguration {
-	pace: Pace;
-	position: Position;
-	tempo: number;
+export function normalizeRouteRole(position: Position | undefined): RouteRole | undefined {
+	if (position === "Guard" || position === "Dawn" || position === "Dawnsworn") return "Dawnsworn";
+	if (position === "Night" || position === "Nightbound") return "Nightbound";
+	if (position === "Chaplain") return "Chaplain";
+	return undefined;
 }
 
-export function getConfigFromRoute(routeConfigParent: Folder): RouteConfig | undefined {
-	const routeConfig: RouteConfig = {};
-	const configFromPart = routeConfigParent.FindFirstChild("Configuration") as Configuration;
-	if (!configFromPart) {
+const VALID_PACES: ReadonlySet<string> = new Set<string>(["Stationary", "Slow", "Medium", "Fast"]);
+const VALID_POSITIONS: ReadonlySet<string> = new Set<string>([
+	"Dawnsworn",
+	"Nightbound",
+	"Chaplain",
+	"Dawn",
+	"Night",
+	"Guard",
+]);
+const VALID_TEMPOS: ReadonlySet<string> = new Set<string>(["Chill", "Hurry", "Gas"]);
+
+function readStringAttribute(parent: Folder, attributeName: string): string | undefined {
+	const value = parent.GetAttribute(attributeName);
+	return typeIs(value, "string") && value !== "" ? value : undefined;
+}
+
+export function getRoutePace(parent: Folder | undefined): Pace | undefined {
+	if (parent === undefined) return undefined;
+	const raw = readStringAttribute(parent, "Pace");
+	if (raw === undefined) return undefined;
+	if (VALID_PACES.has(raw)) return raw as Pace;
+
+	log(`[ROUTE-CONFIG] Route ${parent.Name} has invalid Pace '${raw}' -- using default pace`, "WARN");
+	return undefined;
+}
+
+export function getRoutePosition(parent: Folder | undefined): Position | undefined {
+	if (parent === undefined) return undefined;
+	const raw = readStringAttribute(parent, "RouteRole");
+	if (raw === undefined) return undefined;
+	if (VALID_POSITIONS.has(raw)) return raw as Position;
+
+	log(`[ROUTE-CONFIG] Route ${parent.Name} has invalid RouteRole '${raw}' -- treating as a regular route`, "WARN");
+	return undefined;
+}
+
+export function getRouteTempo(parent: Folder | undefined): number | undefined {
+	if (parent === undefined) return undefined;
+	const raw = readStringAttribute(parent, "Tempo");
+	if (raw === undefined) return undefined;
+	if (!VALID_TEMPOS.has(raw)) {
+		log(`[ROUTE-CONFIG] Route ${parent.Name} has invalid Tempo '${raw}' -- using default tempo`, "WARN");
 		return undefined;
 	}
-	const pace = configFromPart.FindFirstChild("Pace") as StringValue;
-	if (pace) {
-		routeConfig.pace = pace.Value as Pace;
-	}
-	const npcType = configFromPart.FindFirstChild("NPCType") as StringValue;
-	if (npcType) {
-		routeConfig.position = npcType.Value as Position;
-	}
 
-	const tempo = configFromPart.FindFirstChild("Tempo") as StringValue;
-	if (tempo) {
-		const tempoMap: Record<Tempo, number> = {
-			Chill: math.random(10, 60),
-			Hurry: math.random(5, 10),
-			Gas: math.random(1, 2),
-		};
-		routeConfig.tempo = tempoMap[tempo.Value as Tempo];
-	}
-	return routeConfig;
+	const tempoMap: Record<Tempo, number> = {
+		Chill: math.random(10, 60),
+		Hurry: math.random(5, 10),
+		Gas: math.random(1, 2),
+	};
+	return tempoMap[raw as Tempo];
 }
 
+export function getRouteEnchantment(parent: Folder | undefined): EnchantmentId | undefined {
+	if (parent === undefined) return undefined;
+	const raw = readStringAttribute(parent, "Enchantment");
+	if (raw === undefined) return undefined;
 
+	const enchantment = resolveEnchantmentId(raw);
+	if (enchantment !== undefined) return enchantment;
+
+	log(`[ROUTE-CONFIG] Route ${parent.Name} has invalid Enchantment '${raw}' -- ignoring enchantment`, "WARN");
+	return undefined;
+}
+
+export function getRouteRole(routeFolder: Folder | undefined): RouteRole | undefined {
+	return normalizeRouteRole(getRoutePosition(routeFolder));
+}

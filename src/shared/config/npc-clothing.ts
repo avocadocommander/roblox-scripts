@@ -123,7 +123,9 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
  * Takes priority over the tier `accessories` list when present.
  */
 export const ROUTE_ACCESSORIES: Record<string, string[]> = {
-	Guard: ["GuardBack"],
+	Dawnsworn: ["TemplarHelm"],
+	Nightbound: ["GuardBack"],
+	Chaplain: ["Chaplain Hat"],
 };
 
 /**
@@ -131,5 +133,5 @@ export const ROUTE_ACCESSORIES: Record<string, string[]> = {
  * NPCs on that route -- the seeded RNG picks ONE name from this list.
  */
 export const ROUTE_CLOTHING_POOLS: Record<string, string[]> = {
-	Guard: ["GuardCape"],
+	Nightbound: ["GuardCape"],
 };

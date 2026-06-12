@@ -5,10 +5,13 @@
  *   - if any onboarding achievement is missing -> guidance mode on
  *     the first missing step
  *   - if all are unlocked -> contract mode
+ *   - tutorial-only recovery: if the player reached turn-in but has no
+ *     bounty scroll, guide them back to the assassination step
  *
  * There is NO separate tutorial flag. Call setUnlockedAchievements()
- * (full sync) or addUnlockedAchievement() (single unlock) and the
- * renderer re-syncs automatically.
+ * (full sync), addUnlockedAchievement() (single unlock), or
+ * setTutorialBountyScrollCount() (inventory sync) and the renderer
+ * re-syncs automatically.
  *
  * This module holds state + exposes a clean API. It does NOT build UI.
  */
@@ -51,6 +54,7 @@ export interface BoardRenderer {
 const unlocked = new Set<string>();
 let renderer: BoardRenderer | undefined;
 const stateChangeSubscribers = new Array<() => void>();
+let tutorialBountyScrollCount: number | undefined;
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -75,6 +79,18 @@ export function addUnlockedAchievement(id: string): void {
 
 export function hasUnlockedAchievement(id: string): boolean {
 	return unlocked.has(id);
+}
+
+/**
+ * Inventory-backed tutorial recovery.
+ *
+ * FIRST_ASSASSINATION is persistent, but bounty scrolls are not. If a player
+ * dies/leaves after step 3 and loses the scroll before FIRST_TURN_IN, the
+ * tutorial must point them back at the kill step so they can earn a new one.
+ */
+export function setTutorialBountyScrollCount(count: number): void {
+	tutorialBountyScrollCount = count;
+	pushBody();
 }
 
 /** The first onboarding step whose achievement is still locked, if any. */
@@ -111,6 +127,18 @@ export function showServerEvent(text: string | undefined): void {
 // ── Derivation ──────────────────────────────────────────────────────────────
 
 function getNextOnboardingStep(): { step: OnboardingStep; index: number } | undefined {
+	if (
+		unlocked.has("FIRST_ASSASSINATION") &&
+		!unlocked.has("FIRST_TURN_IN") &&
+		tutorialBountyScrollCount !== undefined &&
+		tutorialBountyScrollCount <= 0
+	) {
+		for (let i = 0; i < ONBOARDING_STEPS.size(); i++) {
+			const step = ONBOARDING_STEPS[i];
+			if (step.achievementId === "FIRST_ASSASSINATION") return { step, index: i };
+		}
+	}
+
 	for (let i = 0; i < ONBOARDING_STEPS.size(); i++) {
 		const step = ONBOARDING_STEPS[i];
 		if (!unlocked.has(step.achievementId)) {

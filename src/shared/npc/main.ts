@@ -1,7 +1,7 @@
 import { ReplicatedStorage } from "@rbxts/services";
 import { getNPCFolder, log } from "../helpers";
 import { NPCData, Race, useAssetId } from "../module";
-import { RouteConfig } from "../npc-manager";
+import { getRoutePace } from "../npc-manager";
 import { getHumanoidPace, assignNpcToRoute, navigate } from "./movement";
 import { getGenericSeededAppearance, setHumanoidDefaults } from "./appearance";
 import { makeSeededRandom, getSeedFromName } from "./utils";
@@ -22,7 +22,7 @@ export interface NPC {
 export function createNPCModelAndGenerateHumanoid(
 	name: string,
 	data: NPCData,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): NPC | undefined {
 	const npcTemplate = ReplicatedStorage.WaitForChild("NPC") as Model;
 	const modelClone = npcTemplate.Clone();
@@ -34,8 +34,8 @@ export function createNPCModelAndGenerateHumanoid(
 	const humanoid = modelClone.FindFirstChildOfClass("Humanoid");
 	if (!humanoid) return;
 	humanoid.SetStateEnabled(Enum.HumanoidStateType.Climbing, false);
-	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeData);
-	humanoid.WalkSpeed = getHumanoidPace(routeData?.pace);
+	setHumanoidDefaults(humanoid, getSeedFromName(name), data, routeFolder);
+	humanoid.WalkSpeed = getHumanoidPace(getRoutePace(routeFolder));
 
 	const animator = humanoid.FindFirstChildOfClass("Animator");
 	if (!animator) {

@@ -12,6 +12,7 @@ import { DEV_PRODUCTS } from "shared/config/dev-products";
 import { getPromptProductPurchaseRemote } from "shared/remotes/product-remote";
 import { givePlayerItem } from "./inventory-handler";
 import { trackPurchaseMade, trackPurchasePromptShown } from "./analytics-tracker";
+import { playSoundEffect } from "./sound-effect-bus";
 
 const promptRemote = getPromptProductPurchaseRemote();
 
@@ -59,6 +60,7 @@ export function initializeProductHandler(): void {
 				")",
 		);
 		trackPurchaseMade(player, "developerProduct");
+		playSoundEffect(player, "developerProductPurchase");
 
 		return Enum.ProductPurchaseDecision.PurchaseGranted;
 	};

@@ -952,7 +952,7 @@ onPlayerInitialized(() => {
 	// Guidance mode is derived entirely from the unlocked achievement set.
 	initializeTutorialController();
 
-	// World-space yellow highlights on the active tutorial targets.
+	// World-space highlights on the active tutorial targets.
 	initializeTutorialHighlight();
 
 	// UI pulses (inventory button / dagger tile) for UI-driven tutorial steps.

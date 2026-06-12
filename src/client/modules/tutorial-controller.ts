@@ -14,11 +14,14 @@ import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import {
 	addUnlockedAchievement,
 	BoardMessageType,
+	setTutorialBountyScrollCount,
 	setUnlockedAchievements,
 	showBoardMessage,
 	showServerEvent,
 } from "./board-state";
 import { ACHIEVEMENTS } from "shared/achievements";
+import { InventoryPayload } from "shared/inventory";
+import { getInventorySyncRemote } from "shared/remotes/inventory-remote";
 
 export function initializeTutorialController(): void {
 	// Full sync on join
@@ -40,6 +43,11 @@ export function initializeTutorialController(): void {
 		if (def) {
 			showBoardMessage("unlock", "New Achievement: " + def.title);
 		}
+	});
+
+	getInventorySyncRemote().OnClientEvent.Connect((data: unknown) => {
+		const payload = data as InventoryPayload;
+		setTutorialBountyScrollCount((payload.bountyScrolls ?? []).size());
 	});
 
 	// Server-wide broadcast (special events, decrees, etc.)

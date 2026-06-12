@@ -87,6 +87,11 @@ export interface NPCDef {
 	 * applied. See `NPCClothingItem` in `config/npc-clothing.ts`.
 	 */
 	clothing?: import("./npc-clothing").NPCClothingOverride;
+	/**
+	 * Optional direct route-style appearance role for special NPCs that should
+	 * look like a guild representative regardless of which route they are on.
+	 */
+	appearanceRole?: import("../npc-manager").RouteRole;
 }
 
 export type NPCRegistry = Record<string, NPCDef>;
@@ -136,6 +141,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		...std("Bertram de Mere", "M", "Human", "Nobility", "Guildmaster"),
 		interaction: "TurnIn",
 		killable: false,
+		appearanceRole: "Dawnsworn",
 		dialog: {
 			greetings: [
 				"Ah, a customer. Browse, but do not touch what you cannot afford.",
@@ -159,7 +165,7 @@ export const NPC_REGISTRY: NPCRegistry = {
 		...std("Thorne Æshgrave", "M", "Human", "Serf", "Guildmaster"),
 		interaction: "TurnIn",
 		killable: false,
-		clothing: ["LightAssassinHood", "coat"],
+		appearanceRole: "Nightbound",
 		dialog: {
 			greetings: ["Listen -- theres far more you will hear", "Do i know you?"],
 			chatLines: [

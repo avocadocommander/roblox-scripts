@@ -12,6 +12,7 @@ import { Players, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
 import { trackEvent, trackItemPurchased, trackMerchantVisited } from "./analytics-tracker";
+import { playSoundEffect } from "./sound-effect-bus";
 import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { ITEMS } from "shared/inventory";
 import { MEDIEVAL_NPCS } from "shared/module";
@@ -222,6 +223,7 @@ function handlePurchase(player: Player, npcName: string, itemId: string): [boole
 	trackItemPurchased(player, purchaseDynamicShopType !== undefined ? purchaseDynamicShopType : "fixed");
 
 	log("[DIALOG] " + player.Name + " purchased " + itemDef.name + " from " + npcName + " for " + shopItem.price + "g");
+	playSoundEffect(player, "shopPurchase");
 
 	return [true, "Purchased " + itemDef.name + " for " + shopItem.price + " gold."];
 }

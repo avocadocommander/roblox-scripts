@@ -1,7 +1,7 @@
-import { ReplicatedStorage } from "@rbxts/services";
+import { ReplicatedStorage, ServerStorage } from "@rbxts/services";
 import { log } from "../helpers";
 import { NPCData, Race } from "../module";
-import { RouteConfig } from "../npc-manager";
+import { getRouteRole } from "../npc-manager";
 import { makeSeededRandom } from "./utils";
 import { STATUS_CLOTHING, ROUTE_ACCESSORIES, ROUTE_CLOTHING_POOLS } from "../config/npc-clothing";
 import { NPC_REGISTRY } from "../config/npcs";
@@ -45,12 +45,41 @@ function getRandomAssetFromListBasedOnSeed<T>(list: T[], seed: number): T {
 	return list[math.floor(seed * list.size())];
 }
 
+function getAppearanceRole(npc: Model, routeFolder: Folder | undefined) {
+	const npcName = npc.GetAttribute("NPCName") as string | undefined;
+	const npcDef = npcName !== undefined ? NPC_REGISTRY[npcName] : undefined;
+	return npcDef?.appearanceRole ?? getRouteRole(routeFolder);
+}
+
+function applyRouteClothingColors(
+	role: ReturnType<typeof getAppearanceRole>,
+	shirt: SurfaceAppearance | undefined,
+	pants: SurfaceAppearance | undefined,
+	shoes: SurfaceAppearance | undefined,
+): boolean {
+	if (role === "Nightbound") {
+		if (shirt) shirt.Color = new Color3(0, 0, 0);
+		if (pants) pants.Color = new Color3(0, 0, 0);
+		if (shoes) shoes.Color = new Color3(0, 0, 0);
+		return true;
+	}
+
+	if (role === "Chaplain") {
+		if (shirt) shirt.Color = Color3.fromRGB(138, 21, 32);
+		if (pants) pants.Color = Color3.fromRGB(94, 12, 24);
+		if (shoes) shoes.Color = Color3.fromRGB(61, 8, 16);
+		return true;
+	}
+
+	return false;
+}
+
 function getGenericSeededAppearance(
 	humanoidDescription: HumanoidDescription,
 	seed: () => number,
 	data: NPCData,
 	humanoid: Humanoid,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): HumanoidDescription | undefined {
 	const raceSkinTones = getRaceSkinTones(data.race);
 	const skinColor = getRandomAssetFromListBasedOnSeed(raceSkinTones, seed());
@@ -115,12 +144,8 @@ function getGenericSeededAppearance(
 		return humanoidDescription;
 	}
 
-	// Route-specific overrides (Guards) take priority
-	if (routeData?.position === "Guard") {
-		if (shirt) shirt.Color = new Color3(0, 0, 0);
-		if (pants) pants.Color = new Color3(0, 0, 0);
-		if (shoes) shoes.Color = new Color3(0, 0, 0);
-	} else {
+	// Route-specific overrides take priority.
+	if (!applyRouteClothingColors(getAppearanceRole(npc, routeFolder), shirt, pants, shoes)) {
 		// Use status-tier palette
 		if (shirt) shirt.Color = getRandomAssetFromListBasedOnSeed(tierClothing.shirtColors, seed());
 		if (pants) pants.Color = getRandomAssetFromListBasedOnSeed(tierClothing.pantsColors, seed());
@@ -134,14 +159,20 @@ function getGenericSeededAppearance(
 }
 
 function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
-	const template = ReplicatedStorage.FindFirstChild(accessoryName);
+	const serverClothesFolder = ServerStorage.FindFirstChild("Clothes") as Folder | undefined;
+	const replicatedClothesFolder = ReplicatedStorage.FindFirstChild("Clothes") as Folder | undefined;
+	const template =
+		serverClothesFolder?.FindFirstChild(accessoryName) ??
+		replicatedClothesFolder?.FindFirstChild(accessoryName) ??
+		ServerStorage.FindFirstChild(accessoryName) ??
+		ReplicatedStorage.FindFirstChild(accessoryName);
 	if (!template) {
 		log(
-			"[APPEARANCE] Missing accessory in ReplicatedStorage: '" +
+			"[APPEARANCE] Missing accessory in ServerStorage/Clothes or ReplicatedStorage: '" +
 				accessoryName +
 				"' (NPC=" +
 				npc.Name +
-				"). Make sure an Accessory/Hat with this exact name exists at the root of ReplicatedStorage.",
+				"). Make sure an Accessory/Hat with this exact name exists in ServerStorage/Clothes.",
 			"WARN",
 		);
 		return;
@@ -247,10 +278,10 @@ function attachTierAccessories(
 	npc: Model,
 	data: NPCData,
 	seed: () => number,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): void {
 	// ── Route-specific accessories (guard shirt, etc.) ───────────────────────
-	const position = routeData?.position;
+	const position = getAppearanceRole(npc, routeFolder);
 	const routeAccs = position !== undefined ? ROUTE_ACCESSORIES[position] : undefined;
 
 	log("[APPEARANCE] position=" + tostring(position) + " routeAccs=" + tostring(routeAccs));
@@ -283,7 +314,7 @@ function pickClothingItemsForNPC(
 	npc: Model,
 	data: NPCData,
 	seed: () => number,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): string[] {
 	const npcName = npc.GetAttribute("NPCName") as string | undefined;
 	const npcDef = npcName !== undefined ? NPC_REGISTRY[npcName] : undefined;
@@ -298,7 +329,7 @@ function pickClothingItemsForNPC(
 	if (data.race === "Gnome") return [];
 
 	// 2) Route pool overrides tier pool (one seeded pick).
-	const position = routeData?.position;
+	const position = getAppearanceRole(npc, routeFolder);
 	const routePool = position !== undefined ? ROUTE_CLOTHING_POOLS[position] : undefined;
 	const pool = routePool ?? STATUS_CLOTHING[data.status].clothingPool;
 	if (pool === undefined || pool.size() === 0) return [];
@@ -310,9 +341,9 @@ function attachClothingItems(
 	npc: Model,
 	data: NPCData,
 	seed: () => number,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): void {
-	const items = pickClothingItemsForNPC(npc, data, seed, routeData);
+	const items = pickClothingItemsForNPC(npc, data, seed, routeFolder);
 	for (const name of items) {
 		cloneAndAttachAccessory(npc, name);
 	}
@@ -322,7 +353,7 @@ function setHumanoidDefaults(
 	humanoid: Humanoid,
 	seed: number,
 	data: NPCData,
-	routeData: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 ): Humanoid | undefined {
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	const npcDescription = humanoid.GetAppliedDescription();
@@ -332,30 +363,32 @@ function setHumanoidDefaults(
 	}
 	const rand = makeSeededRandom(seed);
 	randomizeBodyShape(npcDescription, rand, data.race);
-	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeData);
+	const appearenceDescription = getGenericSeededAppearance(npcDescription, rand, data, humanoid, routeFolder);
 
-	if (routeData?.position === "Guard" && routeData?.pace !== "Stationary") {
-		const torch = ReplicatedStorage.FindFirstChild("Handtorch") as Tool | undefined;
-		const animator = humanoid.FindFirstChildOfClass("Animator");
-
-		if (torch && animator) {
-			const anim = new Instance("Animation");
-			anim.AnimationId = `rbxassetid://74875540932204`;
-
-			const track = animator.LoadAnimation(anim);
-			track.Priority = Enum.AnimationPriority.Action2;
-			track.Looped = true;
-
-			track.Play();
-
-			// EquipTool yields until the character is ready -- run on its own
-			// thread so we don't stall the NPC spawn loop / server replication.
-			const torchClone = torch.Clone();
-			task.spawn(() => humanoid.EquipTool(torchClone));
-		} else {
-			log("[APPEARANCE] Guard missing Handtorch or Animator, skipping torch");
-		}
-	}
+	// Guard torch carry is temporarily disabled while guard weapons move to the
+	// attachment-based weapon system. Keep this block here for a later pass.
+	// if (getRouteRole(routeFolder) === "Dawnsworn") {
+	// 	const torch = ReplicatedStorage.FindFirstChild("Handtorch") as Tool | undefined;
+	// 	const animator = humanoid.FindFirstChildOfClass("Animator");
+	//
+	// 	if (torch && animator) {
+	// 		const anim = new Instance("Animation");
+	// 		anim.AnimationId = `rbxassetid://74875540932204`;
+	//
+	// 		const track = animator.LoadAnimation(anim);
+	// 		track.Priority = Enum.AnimationPriority.Action2;
+	// 		track.Looped = true;
+	//
+	// 		track.Play();
+	//
+	// 		// EquipTool yields until the character is ready -- run on its own
+	// 		// thread so we don't stall the NPC spawn loop / server replication.
+	// 		const torchClone = torch.Clone();
+	// 		task.spawn(() => humanoid.EquipTool(torchClone));
+	// 	} else {
+	// 		log("[APPEARANCE] Guard missing Handtorch or Animator, skipping torch");
+	// 	}
+	// }
 
 	if (!appearenceDescription) return;
 	const [applyOk, applyErr] = pcall(() => humanoid.ApplyDescription(appearenceDescription));
@@ -368,8 +401,8 @@ function setHumanoidDefaults(
 	const npc = humanoid.Parent as Model;
 	if (npc) {
 		const accRand = makeSeededRandom(seed);
-		attachTierAccessories(npc, data, accRand, routeData);
-		attachClothingItems(npc, data, makeSeededRandom(seed), routeData);
+		attachTierAccessories(npc, data, accRand, routeFolder);
+		attachClothingItems(npc, data, makeSeededRandom(seed), routeFolder);
 	}
 
 	return humanoid;

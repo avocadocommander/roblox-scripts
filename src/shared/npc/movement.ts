@@ -1,5 +1,5 @@
 import { PathfindingService, TweenService } from "@rbxts/services";
-import { Pace, RouteConfig } from "../npc-manager";
+import { getRoutePace, Pace } from "../npc-manager";
 import type { NPC, NPCStateKeys } from "./main";
 import { makeSeededRandom, getSeedFromName } from "./utils";
 
@@ -133,12 +133,14 @@ function getLingerSeconds(routePoint: BasePart): number {
 async function assignNpcToRoute(
 	npc: NPC,
 	routePoints: BasePart[],
-	routeConfig: RouteConfig | undefined,
+	routeFolder: Folder | undefined,
 	setState: (state: NPCStateKeys, npc: NPC) => void,
+	startIndex = 0,
 ) {
-	let routeActiveIndex = 0;
-	const basePace = getHumanoidPace(routeConfig?.pace);
-	const isStationary = routeConfig?.pace === "Stationary";
+	let routeActiveIndex = routePoints.size() > 0 ? math.clamp(startIndex, 0, routePoints.size() - 1) : 0;
+	const routePace = getRoutePace(routeFolder);
+	const basePace = getHumanoidPace(routePace);
+	const isStationary = routePace === "Stationary";
 
 	while (npc && npc.model.Parent) {
 		const activeRoutePoint = routePoints[routeActiveIndex];

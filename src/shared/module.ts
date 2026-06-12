@@ -41,11 +41,6 @@ export const MEDIEVAL_NPCS: NPCModel = (() => {
 export function useAssetId(id: string) {
 	return `rbxassetid://${id}`;
 }
-export const NPC_TYPE_VALUES = ["GUARD", "TARGET", "MERCHANT", "COMMONER"] as const;
-export type NPCType = (typeof NPC_TYPE_VALUES)[number];
-export function isNPCType(value: string): value is NPCType {
-	return typeOf(value) === "string" && NPC_TYPE_VALUES.includes(value as NPCType);
-}
 
 export const MEDIEVAL_PHRASES = [
 	"Hail, traveler! What brings thee to these lands?",

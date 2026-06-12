@@ -27,8 +27,19 @@ import {
 import { log } from "shared/helpers";
 
 const HIGHLIGHT_NAME = "TutorialHighlight";
-const FILL_COLOR = Color3.fromRGB(245, 210, 80);
-const OUTLINE_COLOR = Color3.fromRGB(255, 235, 140);
+interface HighlightPalette {
+	fill: Color3;
+	outline: Color3;
+}
+
+const GUILD_LEADER_PALETTE: HighlightPalette = {
+	fill: Color3.fromRGB(245, 210, 80),
+	outline: Color3.fromRGB(255, 235, 140),
+};
+const KILL_TARGET_PALETTE: HighlightPalette = {
+	fill: Color3.fromRGB(255, 0, 0),
+	outline: Color3.fromRGB(255, 235, 235),
+};
 const FILL_TRANSPARENCY = 0.6;
 const OUTLINE_TRANSPARENCY = 0;
 
@@ -78,16 +89,29 @@ function getTargetNames(): Set<string> {
 	return set;
 }
 
+function getHighlightPalette(): HighlightPalette {
+	const step = getCurrentOnboardingStep();
+	return step?.highlightType === "bountyTarget" ? KILL_TARGET_PALETTE : GUILD_LEADER_PALETTE;
+}
+
 // ── Highlight application ───────────────────────────────────────────────────
 
-function applyHighlight(model: Model): void {
-	if (activeHighlights.has(model)) return;
-	const highlight = new Instance("Highlight");
-	highlight.Name = HIGHLIGHT_NAME;
-	highlight.FillColor = FILL_COLOR;
-	highlight.OutlineColor = OUTLINE_COLOR;
+function styleHighlight(highlight: Highlight, palette: HighlightPalette): void {
+	highlight.FillColor = palette.fill;
+	highlight.OutlineColor = palette.outline;
 	highlight.FillTransparency = FILL_TRANSPARENCY;
 	highlight.OutlineTransparency = OUTLINE_TRANSPARENCY;
+}
+
+function applyHighlight(model: Model, palette: HighlightPalette): void {
+	const existing = activeHighlights.get(model);
+	if (existing) {
+		styleHighlight(existing, palette);
+		return;
+	}
+	const highlight = new Instance("Highlight");
+	highlight.Name = HIGHLIGHT_NAME;
+	styleHighlight(highlight, palette);
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop;
 	highlight.Adornee = model;
 	highlight.Parent = model;
@@ -118,12 +142,15 @@ function refreshHighlights(): void {
 		clearAllHighlights();
 		return;
 	}
+	const palette = getHighlightPalette();
 
 	// Remove highlights on models that no longer match (e.g. step advanced,
 	// bounty changed, model despawned, etc.).
 	for (const [model] of activeHighlights) {
 		if (!model.IsDescendantOf(Workspace) || !targets.has(model.Name)) {
 			removeHighlight(model);
+		} else {
+			applyHighlight(model, palette);
 		}
 	}
 
@@ -137,7 +164,7 @@ function refreshHighlights(): void {
 		if (!descendant.IsA("Model")) continue;
 		if (!targets.has(descendant.Name)) continue;
 		if (isPlayerCharacter(descendant)) continue;
-		applyHighlight(descendant);
+		applyHighlight(descendant, palette);
 		matched += 1;
 	}
 

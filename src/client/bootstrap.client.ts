@@ -12,6 +12,7 @@ import { toggleInventory, toggleKillBook, fireCampfireAction } from "./modules/u
 import { showPlayerQuip } from "./modules/player-quips";
 import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
 import { QuipCategory } from "shared/config/player-quips";
+import { initializeSoundEffects } from "./modules/sound-effects";
 
 const lifecycle = getOrCreateLifecycleRemote();
 
@@ -50,6 +51,7 @@ lifecycle.OnClientEvent.Connect(async (message: string, data: unknown) => {
 		});
 
 		// Setup unified movement system (handles run, walk, and jump)
+		initializeSoundEffects();
 		initializeMovementSystem();
 
 		// Setup NPC proximity system for custom assassination UI

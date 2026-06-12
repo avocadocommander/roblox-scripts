@@ -4,7 +4,7 @@
  * Operates on ShopSite_* models tagged "MerchantShop" in CollectionService.
  * Each ShopSite_* must contain:
  *   Routes — a Folder named "Routes" whose BasePart children are the NPC's route
- *             points. A Configuration child on Route controls Pace/NPCType/Tempo
+ *             points. Route folder attributes control Pace/RouteRole/Tempo
  *             exactly like any other route in the game. No CollectionService tag
  *             required on the Route folder itself.
  *   Sign   — a BasePart tagged "Sign" in CollectionService (anywhere under the
@@ -14,7 +14,7 @@
  *   1. Collects all ShopSite_* models tagged "MerchantShop".
  *   2. Assigns a shop type (guaranteed: weapon, elixir, poison; extras random).
  *   3. Picks an NPC name from MERCHANT_NPC_POOL for each site.
- *   4. Spawns the NPC using the site's own Route (config + points).
+ *   4. Spawns the NPC using the site's own Route (attributes + points).
  *   5. Writes a SurfaceGui onto the site's Sign BasePart.
  *
  * Exports:
@@ -37,7 +37,8 @@ import { ShopItem } from "shared/config/npcs";
 import { SHOP_OFFER_SLOTS, getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
-import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
+import { getRouteEnchantment } from "shared/npc-manager";
+import { applyEnchantmentVisualToCharacter } from "./enchantment-visual-handler";
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 
@@ -66,11 +67,13 @@ const SHOP_OFFER_IDS: ReadonlySet<string> = (() => {
 const OFFER_SLOT_FAR_WARNING_DISTANCE_FROM_SIGN = 36;
 const GENERATED_OFFERS_FOLDER_NAME = "GeneratedOffers";
 
-// ── Fallback route config (used when a Route folder has no Configuration child) ──
+// ── Fallback route config (used when a Route folder has no route attributes) ──
 
-const FALLBACK_ROUTE_CONFIG: RouteConfig = {
-	pace: "Stationary",
-};
+function ensureDefaultMerchantRouteAttributes(routeFolder: Folder): void {
+	if (routeFolder.GetAttribute("Pace") === undefined) {
+		routeFolder.SetAttribute("Pace", "Stationary");
+	}
+}
 
 // ── Sign rendering ────────────────────────────────────────────────────────────
 
@@ -518,13 +521,16 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 		model.Name = "OfferSlot_" + offerId;
 
 		// Resolve the 3D display source. Order:
-		//   1) ReplicatedStorage.DisplayModels.<name>  (legacy display models)
-		//   2) ReplicatedStorage.<name>                (Accessory or Model at root)
+		//   1) ReplicatedStorage.Weapons.<name>        (shared held/display weapon assets)
+		//   2) ReplicatedStorage.DisplayModels.<name>  (legacy display models)
+		//   3) ReplicatedStorage.<name>                (Accessory, Model, or BasePart at root)
 		// Accessories are cloned and the Handle is extracted as the display.
+		const weaponFolder = ReplicatedStorage.FindFirstChild("Weapons") as Folder | undefined;
 		const displayFolder = ReplicatedStorage.FindFirstChild("DisplayModels") as Folder | undefined;
 		let displayClone: Model | undefined;
 		if (offer.displayModelName !== undefined) {
 			let source: Instance | undefined =
+				weaponFolder?.FindFirstChild(offer.displayModelName) ??
 				displayFolder?.FindFirstChild(offer.displayModelName) ??
 				ReplicatedStorage.FindFirstChild(offer.displayModelName);
 
@@ -542,6 +548,12 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 				}
 			} else if (source && source.IsA("Model")) {
 				displayClone = source.Clone();
+			} else if (source && source.IsA("BasePart")) {
+				const wrapper = new Instance("Model");
+				const partClone = source.Clone();
+				partClone.Parent = wrapper;
+				wrapper.PrimaryPart = partClone;
+				displayClone = wrapper;
 			}
 
 			if (displayClone) {
@@ -582,7 +594,7 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 				log(
 					"[MERCHANT] Display source '" +
 						offer.displayModelName +
-						"' not found in ReplicatedStorage.DisplayModels or root",
+						"' not found in ReplicatedStorage.Weapons, DisplayModels, or root",
 					"WARN",
 				);
 			}
@@ -691,10 +703,10 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 		return;
 	}
 
-	const routeConfig: RouteConfig = getConfigFromRoute(routeFolder) ?? FALLBACK_ROUTE_CONFIG;
+	ensureDefaultMerchantRouteAttributes(routeFolder);
 
 	const npcData = { gender: def.gender, race: def.race, status: def.socialClass };
-	const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeConfig);
+	const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeFolder);
 	if (!npc) {
 		log("[MERCHANT] Failed to create model for " + npcName, "ERROR");
 		return;
@@ -707,9 +719,10 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Tag model so the client can detect this is a shop NPC
 	npc.model.SetAttribute("Interaction", "Shop");
+	applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(routeFolder));
 
 	// Assign to the site's route
-	assignNpcToRoute(npc, routePoints, routeConfig, setState);
+	assignNpcToRoute(npc, routePoints, routeFolder, setState);
 
 	// Record shop items
 	merchantShops.set(npcName, shopItems);

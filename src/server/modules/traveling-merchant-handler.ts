@@ -7,8 +7,8 @@
  * chosen at random per visit). If no spawn attachments exist, the cart's
  * original position from init is used as a fallback.
  *
- * Any PointLight named "Mood Light" anywhere inside the cart model will be
- * tinted to the colour of the rarest item the merchant is currently selling.
+ * The cart's Car/lights mesh is tinted to the colour of the rarest item the
+ * merchant is currently selling, with a PointLight glow added at runtime.
  *
  * Model requirements (Workspace > "Merchant Cart"):
  *   - PrimaryPart set on the model
@@ -30,9 +30,11 @@ import { MERCHANT_NPC_POOL, buildShopInventory, ShopType } from "shared/config/s
 import { ShopItem } from "shared/config/npcs";
 import { ITEMS, RARITY_COLORS } from "shared/inventory";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
-import { RouteConfig, getConfigFromRoute } from "shared/npc-manager";
+import { getRouteEnchantment } from "shared/npc-manager";
 import { registerMerchantShop, unregisterMerchantShop } from "./merchant-handler";
 import { broadcastBoardMessage, clearBoardServerEvent, setBoardServerEvent } from "./board-event-bus";
+import { applySheathedWeaponVisualToCharacter, ensureCharacterWeaponAnchors } from "./weapon-visual-handler";
+import { applyEnchantmentVisualToCharacter } from "./enchantment-visual-handler";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -42,8 +44,11 @@ const SHOP_CHILD_NAME = "Shop";
 /** Attachment name used to mark valid merchant spawn locations in Workspace. */
 const SPAWN_ATTACHMENT_NAME = "MerchantSpawn";
 
-/** Attachment name on the cart whose child PointLight should glow the rarest item's rarity colour. */
-const MOOD_LIGHT_NAME = "Mood Light";
+const CART_BODY_MODEL_NAME = "Car";
+const CART_LIGHTS_PART_NAME = "lights";
+const CART_RARITY_GLOW_NAME = "Rarity Glow";
+const CART_RARITY_GLOW_BRIGHTNESS = 2.5;
+const CART_RARITY_GLOW_RANGE = 18;
 
 /** Rarity rank used to pick the "rarest" item for the mood lights. */
 const RARITY_RANK: Record<string, number> = {
@@ -76,6 +81,12 @@ const DEPART_TWEEN_SECS = 3.5;
  */
 const TRAVELING_MERCHANT_SHOP_TYPE: ShopType = "black_market";
 const BOARD_EVENT_KEY = "traveling_merchant";
+
+function ensureDefaultTravelingMerchantRouteAttributes(routeFolder: Folder): void {
+	if (routeFolder.GetAttribute("Pace") === undefined) {
+		routeFolder.SetAttribute("Pace", "Stationary");
+	}
+}
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 
@@ -154,21 +165,34 @@ function getRarestRarity(shopItems: ShopItem[]): string | undefined {
 	return bestRarity;
 }
 
-/** Recolour every PointLight child of an Attachment named MOOD_LIGHT_NAME in the cart. */
+/** Recolour the cart's light mesh and add a matching glow for the rarest item. */
 function applyMoodLightColor(cart: Model, rarity: string | undefined): void {
 	if (rarity === undefined) return;
 	const color = RARITY_COLORS[rarity];
 	if (!color) return;
-	for (const desc of cart.GetDescendants()) {
-		if (desc.IsA("Attachment") && desc.Name === MOOD_LIGHT_NAME) {
-			for (const child of desc.GetChildren()) {
-				if (child.IsA("PointLight")) {
-					child.Color = color;
-					child.Enabled = true;
-				}
-			}
-		}
+
+	const car = cart.FindFirstChild(CART_BODY_MODEL_NAME);
+	const lights = car?.FindFirstChild(CART_LIGHTS_PART_NAME) ?? cart.FindFirstChild(CART_LIGHTS_PART_NAME, true);
+	if (!lights || !lights.IsA("BasePart")) {
+		log("[TRAVELING-MERCHANT] Cart lights part '" + CART_BODY_MODEL_NAME + "/" + CART_LIGHTS_PART_NAME + "' not found.", "WARN");
+		return;
 	}
+
+	lights.Color = color;
+	lights.Material = Enum.Material.Neon;
+
+	const existingGlow = lights.FindFirstChild(CART_RARITY_GLOW_NAME);
+	let glow = existingGlow?.IsA("PointLight") ? existingGlow : undefined;
+	if (!glow) {
+		if (existingGlow) existingGlow.Destroy();
+		glow = new Instance("PointLight");
+		glow.Name = CART_RARITY_GLOW_NAME;
+		glow.Parent = lights;
+	}
+	glow.Color = color;
+	glow.Brightness = CART_RARITY_GLOW_BRIGHTNESS;
+	glow.Range = CART_RARITY_GLOW_RANGE;
+	glow.Enabled = true;
 }
 
 function despawnNPC(): void {
@@ -215,12 +239,16 @@ function spawnNPCForCart(cart: Model): ShopItem[] {
 		return [];
 	}
 
-	const routeConfig: RouteConfig = getConfigFromRoute(routeFolder) ?? { pace: "Stationary" };
+	ensureDefaultTravelingMerchantRouteAttributes(routeFolder);
 	const npcData = { gender: def.gender, race: def.race, status: def.socialClass };
-	const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeConfig);
+	const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, routeFolder);
 	if (!npc) {
 		log("[TRAVELING-MERCHANT] Failed to create NPC model for '" + npcName + "'.", "ERROR");
 		return [];
+	}
+	ensureCharacterWeaponAnchors(npc.model);
+	if (def.race === "Pirate") {
+		applySheathedWeaponVisualToCharacter(npc.model, "cutlass");
 	}
 
 	// Place the NPC at the first route waypoint.
@@ -229,8 +257,9 @@ function spawnNPCForCart(cart: Model): ShopItem[] {
 	npc.model.SetAttribute("Interaction", "Shop");
 	// Traveling merchants cannot be assassinated.
 	npc.model.SetAttribute("Killable", false);
+	applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(routeFolder));
 
-	assignNpcToRoute(npc, routePoints, routeConfig, setState);
+	assignNpcToRoute(npc, routePoints, routeFolder, setState);
 
 	// Register with the merchant system so the dialog handler can serve the shop.
 	const shopItems: ShopItem[] = buildShopInventory(TRAVELING_MERCHANT_SHOP_TYPE);

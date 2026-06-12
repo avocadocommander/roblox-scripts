@@ -252,9 +252,9 @@ function wallhackApply(model: Model): void {
 	if (wallhackHighlights.has(model)) return;
 	const h = new Instance("Highlight");
 	h.Name = WALLHACK_HIGHLIGHT_NAME;
-	h.FillColor = Color3.fromRGB(255, 60, 60);
-	h.OutlineColor = Color3.fromRGB(255, 200, 200);
-	h.FillTransparency = 0.55;
+	h.FillColor = Color3.fromRGB(255, 0, 0);
+	h.OutlineColor = Color3.fromRGB(255, 235, 235);
+	h.FillTransparency = 0.45;
 	h.OutlineTransparency = 0;
 	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop;
 	h.Adornee = model;

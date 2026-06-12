@@ -35,8 +35,10 @@ import {
 } from "./analytics-tracker";
 import { ANALYTICS_EVENTS } from "shared/config/analytics-events";
 import { isNPCKillable } from "shared/config/npcs";
+import { WEAPON_KILL_SOUND_EFFECTS } from "shared/config/sound-effects";
 import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
 import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
+import { playSoundEffect } from "./sound-effect-bus";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const boardBroadcastRemote = getBoardBroadcastRemote();
@@ -77,6 +79,11 @@ function isNPCModelKillable(model: Model): boolean {
 
 function broadcastBoardMessage(messageType: "info" | "warning" | "unlock", text: string): void {
 	boardBroadcastRemote.FireAllClients(messageType, text);
+}
+
+function playKillSoundForWeapon(player: Player, weaponId: string): void {
+	const effectId = WEAPON_KILL_SOUND_EFFECTS[weaponId];
+	if (effectId !== undefined) playSoundEffect(player, effectId);
 }
 
 function initializeAssassinationHandler() {
@@ -205,6 +212,7 @@ function initializeAssassinationHandler() {
 			// No poison — weapon handles the full kill (no death effect passed)
 			executeDelivery(model, equippedWeapon, playerPosition);
 		}
+		playKillSoundForWeapon(player, equippedWeapon);
 
 		// --- Reward the player ---
 		// Check if this NPC was the player's personal bounty mark BEFORE calling
@@ -331,6 +339,7 @@ function initializeAssassinationHandler() {
 		if (targetHumanoid) {
 			targetHumanoid.Health = 0;
 		}
+		playKillSoundForWeapon(killer, getPlayerEquippedWeapon(killer));
 
 		// Reward the assassin with the bounty
 		const wantedGold = getWantedPlayerGold(targetPlayer) ?? 300;

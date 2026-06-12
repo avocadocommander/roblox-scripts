@@ -21,6 +21,20 @@ export const INSPECT_REGISTRY: Record<string, InspectDef> = {
 		description:
 			"This rune looks old - maybe it was carved by the original settlers of this land? It depicts a cross with four triangles around it. You wonder if it has any significance.",
 	},
+	moon_book: {
+		displayName: "Moon-stained notes",
+		description:
+			"Whoever wrote this book was desperately trying to learn how to replant and reproduce the glowing mushrooms connected to the moon.",
+	},
+	growing_shroom: {
+		displayName: "Farmed glowing mushroom",
+		description: "Looks like these farmed mushrooms do not have the same effect as the natural ones.",
+	},
+	ship: {
+		displayName: "Ancient wreck",
+		description:
+			"This ship must have been down here for hundreds of years by the look of it. You know you have seen that symbol before.",
+	},
 };
 
 /** Look up an inspect definition by id. Returns undefined if not found. */

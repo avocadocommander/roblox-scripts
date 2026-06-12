@@ -2,6 +2,7 @@ import { Players, ReplicatedStorage, Workspace, DataStoreService } from "@rbxts/
 import { log } from "shared/helpers";
 import { getPlaceCampfireRemote, getCampfireRemovedRemote } from "shared/remotes/campfire-remote";
 import { trackPlacedCamp } from "./analytics-tracker";
+import { playSoundEffect } from "./sound-effect-bus";
 
 // Track each player's campfire location
 const playerCampfires = new Map<Player, { campfire: Model; position: Vector3 }>();
@@ -30,7 +31,8 @@ export function initializeCampfireSystem() {
 }
 
 function placePlayerCampfire(player: Player, position: Vector3, lookDir: Vector3): void {
-	spawnCampfireModel(player, position, lookDir);
+	if (!spawnCampfireModel(player, position, lookDir)) return;
+	playSoundEffect(player, "dropRune");
 	trackPlacedCamp(player);
 
 	// Persist the ground-level position that spawnCampfireModel resolved
@@ -135,7 +137,7 @@ function raycastToGround(origin: Vector3): Vector3 {
 	return origin.sub(new Vector3(0, 3, 0));
 }
 
-function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3): void {
+function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3): boolean {
 	const shouldToss = lookDir !== undefined;
 	// Remove any existing campfire for this player
 	const oldData = playerCampfires.get(player);
@@ -146,7 +148,7 @@ function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3
 	const campfireTemplate = ReplicatedStorage.FindFirstChild("Rune") as Model | undefined;
 	if (!campfireTemplate) {
 		log(`[CAMPFIRE] Rune template not found in ReplicatedStorage for ${player.Name}`, "ERROR");
-		return;
+		return false;
 	}
 
 	const campfire = campfireTemplate.Clone();
@@ -266,4 +268,5 @@ function spawnCampfireModel(player: Player, position: Vector3, lookDir?: Vector3
 			placeCampfireRemote.FireClient(otherPlayer, player.Name, position);
 		}
 	}
+	return true;
 }

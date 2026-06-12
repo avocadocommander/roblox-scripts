@@ -43,9 +43,10 @@ export interface PremiumWorldOffer {
 	/** For Developer Products: label describing charges (e.g. "Grants 2 uses per purchase"). */
 	chargesLabel?: string;
 	/**
-	 * Name of a Model in ReplicatedStorage > DisplayModels to clone as the
-	 * floating 3D display at shop OfferSlots.  Leave undefined to show only
-	 * the billboard text (no 3D mesh).
+	 * Name of a Model, MeshPart, or Accessory to clone as the floating 3D
+	 * display at shop OfferSlots. Resolver checks ReplicatedStorage/Weapons
+	 * first, then legacy DisplayModels, then ReplicatedStorage root. Leave
+	 * undefined to show only the billboard text.
 	 */
 	displayModelName?: string;
 }

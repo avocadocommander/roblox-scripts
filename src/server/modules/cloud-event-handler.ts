@@ -42,6 +42,8 @@ const CLOUD_NAME_TOKENS = ["cloud", "clouds", "dreamcloud", "sky cloud", "skyclo
 const CLOUD_MARKER_NAMES = ["CloudBeam", "Clouds", "DreamCloud", "DreamCloudBeam"];
 const WALL_TORCH_NAME = "Wall Torch";
 const FIREFLY_MODEL_NAME = "FireFlys";
+const DAWNS_GUIDE_VISUAL_NAME = "ActiveEnchantmentVisual";
+const DAWNS_GUIDE_LIGHT_NAME = "DawnsGuideLight";
 const SCHEDULE_INTERVAL_SECS = 30 * 60;
 const SCHEDULED_EVENT_DURATION_SECS = 4 * 60;
 const BOARD_EVENT_KEY = "dream_clouds";
@@ -232,11 +234,11 @@ function applyDreamBeam(beam: Beam, defaults: BeamDefaults): void {
 }
 
 function applyDreamTorchLight(light: Light, defaults: LightDefaults): void {
-	light.Enabled = true;
-	light.Color = Color3.fromRGB(40, 82, 190);
-	light.Brightness = math.max(defaults.brightness * 0.62, 0.75);
+	light.Enabled = false;
+	light.Color = defaults.color;
+	light.Brightness = 0;
 	if (light.IsA("PointLight") || light.IsA("SpotLight") || light.IsA("SurfaceLight")) {
-		light.Range = math.max(defaults.range, 14);
+		light.Range = defaults.range;
 	}
 }
 
@@ -250,12 +252,12 @@ function restoreLight(light: Light, defaults: LightDefaults): void {
 }
 
 function applyDreamTorchEmitter(emitter: ParticleEmitter, defaults: ParticleEmitterDefaults): void {
-	emitter.Enabled = true;
-	emitter.Color = MOON_FLAME_COLOR;
-	emitter.Brightness = math.max(defaults.brightness * 0.8, 0.55);
-	emitter.Rate = math.max(defaults.rate * 0.75, 8);
-	emitter.LightEmission = 0.35;
-	emitter.LightInfluence = 0.12;
+	emitter.Enabled = false;
+	emitter.Color = defaults.color;
+	emitter.Brightness = 0;
+	emitter.Rate = 0;
+	emitter.LightEmission = 0;
+	emitter.LightInfluence = defaults.lightInfluence;
 }
 
 function applyDreamFireflyLight(light: Light, defaults: LightDefaults): void {
@@ -286,11 +288,11 @@ function restoreEmitter(emitter: ParticleEmitter, defaults: ParticleEmitterDefau
 }
 
 function applyDreamTorchFire(fire: Fire, defaults: FireDefaults): void {
-	fire.Enabled = true;
-	fire.Color = Color3.fromRGB(28, 70, 190);
-	fire.SecondaryColor = Color3.fromRGB(102, 156, 255);
-	fire.Heat = defaults.heat * 0.65;
-	fire.Size = math.max(defaults.size * 0.85, 2.5);
+	fire.Enabled = false;
+	fire.Color = defaults.color;
+	fire.SecondaryColor = defaults.secondaryColor;
+	fire.Heat = 0;
+	fire.Size = 0;
 }
 
 function restoreFire(fire: Fire, defaults: FireDefaults): void {
@@ -311,6 +313,45 @@ function tweenLight(light: Light, color: Color3, brightness: number, range: numb
 			Range: range,
 		}).Play();
 	}
+}
+
+function isDawnsGuideEffect(instance: Instance): boolean {
+	return instance.Name === DAWNS_GUIDE_LIGHT_NAME || isInsideNamedAncestor(instance, DAWNS_GUIDE_VISUAL_NAME);
+}
+
+function tweenLightOff(light: Light, defaults: LightDefaults): void {
+	light.Enabled = true;
+	tweenLight(light, defaults.color, 0, defaults.range);
+	task.delay(EFFECT_FADE_SECS, () => {
+		if (light.Parent !== undefined) light.Enabled = false;
+	});
+}
+
+function tweenEmitterOff(emitter: ParticleEmitter, defaults: ParticleEmitterDefaults): void {
+	emitter.Enabled = true;
+	emitter.Color = defaults.color;
+	TweenService.Create(emitter, EFFECT_FADE_INFO, {
+		Brightness: 0,
+		Rate: 0,
+		LightEmission: 0,
+		LightInfluence: defaults.lightInfluence,
+	}).Play();
+	task.delay(EFFECT_FADE_SECS, () => {
+		if (emitter.Parent !== undefined) emitter.Enabled = false;
+	});
+}
+
+function tweenFireOff(fire: Fire, defaults: FireDefaults): void {
+	fire.Enabled = true;
+	TweenService.Create(fire, EFFECT_FADE_INFO, {
+		Color: defaults.color,
+		SecondaryColor: defaults.secondaryColor,
+		Heat: 0,
+		Size: 0,
+	}).Play();
+	task.delay(EFFECT_FADE_SECS, () => {
+		if (fire.Parent !== undefined) fire.Enabled = false;
+	});
 }
 
 function applyCloudBeamState(isDreaming: boolean): number {
@@ -377,38 +418,42 @@ function transitionCloudBeamState(isDreaming: boolean): number {
 	return beams.size();
 }
 
-function applyDreamEnvironmentState(isDreaming: boolean): { torches: number; fireflies: number } {
+function applyDreamEnvironmentState(isDreaming: boolean): { torches: number; fireflies: number; dawnsGuides: number } {
 	let torches = 0;
 	let fireflies = 0;
+	let dawnsGuides = 0;
 
 	for (const descendant of Workspace.GetDescendants()) {
 		const inTorch = isInsideNamedAncestor(descendant, WALL_TORCH_NAME);
 		const inFireflies = isInsideNamedAncestor(descendant, FIREFLY_MODEL_NAME);
-		if (!inTorch && !inFireflies) continue;
+		const inDawnsGuide = isDawnsGuideEffect(descendant);
+		if (!inTorch && !inFireflies && !inDawnsGuide) continue;
 
 		if (descendant.IsA("Light")) {
 			const defaults = rememberLightDefaults(descendant);
 			if (isDreaming) {
-				if (inTorch) applyDreamTorchLight(descendant, defaults);
+				if (inTorch || inDawnsGuide) applyDreamTorchLight(descendant, defaults);
 				if (inFireflies) applyDreamFireflyLight(descendant, defaults);
 			} else {
 				restoreLight(descendant, defaults);
 			}
 			if (inTorch) torches++;
 			if (inFireflies) fireflies++;
+			if (inDawnsGuide) dawnsGuides++;
 			continue;
 		}
 
 		if (descendant.IsA("ParticleEmitter")) {
 			const defaults = rememberEmitterDefaults(descendant);
 			if (isDreaming) {
-				if (inTorch) applyDreamTorchEmitter(descendant, defaults);
+				if (inTorch || inDawnsGuide) applyDreamTorchEmitter(descendant, defaults);
 				if (inFireflies) applyDreamFireflyEmitter(descendant, defaults);
 			} else {
 				restoreEmitter(descendant, defaults);
 			}
 			if (inTorch) torches++;
 			if (inFireflies) fireflies++;
+			if (inDawnsGuide) dawnsGuides++;
 			continue;
 		}
 
@@ -420,29 +465,29 @@ function applyDreamEnvironmentState(isDreaming: boolean): { torches: number; fir
 		}
 	}
 
-	return { torches, fireflies };
+	return { torches, fireflies, dawnsGuides };
 }
 
-function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number; fireflies: number } {
+function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number; fireflies: number; dawnsGuides: number } {
 	let torches = 0;
 	let fireflies = 0;
+	let dawnsGuides = 0;
 
 	for (const descendant of Workspace.GetDescendants()) {
 		const inTorch = isInsideNamedAncestor(descendant, WALL_TORCH_NAME);
 		const inFireflies = isInsideNamedAncestor(descendant, FIREFLY_MODEL_NAME);
-		if (!inTorch && !inFireflies) continue;
+		const inDawnsGuide = isDawnsGuideEffect(descendant);
+		if (!inTorch && !inFireflies && !inDawnsGuide) continue;
 
 		if (descendant.IsA("Light")) {
 			const defaults = rememberLightDefaults(descendant);
 			descendant.Enabled = true;
 			if (isDreaming) {
 				if (inTorch) {
-					tweenLight(
-						descendant,
-						Color3.fromRGB(40, 82, 190),
-						math.max(defaults.brightness * 0.62, 0.75),
-						math.max(defaults.range, 14),
-					);
+					tweenLightOff(descendant, defaults);
+				}
+				if (inDawnsGuide) {
+					tweenLightOff(descendant, defaults);
 				}
 				if (inFireflies) {
 					tweenLight(
@@ -460,6 +505,7 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 			}
 			if (inTorch) torches++;
 			if (inFireflies) fireflies++;
+			if (inDawnsGuide) dawnsGuides++;
 			continue;
 		}
 
@@ -468,13 +514,10 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 			descendant.Enabled = true;
 			if (isDreaming) {
 				if (inTorch) {
-					descendant.Color = MOON_FLAME_COLOR;
-					TweenService.Create(descendant, EFFECT_FADE_INFO, {
-						Brightness: math.max(defaults.brightness * 0.8, 0.55),
-						Rate: math.max(defaults.rate * 0.75, 8),
-						LightEmission: 0.35,
-						LightInfluence: 0.12,
-					}).Play();
+					tweenEmitterOff(descendant, defaults);
+				}
+				if (inDawnsGuide) {
+					tweenEmitterOff(descendant, defaults);
 				}
 				if (inFireflies) {
 					descendant.Color = FIREFLY_DREAM_COLOR;
@@ -499,6 +542,7 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 			}
 			if (inTorch) torches++;
 			if (inFireflies) fireflies++;
+			if (inDawnsGuide) dawnsGuides++;
 			continue;
 		}
 
@@ -506,12 +550,7 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 			const defaults = rememberFireDefaults(descendant);
 			descendant.Enabled = true;
 			if (isDreaming) {
-				TweenService.Create(descendant, EFFECT_FADE_INFO, {
-					Color: Color3.fromRGB(28, 70, 190),
-					SecondaryColor: Color3.fromRGB(102, 156, 255),
-					Heat: defaults.heat * 0.65,
-					Size: math.max(defaults.size * 0.85, 2.5),
-				}).Play();
+				tweenFireOff(descendant, defaults);
 			} else {
 				TweenService.Create(descendant, EFFECT_FADE_INFO, {
 					Color: defaults.color,
@@ -527,7 +566,7 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 		}
 	}
 
-	return { torches, fireflies };
+	return { torches, fireflies, dawnsGuides };
 }
 
 export function startDreamCloudEvent(): string {
@@ -537,7 +576,7 @@ export function startDreamCloudEvent(): string {
 	const envCount = transitionDreamEnvironmentState(true);
 	setBoardServerEvent(BOARD_EVENT_KEY, "Dream clouds are racing overhead.");
 	getDreamCloudEventRemote().FireAllClients(true);
-	return `Dream cloud event started (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
+	return `Dream cloud event started (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects, ${envCount.dawnsGuides} Dawn's Guide effects)`;
 }
 
 export function stopDreamCloudEvent(): string {
@@ -548,7 +587,7 @@ export function stopDreamCloudEvent(): string {
 	const envCount = transitionDreamEnvironmentState(false);
 	clearBoardServerEvent(BOARD_EVENT_KEY);
 	getDreamCloudEventRemote().FireAllClients(false);
-	return `Dream cloud event stopped (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects)`;
+	return `Dream cloud event stopped (${beamCount} beams, ${envCount.torches} torch effects, ${envCount.fireflies} firefly effects, ${envCount.dawnsGuides} Dawn's Guide effects)`;
 }
 
 export function toggleDreamCloudEvent(): string {
@@ -628,15 +667,16 @@ export function initializeCloudEventSystem(): void {
 			if (!dreamCloudsActive) return;
 			const inTorch = isInsideNamedAncestor(instance, WALL_TORCH_NAME);
 			const inFireflies = isInsideNamedAncestor(instance, FIREFLY_MODEL_NAME);
-			if (!inTorch && !inFireflies) return;
+			const inDawnsGuide = isDawnsGuideEffect(instance);
+			if (!inTorch && !inFireflies && !inDawnsGuide) return;
 
 			if (instance.IsA("Light")) {
 				const defaults = rememberLightDefaults(instance);
-				if (inTorch) applyDreamTorchLight(instance, defaults);
+				if (inTorch || inDawnsGuide) applyDreamTorchLight(instance, defaults);
 				if (inFireflies) applyDreamFireflyLight(instance, defaults);
 			} else if (instance.IsA("ParticleEmitter")) {
 				const defaults = rememberEmitterDefaults(instance);
-				if (inTorch) applyDreamTorchEmitter(instance, defaults);
+				if (inTorch || inDawnsGuide) applyDreamTorchEmitter(instance, defaults);
 				if (inFireflies) applyDreamFireflyEmitter(instance, defaults);
 			} else if (instance.IsA("Fire") && inTorch) {
 				applyDreamTorchFire(instance, rememberFireDefaults(instance));

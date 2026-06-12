@@ -12,6 +12,7 @@ import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/
 import { ALL_GAME_PASS_IDS, GAME_PASSES, getGamePassByPassId } from "shared/config/game-passes";
 import { givePlayerItem } from "./inventory-handler";
 import { trackPurchaseMade, trackPurchasePromptShown } from "./analytics-tracker";
+import { playSoundEffect } from "./sound-effect-bus";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,7 @@ export function initializePassHandler(): void {
 		if (!purchased) return;
 		log("[PASS] " + player.Name + " purchased pass " + passId);
 		trackPurchaseMade(player, "gamepass");
+		playSoundEffect(player, "gamePassPurchase");
 
 		const cache = getOrCreateCache(player);
 		cache.add(passId);

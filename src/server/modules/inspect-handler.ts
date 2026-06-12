@@ -11,6 +11,7 @@ import { log } from "shared/helpers";
 import { awardAchievement } from "./achievement-handler";
 import { getInspectDef } from "shared/config/inspectables";
 import { getOpenInspectRemote, getInspectPayloadRemote, InspectPayload } from "shared/remotes/inspect-remote";
+import { playSoundEffect } from "./sound-effect-bus";
 
 const openInspectRemote = getOpenInspectRemote();
 const inspectPayloadRemote = getInspectPayloadRemote();
@@ -55,6 +56,7 @@ export function initializeInspectHandler(): void {
 
 		awardAchievement(player, "A_CURIOUS_MIND");
 		inspectPayloadRemote.FireClient(player, payload);
+		playSoundEffect(player, "inspect");
 		log("[INSPECT] " + player.Name + " inspecting " + def.displayName + " (" + model.Name + ")");
 	});
 
