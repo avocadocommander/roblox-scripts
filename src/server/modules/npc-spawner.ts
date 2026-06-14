@@ -386,7 +386,9 @@ export function initializeNpcSpawner(): void {
 	const typedRoutes: Folder[] = [];
 	const untypedRoutes: Folder[] = [];
 	for (const r of remainingRoutes) {
-		if (getRouteSocialClass(r) !== undefined || getRouteRace(r) !== undefined) typedRoutes.push(r);
+		if (getRouteSocialClass(r) !== undefined || getRouteRace(r) !== undefined || getRouteRole(r) !== undefined) {
+			typedRoutes.push(r);
+		}
 		else untypedRoutes.push(r);
 	}
 

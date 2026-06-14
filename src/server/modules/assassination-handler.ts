@@ -72,9 +72,10 @@ function getNPCModelName(model: Model): string {
 }
 
 function isNPCModelKillable(model: Model): boolean {
+	const npcName = getNPCModelName(model);
 	const killableAttr = model.GetAttribute("Killable");
-	if (typeOf(killableAttr) === "boolean") return killableAttr as boolean;
-	return isNPCKillable(getNPCModelName(model));
+	if (typeOf(killableAttr) === "boolean") return (killableAttr as boolean) && isNPCKillable(npcName);
+	return isNPCKillable(npcName);
 }
 
 function broadcastBoardMessage(messageType: "info" | "warning" | "unlock", text: string): void {

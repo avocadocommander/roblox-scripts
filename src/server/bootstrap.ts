@@ -23,6 +23,7 @@ import { initializeTravelingMerchantSystem } from "./modules/traveling-merchant-
 import { initializeAnalyticsTracker } from "./modules/analytics-tracker";
 import { initializeCloudEventSystem } from "./modules/cloud-event-handler";
 import { initializeSoundEffectBus } from "./modules/sound-effect-bus";
+import { initializePositionMetrics } from "./modules/position-metrics";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -31,6 +32,7 @@ export async function bootstrapServer() {
 	// load assets / systems
 	//task.wait(5);
 	initializeAnalyticsTracker();
+	initializePositionMetrics();
 	initializeSoundEffectBus();
 	initializeMovementSystem();
 

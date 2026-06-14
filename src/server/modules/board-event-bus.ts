@@ -11,13 +11,13 @@ const activeServerEvents = new Map<string, ActiveServerEvent>();
 let eventOrder = 0;
 
 function getCurrentServerEventText(): string | undefined {
-	let selected: ActiveServerEvent | undefined;
+	const events: ActiveServerEvent[] = [];
 	for (const [, event] of activeServerEvents) {
-		if (selected === undefined || event.order > selected.order) {
-			selected = event;
-		}
+		events.push(event);
 	}
-	return selected?.text;
+	if (events.size() === 0) return undefined;
+	events.sort((a, b) => a.order > b.order);
+	return events.map((event) => event.text).join("\n");
 }
 
 function pushServerEventToAll(): void {

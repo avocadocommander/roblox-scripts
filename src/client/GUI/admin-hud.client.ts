@@ -1,7 +1,7 @@
 import { Players, TweenService, UserInputService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
-import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
+import { AdminCommandResult, AdminMetricsStats, getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
 import { getMockBountyKillRemote, getTurnInBountyRemote } from "shared/remotes/inventory-remote";
 import { POISON_LIST, getPoisonDisplayName } from "shared/config/poisons";
 import { ELIXIR_LIST, getElixirDisplayName } from "shared/config/elixirs";
@@ -15,6 +15,9 @@ function sc(base: number): number {
 
 let feedbackLabel: TextLabel | undefined;
 let panelRoot: Frame | undefined;
+let metricsStatsBar: Frame | undefined;
+let metricsTitleLabel: TextLabel | undefined;
+let metricsStatLabels: TextLabel[] = [];
 let panelOpen = false;
 
 // -- Admin check --------------------------------------------------------------
@@ -29,8 +32,15 @@ function isAdmin(): boolean {
 function runCommand(command: string, value?: string | number): void {
 	task.spawn(() => {
 		const remote = getAdminCommandRemote();
-		const result = remote.InvokeServer(command, value !== undefined ? value : 0) as string;
-		showFeedback(result);
+		const result = remote.InvokeServer(command, value !== undefined ? value : 0) as string | AdminCommandResult;
+		if (typeOf(result) === "table") {
+			const commandResult = result as AdminCommandResult;
+			showFeedback(commandResult.message);
+			if (commandResult.metricsActive === false) hideMetricsStatsBar();
+			else if (commandResult.metricsStats !== undefined) showMetricsStatsBar(commandResult.metricsStats);
+		} else {
+			showFeedback(result as string);
+		}
 	});
 }
 
@@ -41,6 +51,102 @@ function showFeedback(msg: string): void {
 	TweenService.Create(feedbackLabel, new TweenInfo(2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 		TextTransparency: 1,
 	}).Play();
+}
+
+function setStatText(index: number, label: string, value: string): void {
+	const stat = metricsStatLabels[index];
+	if (!stat) return;
+	stat.Text = label + "\n" + value;
+}
+
+function showMetricsStatsBar(stats: AdminMetricsStats): void {
+	if (!metricsStatsBar || !metricsTitleLabel) return;
+	metricsTitleLabel.Text = stats.modeLabel.upper();
+	setStatText(0, "Sessions", tostring(stats.sessions));
+	setStatText(1, "Players", tostring(stats.players));
+	setStatText(2, "Paths", tostring(stats.paths));
+	setStatText(3, "Points", tostring(stats.points));
+	setStatText(4, "Longest", stats.longestSession);
+	setStatText(5, "Window", stats.window);
+	metricsStatsBar.Visible = true;
+	metricsStatsBar.BackgroundTransparency = 0.12;
+}
+
+function hideMetricsStatsBar(): void {
+	if (!metricsStatsBar) return;
+	metricsStatsBar.Visible = false;
+}
+
+function buildMetricsStatsBar(screenGui: ScreenGui): void {
+	const bar = new Instance("Frame");
+	bar.Name = "MetricsStatsBar";
+	bar.Size = new UDim2(0, sc(760), 0, sc(56));
+	bar.Position = new UDim2(0.5, 0, 0, sc(8));
+	bar.AnchorPoint = new Vector2(0.5, 0);
+	bar.BackgroundColor3 = UI_THEME.bg;
+	bar.BackgroundTransparency = 0.12;
+	bar.BorderSizePixel = 0;
+	bar.Visible = false;
+	bar.ZIndex = 70;
+	bar.Parent = screenGui;
+	metricsStatsBar = bar;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = new UDim(0, sc(6));
+	corner.Parent = bar;
+
+	const stroke = new Instance("UIStroke");
+	stroke.Color = Color3.fromRGB(120, 98, 44);
+	stroke.Thickness = sc(1.2);
+	stroke.Transparency = 0.15;
+	stroke.Parent = bar;
+
+	const layout = new Instance("UIListLayout");
+	layout.FillDirection = Enum.FillDirection.Horizontal;
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center;
+	layout.Padding = new UDim(0, sc(8));
+	layout.Parent = bar;
+
+	const pad = new Instance("UIPadding");
+	pad.PaddingLeft = new UDim(0, sc(12));
+	pad.PaddingRight = new UDim(0, sc(12));
+	pad.Parent = bar;
+
+	const title = new Instance("TextLabel");
+	title.Name = "Title";
+	title.LayoutOrder = 0;
+	title.Size = new UDim2(0, sc(150), 1, 0);
+	title.BackgroundTransparency = 1;
+	title.Font = UI_THEME.fontBold;
+	title.Text = "METRICS";
+	title.TextColor3 = Color3.fromRGB(220, 178, 74);
+	title.TextSize = sc(13);
+	title.TextXAlignment = Enum.TextXAlignment.Left;
+	title.TextWrapped = true;
+	title.ZIndex = 71;
+	title.Parent = bar;
+	metricsTitleLabel = title;
+
+	metricsStatLabels = [];
+	const statWidth = sc(92);
+	for (let i = 0; i < 6; i++) {
+		const stat = new Instance("TextLabel");
+		stat.Name = "Stat_" + tostring(i);
+		stat.LayoutOrder = i + 1;
+		stat.Size = new UDim2(0, statWidth, 1, 0);
+		stat.BackgroundTransparency = 1;
+		stat.Font = UI_THEME.fontBold;
+		stat.Text = "";
+		stat.TextColor3 = UI_THEME.textPrimary;
+		stat.TextSize = sc(11);
+		stat.TextXAlignment = Enum.TextXAlignment.Center;
+		stat.TextYAlignment = Enum.TextYAlignment.Center;
+		stat.TextWrapped = true;
+		stat.ZIndex = 71;
+		stat.Parent = bar;
+		metricsStatLabels.push(stat);
+	}
 }
 
 // -- Panel toggle -------------------------------------------------------------
@@ -158,14 +264,41 @@ function getDropdowns(): DropdownDef[] {
 					action: () => runCommand("toggleDreamClouds"),
 				},
 				{
-					label: "Start Traveling Merchant",
+					label: "Traveling Merchant Toggle",
 					color: Color3.fromRGB(80, 180, 120),
-					action: () => runCommand("startTravelingMerchant"),
+					action: () => runCommand("toggleTravelingMerchant"),
+				},
+			],
+		},
+		{
+			id: "metrics",
+			label: "Metrics",
+			color: Color3.fromRGB(150, 210, 230),
+			buttons: [
+				{
+					label: "Live Trails Toggle",
+					color: Color3.fromRGB(150, 210, 230),
+					action: () => runCommand("togglePositionTrails"),
 				},
 				{
-					label: "Stop Traveling Merchant",
-					color: Color3.fromRGB(180, 80, 80),
-					action: () => runCommand("stopTravelingMerchant"),
+					label: "Historical Toggle",
+					color: Color3.fromRGB(190, 150, 230),
+					action: () => runCommand("toggleHistoricalPositionTrails"),
+				},
+				{
+					label: "1 Today Activity",
+					color: Color3.fromRGB(80, 180, 160),
+					action: () => runCommand("showTodayPositionTrails"),
+				},
+				{
+					label: "2 Yesterday Activity",
+					color: Color3.fromRGB(120, 150, 210),
+					action: () => runCommand("showYesterdayPositionTrails"),
+				},
+				{
+					label: "3 Latest Sessions",
+					color: Color3.fromRGB(190, 150, 230),
+					action: () => runCommand("showLatestPositionTrails"),
 				},
 			],
 		},
@@ -433,6 +566,7 @@ onPlayerInitialized(() => {
 	const screenGui = playerGui.WaitForChild("ScreenGui") as ScreenGui;
 
 	buildAdminHUD(screenGui);
+	buildMetricsStatsBar(screenGui);
 
 	// Toggle with Ctrl + ` (backquote). Keyboard-only -- not reachable on
 	// mobile/console which have no Ctrl key. Same combo on Windows and macOS.

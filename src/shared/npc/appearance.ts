@@ -51,6 +51,16 @@ function getAppearanceRole(npc: Model, routeFolder: Folder | undefined) {
 	return npcDef?.appearanceRole ?? getRouteRole(routeFolder);
 }
 
+function getHeadwearOffset(accessoryName: string): CFrame {
+	if (accessoryName === "Chaplain Hat") return new CFrame(0, 0.55, 0);
+	if (accessoryName === "TemplarHelm") return new CFrame(0, 0.2, 0);
+	return new CFrame();
+}
+
+function usesManualHeadwearAttach(accessoryName: string): boolean {
+	return accessoryName === "TemplarHelm" || accessoryName === "Chaplain Hat";
+}
+
 function applyRouteClothingColors(
 	role: ReturnType<typeof getAppearanceRole>,
 	shirt: SurfaceAppearance | undefined,
@@ -61,6 +71,13 @@ function applyRouteClothingColors(
 		if (shirt) shirt.Color = new Color3(0, 0, 0);
 		if (pants) pants.Color = new Color3(0, 0, 0);
 		if (shoes) shoes.Color = new Color3(0, 0, 0);
+		return true;
+	}
+
+	if (role === "Dawnsworn") {
+		if (shirt) shirt.Color = Color3.fromRGB(132, 138, 140);
+		if (pants) pants.Color = Color3.fromRGB(72, 78, 82);
+		if (shoes) shoes.Color = Color3.fromRGB(42, 45, 48);
 		return true;
 	}
 
@@ -179,8 +196,19 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 	}
 
 	const humanoid = npc.FindFirstChildOfClass("Humanoid");
+	const head = npc.FindFirstChild("Head") as BasePart | undefined;
+
+	function removeEmbeddedScripts(root: Instance): void {
+		for (const desc of root.GetDescendants()) {
+			if (desc.IsA("Script") || desc.IsA("LocalScript") || desc.IsA("ModuleScript")) {
+				desc.Destroy();
+			}
+		}
+	}
 
 	function sanitizeAccessoryClone(accessory: Accessory): void {
+		removeEmbeddedScripts(accessory);
+
 		function weldTouchesOutsideAccessory(part0: BasePart | undefined, part1: BasePart | undefined): boolean {
 			return (
 				part0 === undefined ||
@@ -229,8 +257,74 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 		log(logLabel + accessoryName);
 	}
 
+	function prepareModelParts(model: Model): BasePart[] {
+		removeEmbeddedScripts(model);
+
+		const parts: BasePart[] = [];
+		for (const desc of model.GetDescendants()) {
+			if (desc.IsA("BasePart")) {
+				desc.Anchored = false;
+				desc.CanCollide = false;
+				desc.CanTouch = false;
+				desc.CanQuery = false;
+				desc.Massless = true;
+				parts.push(desc);
+			}
+		}
+		return parts;
+	}
+
+	function attachHeadwearInstance(templateInstance: Instance): boolean {
+		if (!head) return false;
+
+		const model = new Instance("Model");
+		model.Name = accessoryName;
+		const clone = templateInstance.Clone();
+		clone.Parent = model;
+		const parts = prepareModelParts(model);
+		if (parts.size() === 0) {
+			model.Destroy();
+			return false;
+		}
+
+		let anchor =
+			(model.FindFirstChild("Handle", true) as BasePart | undefined) ??
+			(model.FindFirstChild("Middle", true) as BasePart | undefined) ??
+			(model.FindFirstChild("Root", true) as BasePart | undefined) ??
+			(model.FindFirstChild("Cabasset", true) as BasePart | undefined) ??
+			parts[0];
+		if (!anchor || !anchor.IsA("BasePart")) anchor = parts[0];
+
+		model.PrimaryPart = anchor;
+		model.Parent = npc;
+
+		const pivotOffsetFromAnchor = anchor.CFrame.ToObjectSpace(model.GetPivot());
+		model.PivotTo(head.CFrame.mul(getHeadwearOffset(accessoryName)).mul(pivotOffsetFromAnchor));
+
+		for (const part of parts) {
+			if (part === anchor) continue;
+			const weld = new Instance("WeldConstraint");
+			weld.Part0 = anchor;
+			weld.Part1 = part;
+			weld.Parent = anchor;
+		}
+
+		const headWeld = new Instance("WeldConstraint");
+		headWeld.Name = "HeadwearWeld";
+		headWeld.Part0 = head;
+		headWeld.Part1 = anchor;
+		headWeld.Parent = anchor;
+		log("[APPEARANCE] Attached model headwear: " + accessoryName);
+		return true;
+	}
+
 	// Accessory or Hat: humanoid can equip directly.
 	if (template.IsA("Accessory") || template.IsA("Hat")) {
+		const handle = template.FindFirstChild("Handle");
+		if ((!handle || !handle.IsA("BasePart")) && usesManualHeadwearAttach(accessoryName)) {
+			if (attachHeadwearInstance(template)) return;
+		}
+
 		const accessory = template.Clone() as Accessory;
 		equipAccessory(accessory, "[APPEARANCE] Attached accessory: ");
 		return;
@@ -250,6 +344,10 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 		// Model containing a `Handle` BasePart (no nested Accessory) — wrap
 		// the Handle in a runtime Accessory so the humanoid can equip it.
 		// The Handle should carry its own Attachment so AddAccessory can weld.
+		if (usesManualHeadwearAttach(accessoryName)) {
+			if (attachHeadwearInstance(template)) return;
+		}
+
 		const handle = template.FindFirstChild("Handle");
 		if (handle && handle.IsA("BasePart")) {
 			const accessory = new Instance("Accessory");
@@ -260,6 +358,10 @@ function cloneAndAttachAccessory(npc: Model, accessoryName: string): void {
 			equipAccessory(accessory, "[APPEARANCE] Attached accessory from Model+Handle: ");
 			return;
 		}
+	}
+
+	if (template.IsA("BasePart") && usesManualHeadwearAttach(accessoryName)) {
+		if (attachHeadwearInstance(template)) return;
 	}
 
 	log(
@@ -331,6 +433,7 @@ function pickClothingItemsForNPC(
 	// 2) Route pool overrides tier pool (one seeded pick).
 	const position = getAppearanceRole(npc, routeFolder);
 	const routePool = position !== undefined ? ROUTE_CLOTHING_POOLS[position] : undefined;
+	if (position !== undefined && routePool === undefined) return [];
 	const pool = routePool ?? STATUS_CLOTHING[data.status].clothingPool;
 	if (pool === undefined || pool.size() === 0) return [];
 	const pick = pool[math.floor(seed() * pool.size())];

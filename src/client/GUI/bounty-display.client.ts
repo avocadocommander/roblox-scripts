@@ -183,7 +183,7 @@ interface MessageEntry {
 }
 const activeMessages: MessageEntry[] = [];
 
-// Server-event banner — static, 1 at a time, hidden when no active event
+// Server-event banner — static stack of active server events, hidden when none
 let serverEventFrame: Frame | undefined;
 let serverEventLabel: TextLabel | undefined;
 
@@ -558,7 +558,7 @@ function buildWantedSections(wrapper: Frame): void {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  SERVER EVENT BANNER  (static, 1 at a time — hidden when no active event)
+//  SERVER EVENT BANNER  (static stack — hidden when no active event)
 //  Set by the server via BoardBroadcast "event" type. Unlike transient
 //  messages this persists until explicitly cleared.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -568,6 +568,7 @@ function buildServerEventBanner(wrapper: Frame): void {
 	frame.Name = "ServerEvent";
 	frame.LayoutOrder = 3;
 	frame.Size = new UDim2(1, 0, 0, sc(compact ? 30 : 38));
+	frame.AutomaticSize = Enum.AutomaticSize.Y;
 	frame.BackgroundColor3 = UI_THEME.bg;
 	frame.BackgroundTransparency = UI_THEME.bgTransparency;
 	frame.BorderSizePixel = 0;
@@ -611,13 +612,15 @@ function buildServerEventBanner(wrapper: Frame): void {
 	bodyLabel.Name = "Body";
 	bodyLabel.LayoutOrder = 1;
 	bodyLabel.Size = new UDim2(1, 0, 0, sc(16));
+	bodyLabel.AutomaticSize = Enum.AutomaticSize.Y;
 	bodyLabel.BackgroundTransparency = 1;
 	bodyLabel.Text = "";
 	bodyLabel.TextColor3 = UI_THEME.textPrimary;
 	bodyLabel.Font = UI_THEME.fontBold;
 	bodyLabel.TextSize = sc(compact ? 11 : 13);
 	bodyLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	bodyLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	bodyLabel.TextYAlignment = Enum.TextYAlignment.Top;
+	bodyLabel.TextWrapped = true;
 	bodyLabel.Parent = frame;
 
 	serverEventFrame = frame;

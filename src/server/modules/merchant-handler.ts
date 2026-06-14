@@ -88,6 +88,7 @@ function buildSignContents(
 	marker: string,
 	shopName: string,
 	rotation: number,
+	vertical = false,
 ): void {
 	// Canvas is portrait (186 wide × 294 tall px at 50pps).
 	// Rotator swaps dimensions so content fills the physically landscape sign.
@@ -96,7 +97,7 @@ function buildSignContents(
 	rotator.BackgroundTransparency = 1;
 	rotator.AnchorPoint = new Vector2(0.5, 0.5);
 	rotator.Position = new UDim2(0.5, 0, 0.5, 0);
-	rotator.Size = new UDim2(0, 294, 0, 186);
+	rotator.Size = vertical ? new UDim2(1, 0, 1, 0) : new UDim2(0, 294, 0, 186);
 	rotator.Rotation = rotation;
 	rotator.ClipsDescendants = false;
 	rotator.Parent = gui;
@@ -142,13 +143,13 @@ function buildSignContents(
 	// ── Tier 1: main shop name — large, top area ────────────────────────────
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Name = "NameLabel";
-	nameLabel.Size = new UDim2(1, -8, 0.6, 0);
-	nameLabel.Position = new UDim2(0, 4, 0.02, 0);
+	nameLabel.Size = vertical ? new UDim2(1, -12, 0.68, 0) : new UDim2(1, -8, 0.6, 0);
+	nameLabel.Position = vertical ? new UDim2(0, 6, 0.08, 0) : new UDim2(0, 4, 0.02, 0);
 	nameLabel.BackgroundTransparency = 1;
 	nameLabel.TextColor3 = colors.name;
 	nameLabel.Font = Enum.Font.GothamBold;
 	nameLabel.TextScaled = false;
-	nameLabel.TextSize = 52;
+	nameLabel.TextSize = vertical ? 44 : 52;
 	nameLabel.TextWrapped = true;
 	nameLabel.ClipsDescendants = false;
 	nameLabel.TextStrokeTransparency = 0.75;
@@ -160,13 +161,13 @@ function buildSignContents(
 	// ── Tier 2: shop type — smaller, bottom area ────────────────────────────
 	const markerLabel = new Instance("TextLabel");
 	markerLabel.Name = "MarkerLabel";
-	markerLabel.Size = new UDim2(1, -8, 0.3, 0);
-	markerLabel.Position = new UDim2(0, 4, 0.65, 0);
+	markerLabel.Size = vertical ? new UDim2(1, -12, 0.2, 0) : new UDim2(1, -8, 0.3, 0);
+	markerLabel.Position = vertical ? new UDim2(0, 6, 0.74, 0) : new UDim2(0, 4, 0.65, 0);
 	markerLabel.BackgroundTransparency = 1;
 	markerLabel.TextColor3 = colors.marker;
 	markerLabel.Font = Enum.Font.SourceSansBold;
 	markerLabel.TextScaled = false;
-	markerLabel.TextSize = 36;
+	markerLabel.TextSize = vertical ? 24 : 36;
 	markerLabel.TextWrapped = false;
 	markerLabel.ClipsDescendants = false;
 	markerLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0);
@@ -177,10 +178,25 @@ function buildSignContents(
 	markerLabel.Parent = bg;
 }
 
-function applySignText(signPart: BasePart, shopType: ShopType, npcName: string): void {
+interface SignTextOverrides {
+	marker?: string;
+	shopName?: string;
+}
+
+function isStandingSignBoard(signPart: BasePart): boolean {
+	return signPart.Name === "Board" || signPart.Size.Y > signPart.Size.X;
+}
+
+export function applyMerchantSignText(
+	signPart: BasePart,
+	shopType: ShopType,
+	npcName: string,
+	overrides?: SignTextOverrides,
+): void {
 	const colors = SIGN_COLORS[shopType];
-	const marker = SHOP_TYPE_MARKERS[shopType];
-	const shopName = generateShopName(npcName, shopType);
+	const marker = overrides?.marker ?? SHOP_TYPE_MARKERS[shopType];
+	const shopName = overrides?.shopName ?? generateShopName(npcName, shopType);
+	const standingBoard = isStandingSignBoard(signPart);
 
 	// Remove any stale guis
 	for (const child of signPart.GetChildren()) {
@@ -190,23 +206,23 @@ function applySignText(signPart: BasePart, shopType: ShopType, npcName: string):
 	// Front face
 	const front = new Instance("SurfaceGui");
 	front.Name = "ShopSignGui";
-	front.Face = Enum.NormalId.Right;
+	front.Face = standingBoard ? Enum.NormalId.Front : Enum.NormalId.Right;
 	front.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud;
 	front.PixelsPerStud = 50;
 	front.AlwaysOnTop = false;
 	front.LightInfluence = 1;
-	buildSignContents(front, colors, marker, shopName, 90);
+	buildSignContents(front, colors, marker, shopName, standingBoard ? 0 : 90, standingBoard);
 	front.Parent = signPart;
 
 	// Back face — Left face Y axis is flipped so use -90
 	const back = new Instance("SurfaceGui");
 	back.Name = "ShopSignGuiBack";
-	back.Face = Enum.NormalId.Left;
+	back.Face = standingBoard ? Enum.NormalId.Back : Enum.NormalId.Left;
 	back.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud;
 	back.PixelsPerStud = 50;
 	back.AlwaysOnTop = false;
 	back.LightInfluence = 1;
-	buildSignContents(back, colors, marker, shopName, -90);
+	buildSignContents(back, colors, marker, shopName, standingBoard ? 0 : -90, standingBoard);
 	back.Parent = signPart;
 
 	log("[MERCHANT] Sign: [" + shopType + "] " + shopName + " on " + signPart.Name);
@@ -219,7 +235,7 @@ function applySignText(signPart: BasePart, shopType: ShopType, npcName: string):
  * Searches CollectionService tags, exact name matches, Sign models,
  * and case-insensitive fallbacks. Returns all unique matches.
  */
-function resolveSignParts(shopSite: Model, routeOrigin?: Vector3): BasePart[] {
+export function resolveMerchantSignParts(shopSite: Model, routeOrigin?: Vector3): BasePart[] {
 	const found = new Set<BasePart>();
 
 	// 1. CollectionService "Sign" tag on descendant BaseParts
@@ -236,11 +252,16 @@ function resolveSignParts(shopSite: Model, routeOrigin?: Vector3): BasePart[] {
 		}
 	}
 
-	// 3. Any descendant named "Sign" that is a Model -> use PrimaryPart or first BasePart
+	// 3. Any descendant named "Sign" that is a container -> prefer a Board part,
+	// then PrimaryPart, then the first BasePart.
 	for (const inst of shopSite.GetDescendants()) {
-		if (inst.Name === "Sign" && inst.IsA("Model")) {
-			const m = inst as Model;
-			const part = m.PrimaryPart ?? (m.FindFirstChildWhichIsA("BasePart") as BasePart | undefined);
+		if (inst.Name === "Sign" && (inst.IsA("Model") || inst.IsA("Folder"))) {
+			const m = inst.IsA("Model") ? (inst as Model) : undefined;
+			const board = inst.FindFirstChild("Board", true);
+			const part =
+				(board?.IsA("BasePart") ? board : undefined) ??
+				m?.PrimaryPart ??
+				(inst.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined);
 			if (part) found.add(part);
 		}
 	}
@@ -731,9 +752,9 @@ function spawnMerchant(npcName: string, shopSite: Model, shopItems: ShopItem[], 
 
 	// Apply sign from the same ShopSite
 	// Apply sign to all sign parts in the ShopSite
-	const signParts = resolveSignParts(shopSite, routePoints[0].Position);
+	const signParts = resolveMerchantSignParts(shopSite, routePoints[0].Position);
 	for (const signPart of signParts) {
-		applySignText(signPart, shopType, npcName);
+		applyMerchantSignText(signPart, shopType, npcName);
 	}
 	const offerPlacementOrigin = signParts[0]?.Position ?? routePoints[0].Position;
 

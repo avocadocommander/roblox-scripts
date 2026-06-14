@@ -113,7 +113,7 @@ function std(
 		socialClass,
 		occupation: occupation ?? socialClass,
 		interaction: interaction ?? "Ambient",
-		killable: true,
+		killable: race !== "Gnome",
 		dialog: undefined,
 		shop: undefined,
 	};
@@ -434,13 +434,13 @@ export const ROUTABLE_NPC_NAMES = NPC_NAMES.filter((n) => {
 	const def = NPC_REGISTRY[n];
 	// Exclude non-killable special NPCs (guild leaders, etc.) and any with a
 	// non-ambient interaction — they must be pinned via NPCName on a Route folder.
-	return def.killable && def.interaction === "Ambient";
+	return def.interaction === "Ambient" && (def.killable || def.race === "Gnome");
 });
 
 /** Returns true if `npcName` is killable (can be assassinated). */
 export function isNPCKillable(npcName: string): boolean {
 	const def = NPC_REGISTRY[npcName];
-	return def !== undefined && def.killable;
+	return def !== undefined && def.killable && def.race !== "Gnome";
 }
 
 /** Get the player-facing interaction type for an NPC. */

@@ -623,19 +623,28 @@ export function normalizeRouteRole(position: Position | undefined): RouteRole | 
 }
 
 const VALID_PACES: ReadonlySet<string> = new Set<string>(["Stationary", "Slow", "Medium", "Fast"]);
-const VALID_POSITIONS: ReadonlySet<string> = new Set<string>([
-	"Dawnsworn",
-	"Nightbound",
-	"Chaplain",
-	"Dawn",
-	"Night",
-	"Guard",
-]);
 const VALID_TEMPOS: ReadonlySet<string> = new Set<string>(["Chill", "Hurry", "Gas"]);
+
+const POSITION_ALIASES: Record<string, Position> = {
+	dawn: "Dawn",
+	dawnsworn: "Dawnsworn",
+	guard: "Guard",
+	night: "Night",
+	nightbound: "Nightbound",
+	nightsworn: "Nightbound",
+	chaplain: "Chaplain",
+};
+
+function trimAttribute(value: string): string {
+	const [trimmed] = value.gsub("^%s*(.-)%s*$", "%1");
+	return trimmed;
+}
 
 function readStringAttribute(parent: Folder, attributeName: string): string | undefined {
 	const value = parent.GetAttribute(attributeName);
-	return typeIs(value, "string") && value !== "" ? value : undefined;
+	if (!typeIs(value, "string")) return undefined;
+	const trimmed = trimAttribute(value);
+	return trimmed !== "" ? trimmed : undefined;
 }
 
 export function getRoutePace(parent: Folder | undefined): Pace | undefined {
@@ -652,7 +661,8 @@ export function getRoutePosition(parent: Folder | undefined): Position | undefin
 	if (parent === undefined) return undefined;
 	const raw = readStringAttribute(parent, "RouteRole");
 	if (raw === undefined) return undefined;
-	if (VALID_POSITIONS.has(raw)) return raw as Position;
+	const canonical = POSITION_ALIASES[raw.lower()];
+	if (canonical !== undefined) return canonical;
 
 	log(`[ROUTE-CONFIG] Route ${parent.Name} has invalid RouteRole '${raw}' -- treating as a regular route`, "WARN");
 	return undefined;

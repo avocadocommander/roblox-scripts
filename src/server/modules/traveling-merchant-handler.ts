@@ -31,7 +31,12 @@ import { ShopItem } from "shared/config/npcs";
 import { ITEMS, RARITY_COLORS } from "shared/inventory";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { getRouteEnchantment } from "shared/npc-manager";
-import { registerMerchantShop, unregisterMerchantShop } from "./merchant-handler";
+import {
+	applyMerchantSignText,
+	registerMerchantShop,
+	resolveMerchantSignParts,
+	unregisterMerchantShop,
+} from "./merchant-handler";
 import { broadcastBoardMessage, clearBoardServerEvent, setBoardServerEvent } from "./board-event-bus";
 import { applySheathedWeaponVisualToCharacter, ensureCharacterWeaponAnchors } from "./weapon-visual-handler";
 import { applyEnchantmentVisualToCharacter } from "./enchantment-visual-handler";
@@ -43,6 +48,7 @@ const SHOP_CHILD_NAME = "Shop";
 
 /** Attachment name used to mark valid merchant spawn locations in Workspace. */
 const SPAWN_ATTACHMENT_NAME = "MerchantSpawn";
+const CART_SPAWN_ATTACHMENT_NAME = "SpawnPoint";
 
 const CART_BODY_MODEL_NAME = "Car";
 const CART_LIGHTS_PART_NAME = "lights";
@@ -121,7 +127,7 @@ function spawnCart(): Model | undefined {
  * Scan Workspace for Attachments named SPAWN_ATTACHMENT_NAME and pick one at
  * random. Returns undefined if no spawn attachments exist.
  */
-function pickSpawnCFrame(): CFrame | undefined {
+function pickSpawnAttachment(): Attachment | undefined {
 	const spots: Attachment[] = [];
 	for (const desc of Workspace.GetDescendants()) {
 		if (desc.IsA("Attachment") && desc.Name === SPAWN_ATTACHMENT_NAME) {
@@ -129,7 +135,28 @@ function pickSpawnCFrame(): CFrame | undefined {
 		}
 	}
 	if (spots.size() === 0) return undefined;
-	return spots[math.random(0, spots.size() - 1)].WorldCFrame;
+	return spots[math.random(0, spots.size() - 1)];
+}
+
+function findCartSpawnAttachment(cart: Model): Attachment | undefined {
+	const direct = cart.FindFirstChild(CART_SPAWN_ATTACHMENT_NAME);
+	if (direct?.IsA("Attachment")) return direct;
+
+	for (const desc of cart.GetDescendants()) {
+		if (desc.IsA("Attachment") && desc.Name === CART_SPAWN_ATTACHMENT_NAME) return desc;
+	}
+	return undefined;
+}
+
+function getCartPivotForSpawnAttachment(cart: Model, targetSpawnCF: CFrame): CFrame {
+	const cartSpawn = findCartSpawnAttachment(cart);
+	if (!cartSpawn) {
+		log("[TRAVELING-MERCHANT] Cart missing SpawnPoint attachment -- falling back to model pivot.", "WARN");
+		return targetSpawnCF;
+	}
+
+	const spawnOffsetFromPivot = cart.GetPivot().ToObjectSpace(cartSpawn.WorldCFrame);
+	return targetSpawnCF.mul(spawnOffsetFromPivot.Inverse());
 }
 
 /** Smoothly interpolate the whole model from `fromCF` to `toCF` (ease-out cubic). */
@@ -211,6 +238,21 @@ function despawnNPC(): void {
 	activeNPCName = undefined;
 }
 
+function getMerchantSurname(npcName: string): string {
+	let [lastSpace] = npcName.find(" ", 1, true);
+	if (lastSpace === undefined) return npcName;
+
+	let searchFrom = lastSpace + 1;
+	let [nextSpace] = npcName.find(" ", searchFrom, true);
+	while (nextSpace !== undefined) {
+		lastSpace = nextSpace;
+		searchFrom = nextSpace + 1;
+		[nextSpace] = npcName.find(" ", searchFrom, true);
+	}
+
+	return npcName.sub(lastSpace + 1);
+}
+
 function spawnNPCForCart(cart: Model): ShopItem[] {
 	// Resolve the shop sub-model which travels with the cart clone.
 	const shopModel = cart.FindFirstChild(SHOP_CHILD_NAME) as Model | undefined;
@@ -271,6 +313,15 @@ function spawnNPCForCart(cart: Model): ShopItem[] {
 	if (!hasDawn) shopItems.push({ itemId: "dawnsight_elixir", price: 1600 });
 	registerMerchantShop(npcName, shopItems);
 
+	const signParts = resolveMerchantSignParts(shopModel, routePoints[0].Position);
+	const shopSignName = getMerchantSurname(npcName) + " Rare Wares";
+	for (const signPart of signParts) {
+		applyMerchantSignText(signPart, TRAVELING_MERCHANT_SHOP_TYPE, npcName, {
+			shopName: shopSignName,
+			marker: "MIXED GOODS",
+		});
+	}
+
 	activeNPC = npc;
 	activeNPCName = npcName;
 	log("[TRAVELING-MERCHANT] NPC '" + npcName + "' spawned at cart.");
@@ -293,8 +344,8 @@ export function startTravelingMerchantEvent(): void {
 		return;
 	}
 
-	const spawnCF = pickSpawnCFrame();
-	if (spawnCF === undefined) {
+	const spawnAttachment = pickSpawnAttachment();
+	if (spawnAttachment === undefined) {
 		log("[TRAVELING-MERCHANT] No spawn location available -- event cannot start.", "ERROR");
 		return;
 	}
@@ -316,11 +367,12 @@ export function startTravelingMerchantEvent(): void {
 	// Clone the template and start it in the sky above the chosen attachment.
 	const cart = spawnCart()!;
 	activeCart = cart;
-	const skyCF = buildSkyCFrame(spawnCF);
+	const landingCF = getCartPivotForSpawnAttachment(cart, spawnAttachment.WorldCFrame);
+	const skyCF = buildSkyCFrame(landingCF);
 	cart.PivotTo(skyCF);
 
 	task.spawn(() => {
-		lerpModel(cart, skyCF, spawnCF, ARRIVE_TWEEN_SECS);
+		lerpModel(cart, skyCF, landingCF, ARRIVE_TWEEN_SECS);
 
 		// After landing, spawn the merchant NPC and colour the mood lights.
 		const shopItems = spawnNPCForCart(cart);
@@ -377,6 +429,15 @@ export function stopTravelingMerchantEvent(): void {
 
 	// Schedule the next automatic spawn.
 	scheduleNextAutoSpawn();
+}
+
+export function toggleTravelingMerchantEvent(): string {
+	if (eventActive) {
+		stopTravelingMerchantEvent();
+		return "Traveling merchant event stopped";
+	}
+	startTravelingMerchantEvent();
+	return "Traveling merchant event started";
 }
 
 function scheduleNextAutoSpawn(): void {

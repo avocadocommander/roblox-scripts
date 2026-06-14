@@ -1,5 +1,21 @@
 import { getRemotesFolder, getRemoteFunction } from "shared/remote-utils";
 
+export interface AdminMetricsStats {
+	modeLabel: string;
+	sessions: number;
+	players: number;
+	paths: number;
+	points: number;
+	longestSession: string;
+	window: string;
+}
+
+export interface AdminCommandResult {
+	message: string;
+	metricsActive?: boolean;
+	metricsStats?: AdminMetricsStats;
+}
+
 /** Client -> Server: admin command (add money, xp, level up, reset, random bounty, etc.). */
 export function getAdminCommandRemote(): RemoteFunction {
 	return getRemoteFunction(getRemotesFolder(), "AdminCommand");

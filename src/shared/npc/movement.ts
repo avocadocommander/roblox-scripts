@@ -1,4 +1,4 @@
-import { PathfindingService, TweenService } from "@rbxts/services";
+import { TweenService } from "@rbxts/services";
 import { getRoutePace, Pace } from "../npc-manager";
 import type { NPC, NPCStateKeys } from "./main";
 import { makeSeededRandom, getSeedFromName } from "./utils";
@@ -204,18 +204,6 @@ async function navigate(
 	npc: NPC,
 	setState: (state: NPCStateKeys, npc: NPC) => void,
 ): Promise<void> {
-	const path = PathfindingService.CreatePath({
-		AgentRadius: 2,
-		AgentHeight: 5,
-		AgentCanJump: true,
-		AgentCanClimb: false,
-		Costs: {
-			Water: 100,
-			Carpet: 0,
-			Cobblestone: 0,
-		},
-	});
-
 	// RootPart can be nil transiently while the rig is still assembling or
 	// during tear-down — bail early rather than throwing.
 	const rootPart = npc.humanoid.RootPart;
@@ -223,42 +211,30 @@ async function navigate(
 		setState("IDLE", npc);
 		return;
 	}
-	path.ComputeAsync(rootPart.Position, moveToPosition);
-	if (path.Status === Enum.PathStatus.Success) {
-		const waypoints = path.GetWaypoints();
-		let current = 0;
+	setState("WALKING", npc);
+	npc.humanoid.MoveTo(moveToPosition);
 
-		setState("WALKING", npc);
+	const distance = rootPart.Position.sub(moveToPosition).Magnitude;
+	const expectedTravelSecs = distance / math.max(npc.humanoid.WalkSpeed, 1);
+	const timeoutSecs = math.clamp(expectedTravelSecs + 2, 3, 10);
 
-		const moveToNextWaypoint = async () => {
-			current++;
-			if (current >= waypoints.size()) {
-				setState("IDLE", npc);
-				return;
-			}
-			const wp = waypoints[current];
+	await new Promise<void>((resolve) => {
+		let done = false;
+		const conn = npc.humanoid.MoveToFinished.Connect(() => {
+			if (done) return;
+			done = true;
+			conn.Disconnect();
+			resolve();
+		});
+		task.delay(timeoutSecs, () => {
+			if (done) return;
+			done = true;
+			conn.Disconnect();
+			resolve();
+		});
+	});
 
-			npc.humanoid.MoveTo(wp.Position);
-			await new Promise<void>((resolve) => {
-				const conn = npc.humanoid.MoveToFinished.Connect((reached) => {
-					if (reached) {
-						conn.Disconnect();
-						resolve();
-					} else {
-						// Re-issue MoveTo to beat the 8-second timeout
-						if (npc.model.Parent) {
-							npc.humanoid.MoveTo(wp.Position);
-						} else {
-							conn.Disconnect();
-							resolve();
-						}
-					}
-				});
-			});
-			await moveToNextWaypoint();
-		};
-		await moveToNextWaypoint();
-	}
+	setState("IDLE", npc);
 }
 
 export { getHumanoidPace, assignNpcToRoute, navigate };

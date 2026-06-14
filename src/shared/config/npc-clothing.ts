@@ -125,7 +125,7 @@ export const STATUS_CLOTHING: Record<Status, TierClothingDef> = {
 export const ROUTE_ACCESSORIES: Record<string, string[]> = {
 	Dawnsworn: ["TemplarHelm"],
 	Nightbound: ["GuardBack"],
-	Chaplain: ["Chaplain Hat"],
+	Chaplain: [],
 };
 
 /**

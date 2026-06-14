@@ -1,4 +1,4 @@
-import { getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
+import { AdminCommandResult, getAdminCommandRemote, ADMIN_USER_IDS } from "shared/remotes/admin-remote";
 import {
 	addCoins,
 	addExperience,
@@ -13,9 +13,21 @@ import { givePlayerItem } from "./inventory-handler";
 import { clearPlayerCampfire } from "./campfire-handler";
 import { POISONS } from "shared/config/poisons";
 import { ELIXIRS } from "shared/config/elixirs";
-import { startTravelingMerchantEvent, stopTravelingMerchantEvent } from "./traveling-merchant-handler";
+import {
+	startTravelingMerchantEvent,
+	stopTravelingMerchantEvent,
+	toggleTravelingMerchantEvent,
+} from "./traveling-merchant-handler";
 import { startDreamCloudEvent, stopDreamCloudEvent, toggleDreamCloudEvent } from "./cloud-event-handler";
 import { initializeBoardEventBus, setBoardServerEvent } from "./board-event-bus";
+import {
+	excludePlayerFromPositionMetrics,
+	showLatestHistoricalPositionMetrics,
+	showTodayHistoricalPositionMetrics,
+	showYesterdayHistoricalPositionMetrics,
+	toggleHistoricalPositionMetricsVisuals,
+	togglePositionMetricsVisuals,
+} from "./position-metrics";
 
 const adminRemote = getAdminCommandRemote();
 
@@ -29,7 +41,7 @@ export function initializeAdminHandler(): void {
 	// Eagerly create the broadcast remote so clients don't infinite-yield on WaitForChild
 	initializeBoardEventBus();
 
-	adminRemote.OnServerInvoke = (player: Player, ...args: unknown[]): string => {
+	adminRemote.OnServerInvoke = (player: Player, ...args: unknown[]): string | AdminCommandResult => {
 		if (!isAdmin(player)) return "Not authorized";
 
 		const [commandArg, valueArg] = args;
@@ -122,6 +134,10 @@ export function initializeAdminHandler(): void {
 			return "Traveling merchant event stopped";
 		}
 
+		if (command === "toggleTravelingMerchant") {
+			return toggleTravelingMerchantEvent();
+		}
+
 		if (command === "toggleDreamClouds") {
 			return toggleDreamCloudEvent();
 		}
@@ -132,6 +148,31 @@ export function initializeAdminHandler(): void {
 
 		if (command === "stopDreamClouds") {
 			return stopDreamCloudEvent();
+		}
+
+		if (command === "togglePositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return togglePositionMetricsVisuals();
+		}
+
+		if (command === "toggleHistoricalPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return toggleHistoricalPositionMetricsVisuals();
+		}
+
+		if (command === "showLatestPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showLatestHistoricalPositionMetrics();
+		}
+
+		if (command === "showTodayPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showTodayHistoricalPositionMetrics();
+		}
+
+		if (command === "showYesterdayPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showYesterdayHistoricalPositionMetrics();
 		}
 
 		if (command === "resetSpawn") {

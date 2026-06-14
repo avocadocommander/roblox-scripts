@@ -3,8 +3,14 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "version:sync": "node scripts/sync-version.js",
+    "prebuild": "npm.cmd run version:sync",
     "build": "rbxtsc",
-    "watch": "rbxtsc -w"
+    "watch": "rbxtsc -w",
+    "publish:roblox": "scripts\\publish-roblox.cmd",
+    "publish:roblox:patch": "scripts\\publish-roblox.cmd patch",
+    "publish:roblox:minor": "scripts\\publish-roblox.cmd minor",
+    "publish:roblox:major": "scripts\\publish-roblox.cmd major"
   },
   "keywords": [],
   "author": "",

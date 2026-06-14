@@ -185,9 +185,10 @@ function getNPCModelName(npc: Model): string {
 }
 
 function isNPCModelKillable(npc: Model): boolean {
+	const npcName = getNPCModelName(npc);
 	const killableAttr = npc.GetAttribute("Killable");
-	if (typeOf(killableAttr) === "boolean") return killableAttr as boolean;
-	return isNPCKillable(getNPCModelName(npc));
+	if (typeOf(killableAttr) === "boolean") return (killableAttr as boolean) && isNPCKillable(npcName);
+	return isNPCKillable(npcName);
 }
 
 function createNPCBillboard(npc: Model): BillboardGui {
