@@ -81,6 +81,7 @@ const FIREFLY_DREAM_COLOR = new ColorSequence([
 	new ColorSequenceKeypoint(0.5, Color3.fromRGB(152, 120, 255)),
 	new ColorSequenceKeypoint(1, Color3.fromRGB(205, 238, 255)),
 ]);
+const MOON_BLUE_LIGHT = Color3.fromRGB(92, 158, 255);
 
 const beamDefaults = new Map<Beam, BeamDefaults>();
 const lightDefaults = new Map<Light, LightDefaults>();
@@ -234,11 +235,11 @@ function applyDreamBeam(beam: Beam, defaults: BeamDefaults): void {
 }
 
 function applyDreamTorchLight(light: Light, defaults: LightDefaults): void {
-	light.Enabled = false;
-	light.Color = defaults.color;
-	light.Brightness = 0;
+	light.Enabled = true;
+	light.Color = MOON_BLUE_LIGHT;
+	light.Brightness = math.max(defaults.brightness, 0.8);
 	if (light.IsA("PointLight") || light.IsA("SpotLight") || light.IsA("SurfaceLight")) {
-		light.Range = defaults.range;
+		light.Range = math.max(defaults.range, 14);
 	}
 }
 
@@ -319,12 +320,9 @@ function isDawnsGuideEffect(instance: Instance): boolean {
 	return instance.Name === DAWNS_GUIDE_LIGHT_NAME || isInsideNamedAncestor(instance, DAWNS_GUIDE_VISUAL_NAME);
 }
 
-function tweenLightOff(light: Light, defaults: LightDefaults): void {
+function tweenDreamTorchLight(light: Light, defaults: LightDefaults): void {
 	light.Enabled = true;
-	tweenLight(light, defaults.color, 0, defaults.range);
-	task.delay(EFFECT_FADE_SECS, () => {
-		if (light.Parent !== undefined) light.Enabled = false;
-	});
+	tweenLight(light, MOON_BLUE_LIGHT, math.max(defaults.brightness, 0.8), math.max(defaults.range, 14));
 }
 
 function tweenEmitterOff(emitter: ParticleEmitter, defaults: ParticleEmitterDefaults): void {
@@ -484,10 +482,10 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 			descendant.Enabled = true;
 			if (isDreaming) {
 				if (inTorch) {
-					tweenLightOff(descendant, defaults);
+					tweenDreamTorchLight(descendant, defaults);
 				}
 				if (inDawnsGuide) {
-					tweenLightOff(descendant, defaults);
+					tweenDreamTorchLight(descendant, defaults);
 				}
 				if (inFireflies) {
 					tweenLight(

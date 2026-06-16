@@ -35,6 +35,7 @@ print("[LOADING] Loading screen script started")
 local LOADING_MIN_DURATION_SECONDS = 7
 local LOADING_FADE_OUT_SECONDS = 0.6
 local LOADING_IMAGE_LOAD_TIMEOUT_SECONDS = 5
+local LOADING_DOTS_INTERVAL_SECONDS = 0.45
 
 -- ── Background images ───────────────────────────────────────────────────────
 -- Add rbxassetid:// strings here. One is picked at random per load.
@@ -131,6 +132,37 @@ if #LOADING_BACKGROUND_IMAGES > 0 then
 	bg.Parent = root
 	backgroundImage = bg
 end
+
+-- Animated loading indicator in the top-right corner.
+local loadingLabel = Instance.new("TextLabel")
+loadingLabel.Name = "LoadingIndicator"
+loadingLabel.AnchorPoint = Vector2.new(1, 0)
+loadingLabel.Position = UDim2.new(1, -24, 0, 20)
+loadingLabel.Size = UDim2.new(0, 220, 0, 36)
+loadingLabel.BackgroundTransparency = 1
+loadingLabel.TextColor3 = Color3.fromRGB(232, 218, 188)
+loadingLabel.Font = Enum.Font.Antique -- matches UI_THEME.fontDisplay
+loadingLabel.TextSize = 24
+loadingLabel.TextScaled = false
+loadingLabel.TextWrapped = false
+loadingLabel.TextXAlignment = Enum.TextXAlignment.Right
+loadingLabel.TextYAlignment = Enum.TextYAlignment.Top
+loadingLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+loadingLabel.TextStrokeTransparency = 0.35
+loadingLabel.Text = ".loading"
+loadingLabel.Parent = root
+
+local loadingIndicatorRunning = true
+task.spawn(function()
+	local loadingStates = { ".loading", "..loading", "...loading" }
+	local stateIndex = 1
+
+	while loadingIndicatorRunning and loadingLabel.Parent do
+		loadingLabel.Text = loadingStates[stateIndex]
+		stateIndex = (stateIndex % #loadingStates) + 1
+		task.wait(LOADING_DOTS_INTERVAL_SECONDS)
+	end
+end)
 
 -- Bottom-edge shade so the tip stays readable over any background.
 local bottomShade = Instance.new("Frame")
@@ -235,7 +267,13 @@ TweenService:Create(tipLabel, fadeInfo, {
 	TextStrokeTransparency = 1,
 }):Play()
 
+TweenService:Create(loadingLabel, fadeInfo, {
+	TextTransparency = 1,
+	TextStrokeTransparency = 1,
+}):Play()
+
 rootTween.Completed:Wait()
+loadingIndicatorRunning = false
 RunService.Heartbeat:Wait()
 screenGui:Destroy()
 print("[LOADING] loading screen destroyed")
