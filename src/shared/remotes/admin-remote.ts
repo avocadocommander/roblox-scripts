@@ -6,6 +6,7 @@ export interface AdminMetricsStats {
 	players: number;
 	paths: number;
 	points: number;
+	distance: string;
 	longestSession: string;
 	window: string;
 }

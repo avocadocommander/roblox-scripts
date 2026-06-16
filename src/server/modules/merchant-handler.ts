@@ -184,7 +184,7 @@ interface SignTextOverrides {
 }
 
 function isStandingSignBoard(signPart: BasePart): boolean {
-	return signPart.Name === "Board" || signPart.Size.Y > signPart.Size.X;
+	return signPart.Name === "Board";
 }
 
 export function applyMerchantSignText(

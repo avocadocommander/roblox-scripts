@@ -211,6 +211,9 @@ export const RARITY_BG_COLORS: Record<string, Color3> = {
 /** Rarity tiers that a bounty scroll can inherit from NPC status (or PvP kill). */
 export type BountyScrollRarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "player";
 
+/** What kind of bounty created the scroll, used by guild-specific turn-ins. */
+export type BountyScrollSource = "npc" | "player";
+
 /** Maps NPC social status to a scroll rarity tier. */
 export const STATUS_TO_SCROLL_RARITY: Record<string, BountyScrollRarity> = {
 	Serf: "common",
@@ -226,6 +229,8 @@ export interface BountyScroll {
 	slotIndex: number;
 	/** Name of the assassination target. */
 	targetName: string;
+	/** NPC marks go to Night; PvP player marks go to Dawn. */
+	source?: BountyScrollSource;
 	/** Rarity colour tier. */
 	rarity: BountyScrollRarity;
 	/** Gold reward to claim on turn-in. */

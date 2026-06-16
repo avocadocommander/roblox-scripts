@@ -22,8 +22,13 @@ import { startDreamCloudEvent, stopDreamCloudEvent, toggleDreamCloudEvent } from
 import { initializeBoardEventBus, setBoardServerEvent } from "./board-event-bus";
 import {
 	excludePlayerFromPositionMetrics,
+	showAllLivePositionTrails,
+	showBottomDistanceHistoricalPositionTrails,
+	showBottomDistanceLivePositionTrails,
 	showLatestHistoricalPositionMetrics,
 	showTodayHistoricalPositionMetrics,
+	showTopDistanceHistoricalPositionTrails,
+	showTopDistanceLivePositionTrails,
 	showYesterdayHistoricalPositionMetrics,
 	toggleHistoricalPositionMetricsVisuals,
 	togglePositionMetricsVisuals,
@@ -153,6 +158,31 @@ export function initializeAdminHandler(): void {
 		if (command === "togglePositionTrails") {
 			excludePlayerFromPositionMetrics(player);
 			return togglePositionMetricsVisuals();
+		}
+
+		if (command === "showAllLivePositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showAllLivePositionTrails();
+		}
+
+		if (command === "showTopDistanceLivePositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showTopDistanceLivePositionTrails();
+		}
+
+		if (command === "showBottomDistanceLivePositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showBottomDistanceLivePositionTrails();
+		}
+
+		if (command === "showTopDistanceHistoricalPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showTopDistanceHistoricalPositionTrails();
+		}
+
+		if (command === "showBottomDistanceHistoricalPositionTrails") {
+			excludePlayerFromPositionMetrics(player);
+			return showBottomDistanceHistoricalPositionTrails();
 		}
 
 		if (command === "toggleHistoricalPositionTrails") {

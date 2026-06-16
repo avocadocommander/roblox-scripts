@@ -1267,6 +1267,7 @@ function handleTurnIn(): void {
 			count: number;
 			factionId: string | undefined;
 			guildName: string | undefined;
+			message?: string;
 		};
 
 		if (!dialogTextLabel || !currentPayload) return;
@@ -1287,7 +1288,7 @@ function handleTurnIn(): void {
 			// Refresh the options so the button updates
 			showMainOptions();
 		} else {
-			dialogTextLabel.Text = '"Nothing to turn in."';
+			dialogTextLabel.Text = '"' + (result.message ?? "Nothing to turn in.") + '"';
 		}
 	});
 }

@@ -9,14 +9,15 @@
  *
  * Target resolution is data-driven through the `highlightType` field
  * on OnboardingStep:
- *   - "guildLeaders" -> every faction guild leader (both leaders).
+ *   - "nightGuildLeader" -> the Night guild leader.
+ *   - "dawnGuildLeader" -> the Dawn guild leader.
  *   - "bountyTarget" -> the currently assigned NPC bounty (if any).
  *   - undefined      -> no highlight this step.
  */
 
 import { Players, Workspace } from "@rbxts/services";
 import { getCurrentOnboardingStep, onBoardStateChanged } from "./board-state";
-import { getGuildLeaderNames } from "shared/config/factions";
+import { FACTIONS } from "shared/config/factions";
 import {
 	getBountyAssignedRemote,
 	getBountyCompletedRemote,
@@ -75,8 +76,10 @@ function getTargetNames(): Set<string> {
 	const step = getCurrentOnboardingStep();
 	if (!step || step.highlightType === undefined) return set;
 
-	if (step.highlightType === "guildLeaders") {
-		for (const name of getGuildLeaderNames()) set.add(name);
+	if (step.highlightType === "nightGuildLeader") {
+		set.add(FACTIONS.Night.leaderNPC);
+	} else if (step.highlightType === "dawnGuildLeader") {
+		set.add(FACTIONS.Dawn.leaderNPC);
 	} else if (step.highlightType === "bountyTarget") {
 		if (currentBountyName !== undefined && currentBountyName !== "") {
 			set.add(currentBountyName);

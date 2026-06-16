@@ -32,11 +32,19 @@ import {
 	DialogPayload,
 	ShopItemPayload,
 } from "shared/remotes/dialog-remote";
-import { addCoins, getPlayerStateSnapshot, addExperience, addScore, addFactionXP } from "shared/player-state";
+import {
+	addCoins,
+	getPlayerStateSnapshot,
+	addExperience,
+	addScore,
+	addFactionXP,
+	hasAchievement,
+} from "shared/player-state";
 import {
 	givePlayerItem,
 	getPlayerOwnedCount,
 	getPlayerBountyScrollCount,
+	getPlayerBountyScrollCountForFaction,
 	turnInBountyScrolls,
 } from "./inventory-handler";
 import { getQuipForStatus } from "shared/config/npc-quips";
@@ -60,6 +68,60 @@ const activeDialog = new Map<Player, string>(); // player -> npcName
 // Cooldown: prevent spamming floating quips per player (seconds)
 const QUIP_COOLDOWN = 2.5;
 const lastQuipTime = new Map<Player, number>();
+
+function applyTutorialDialogOverride(npcName: string, player: Player, payload: DialogPayload): void {
+	if (npcName === FACTIONS.Dawn.leaderNPC) {
+		if (!hasAchievement(player, "FIRST_PVP_SCROLL") || hasAchievement(player, "FIRST_PVP_TURN_IN")) return;
+		if (!hasAchievement(player, "MET_DAWN_GUILD_LEADER")) {
+			payload.greeting = "You carry a red writ. Then you have seen what happens when justice leaves the board.";
+			payload.chatLines = [
+				"The Dawn Order handles PvP bounty scrolls: wanted players, public crimes, public reckoning.",
+				"Bring those scrolls to me. I will see the Dawn remembers your service.",
+				"Thorne pays for quiet names. I pay for criminals who made themselves known.",
+			];
+			payload.farewell = "Stand in the light long enough to be counted.";
+			return;
+		}
+		payload.greeting = "The writ is ready. Let the record show it.";
+		payload.chatLines = [
+			"Turn in PvP bounty scrolls here for Dawn XP.",
+			"The Night Guild hunts marks. The Dawn Order answers crimes.",
+		];
+		payload.farewell = "Return when the realm has another name for us.";
+		return;
+	}
+
+	if (npcName !== FACTIONS.Night.leaderNPC) return;
+	if (hasAchievement(player, "FIRST_TURN_IN")) return;
+
+	if (!hasAchievement(player, "MET_GUILD_LEADER")) {
+		payload.greeting = "You found the Night Guild. Good.";
+		payload.chatLines = [
+			"I handle quiet contracts: names on the board, blades in the dark, scrolls brought back as proof.",
+			"Take the dagger. Equip it, find your mark, and return the scroll to me.",
+			"NPC assassination scrolls belong with the Night Guild. Bring them here and your Night standing rises.",
+		];
+		payload.farewell = "Go carefully. A loud assassin is just a witness with a weapon.";
+		return;
+	}
+
+	if (!hasAchievement(player, "FIRST_ASSASSINATION")) {
+		payload.greeting = "Dagger ready? Then listen.";
+		payload.chatLines = [
+			"The board has chosen your first mark. Find them, get close, and make it clean.",
+			"When the work is done, you will carry a scroll. That scroll comes back to me.",
+		];
+		payload.farewell = "Bring me proof, not excuses.";
+		return;
+	}
+
+	payload.greeting = "You have the look of someone carrying proof.";
+	payload.chatLines = [
+		"NPC assassination scrolls are Night Guild work. Turn them in here for coin and Night XP.",
+		"The Dawn Order deals in public justice. We deal in names that vanish.",
+	];
+	payload.farewell = "Return when the scroll is in your hand.";
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -135,9 +197,11 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 	}
 
 	const interaction = isMerchant ? "Shop" : (def?.interaction ?? "Ambient");
-	const pendingBounties = getPlayerBountyScrollCount(player);
+	const faction = factionForNPC(npcName);
+	const pendingBounties =
+		faction !== undefined ? getPlayerBountyScrollCountForFaction(player, faction) : getPlayerBountyScrollCount(player);
 
-	return {
+	const payload: DialogPayload = {
 		npcName,
 		greeting,
 		hasShop,
@@ -147,6 +211,8 @@ function buildDialogPayload(npcName: string, player: Player): DialogPayload | un
 		shopItems,
 		pendingBounties,
 	};
+	applyTutorialDialogOverride(npcName, player, payload);
+	return payload;
 }
 
 function handlePurchase(player: Player, npcName: string, itemId: string): [boolean, string] {
@@ -280,15 +346,25 @@ export function initializeDialogHandler(): void {
 			trackMerchantVisited(player, shopType);
 		}
 
-		// Tutorial: first conversation with any Guildmaster unlocks MET_GUILD_LEADER
-		// and grants the Dagger (step 2 reward) so the inventory pulse fires.
+		// Tutorial: first Night funnel conversation must be with Thorne, and
+		// grants the Dagger (step 2 reward) so the inventory pulse fires.
 		const registryDef = NPC_REGISTRY[npcName];
-		if (registryDef !== undefined && registryDef.occupation === "Guildmaster") {
+		if (registryDef !== undefined && registryDef.occupation === "Guildmaster" && npcName === FACTIONS.Night.leaderNPC) {
 			const justUnlocked = awardAchievement(player, "MET_GUILD_LEADER");
 			if (justUnlocked) {
 				givePlayerItem(player, "dagger", 1);
 				log("[DIALOG] Granted Dagger to " + player.Name + " for meeting Guild Leader");
 			}
+		}
+		if (
+			registryDef !== undefined &&
+			registryDef.occupation === "Guildmaster" &&
+			npcName === FACTIONS.Dawn.leaderNPC &&
+			hasAchievement(player, "FIRST_TURN_IN") &&
+			hasAchievement(player, "FIRST_PVP_SCROLL") &&
+			getPlayerBountyScrollCountForFaction(player, "Dawn") > 0
+		) {
+			awardAchievement(player, "MET_DAWN_GUILD_LEADER");
 		}
 	});
 
@@ -323,7 +399,7 @@ export function initializeDialogHandler(): void {
 		const faction = factionForNPC(currentNPC);
 		const guildName = faction !== undefined ? FACTIONS[faction].name : undefined;
 
-		const result = turnInBountyScrolls(player);
+		const result = turnInBountyScrolls(player, faction);
 		if (result.count > 0) {
 			// Award gold and score
 			addCoins(player, result.totalGold);
@@ -358,7 +434,20 @@ export function initializeDialogHandler(): void {
 			);
 		}
 
-		return { success: true, ...result, factionId: faction, guildName };
+		return {
+			success: result.count > 0,
+			...result,
+			factionId: faction,
+			guildName,
+			message:
+				result.count > 0
+					? undefined
+					: faction === "Night"
+						? "Thorne only accepts NPC assassination scrolls."
+						: faction === "Dawn"
+							? "Bertram only accepts PvP bounty scrolls."
+							: "Nothing to turn in.",
+		};
 	};
 
 	// Player closes dialog

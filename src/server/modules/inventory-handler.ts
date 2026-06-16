@@ -4,6 +4,7 @@ import {
 	ITEMS,
 	InventoryPayload,
 	BountyScroll,
+	BountyScrollSource,
 	BountyScrollPayload,
 	MAX_BOUNTY_SLOTS,
 	STATUS_TO_SCROLL_RARITY,
@@ -34,6 +35,7 @@ import { getGamePassForItem } from "shared/config/game-passes";
 import { onPlayerStateLoaded, setInventoryState, getInventoryState } from "shared/player-state";
 import { playSoundEffect } from "./sound-effect-bus";
 import { applyHeldWeaponVisual, applySheathedWeaponVisual, ensureCharacterWeaponAnchors } from "./weapon-visual-handler";
+import { FactionId } from "shared/config/factions";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -277,6 +279,18 @@ function nextScrollSlotIndex(inv: PlayerInventory): number {
 	return 0;
 }
 
+function getScrollSource(scroll: BountyScroll): BountyScrollSource {
+	return scroll.source ?? (scroll.rarity === "player" ? "player" : "npc");
+}
+
+function sourceForFaction(faction: FactionId): BountyScrollSource {
+	return faction === "Dawn" ? "player" : "npc";
+}
+
+function isScrollAcceptedByFaction(scroll: BountyScroll, faction: FactionId): boolean {
+	return getScrollSource(scroll) === sourceForFaction(faction);
+}
+
 /** Generate a mock bounty kill: pick a random NPC, create a scroll. */
 function generateMockBountyScroll(inv: PlayerInventory): BountyScroll | undefined {
 	if (!canAcceptBountyScroll(inv)) return undefined;
@@ -289,6 +303,7 @@ function generateMockBountyScroll(inv: PlayerInventory): BountyScroll | undefine
 	const scroll: BountyScroll = {
 		slotIndex: nextScrollSlotIndex(inv),
 		targetName: npcName,
+		source: "npc",
 		rarity: STATUS_TO_SCROLL_RARITY[status] ?? "common",
 		gold: SCROLL_GOLD[status] ?? 200,
 		xp: SCROLL_XP[status] ?? 500,
@@ -319,29 +334,54 @@ export function getPlayerBountyScrollCount(player: Player): number {
 	return inv.bountyScrolls.size();
 }
 
+/** Return how many bounty scrolls this player can turn in to the given faction. */
+export function getPlayerBountyScrollCountForFaction(player: Player, faction: FactionId): number {
+	const inv = PLAYER_INVENTORIES.get(player);
+	if (!inv) return 0;
+	let count = 0;
+	for (const scroll of inv.bountyScrolls) {
+		if (isScrollAcceptedByFaction(scroll, faction)) count++;
+	}
+	return count;
+}
+
 /**
  * Consume ALL bounty scrolls from the player's inventory, awarding their
  * gold and XP. This is the turn-in action used by guild-leader NPCs.
  * Returns totals so the dialog can display a result message.
  */
-export function turnInBountyScrolls(player: Player): { totalGold: number; totalXP: number; count: number } {
+export function turnInBountyScrolls(
+	player: Player,
+	faction?: FactionId,
+): { totalGold: number; totalXP: number; count: number } {
 	const inv = PLAYER_INVENTORIES.get(player);
 	if (!inv || inv.bountyScrolls.size() === 0) return { totalGold: 0, totalXP: 0, count: 0 };
 
 	let totalGold = 0;
 	let totalXP = 0;
+	const remaining: BountyScroll[] = [];
+	let count = 0;
 	for (const scroll of inv.bountyScrolls) {
+		if (faction !== undefined && !isScrollAcceptedByFaction(scroll, faction)) {
+			remaining.push(scroll);
+			continue;
+		}
 		totalGold += scroll.gold;
 		totalXP += scroll.xp;
+		count++;
 	}
+	if (count === 0) return { totalGold: 0, totalXP: 0, count: 0 };
 
-	const count = inv.bountyScrolls.size();
-	inv.bountyScrolls = [];
+	inv.bountyScrolls = remaining;
 
 	pushSync(player);
 	notifyWantedScrollChange(player);
 
-	awardAchievementLazy(player, "FIRST_TURN_IN");
+	if (faction === undefined || faction === "Night") {
+		awardAchievementLazy(player, "FIRST_TURN_IN");
+	} else if (faction === "Dawn") {
+		awardAchievementLazy(player, "FIRST_PVP_TURN_IN");
+	}
 	playSoundEffect(player, "bountyTurnIn");
 
 	log(
@@ -389,17 +429,21 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 	});
 
 	let transferred = 0;
+	let transferredPlayerScroll = false;
 	for (const scroll of sorted) {
 		if (!canAcceptBountyScroll(killerInv)) break;
+		const source = getScrollSource(scroll);
 
 		const newScroll: BountyScroll = {
 			slotIndex: nextScrollSlotIndex(killerInv),
 			targetName: scroll.targetName,
+			source,
 			rarity: scroll.rarity,
 			gold: scroll.gold,
 			xp: scroll.xp,
 		};
 		killerInv.bountyScrolls.push(newScroll);
+		if (source === "player") transferredPlayerScroll = true;
 		transferred++;
 	}
 
@@ -409,6 +453,7 @@ export function transferBountyScrolls(victim: Player, killer: Player): number {
 	pushSync(killer);
 	notifyWantedScrollChange(victim);
 	notifyWantedScrollChange(killer);
+	if (transferredPlayerScroll) awardAchievementLazy(killer, "FIRST_PVP_SCROLL");
 
 	log(
 		"[BOUNTY-SCROLL] Transferred " +
@@ -435,6 +480,7 @@ export function addPlayerBountyScroll(killer: Player, victimName: string, gold: 
 	const scroll: BountyScroll = {
 		slotIndex: nextScrollSlotIndex(inv),
 		targetName: victimName,
+		source: "player",
 		rarity: "player",
 		gold,
 		xp,
@@ -442,6 +488,7 @@ export function addPlayerBountyScroll(killer: Player, victimName: string, gold: 
 	inv.bountyScrolls.push(scroll);
 	pushSync(killer);
 	notifyWantedScrollChange(killer);
+	awardAchievementLazy(killer, "FIRST_PVP_SCROLL");
 	log("[BOUNTY-SCROLL] " + killer.Name + " earned PLAYER scroll: " + victimName + " (" + gold + "g)");
 	return true;
 }
@@ -460,6 +507,7 @@ export function addBountyScrollFromKill(
 	const scroll: BountyScroll = {
 		slotIndex: nextScrollSlotIndex(inv),
 		targetName: npcName,
+		source: "npc",
 		rarity: STATUS_TO_SCROLL_RARITY[npcStatus] ?? "common",
 		gold,
 		xp,

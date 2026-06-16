@@ -16,7 +16,7 @@
  * This module holds state + exposes a clean API. It does NOT build UI.
  */
 
-import { ONBOARDING_STEPS, OnboardingStep } from "shared/config/onboarding-steps";
+import { DAWN_ONBOARDING_STEPS, ONBOARDING_STEPS, OnboardingStep } from "shared/config/onboarding-steps";
 
 export type BoardMode = "contract" | "guidance";
 
@@ -55,6 +55,7 @@ const unlocked = new Set<string>();
 let renderer: BoardRenderer | undefined;
 const stateChangeSubscribers = new Array<() => void>();
 let tutorialBountyScrollCount: number | undefined;
+let tutorialPlayerBountyScrollCount = 0;
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -88,8 +89,9 @@ export function hasUnlockedAchievement(id: string): boolean {
  * dies/leaves after step 3 and loses the scroll before FIRST_TURN_IN, the
  * tutorial must point them back at the kill step so they can earn a new one.
  */
-export function setTutorialBountyScrollCount(count: number): void {
+export function setTutorialBountyScrollCount(count: number, playerScrollCount = 0): void {
 	tutorialBountyScrollCount = count;
+	tutorialPlayerBountyScrollCount = playerScrollCount;
 	pushBody();
 }
 
@@ -127,6 +129,21 @@ export function showServerEvent(text: string | undefined): void {
 // ── Derivation ──────────────────────────────────────────────────────────────
 
 function getNextOnboardingStep(): { step: OnboardingStep; index: number } | undefined {
+	const nightStep = getNextNightOnboardingStep();
+	if (nightStep !== undefined) return nightStep;
+
+	if (tutorialPlayerBountyScrollCount > 0) {
+		for (let i = 0; i < DAWN_ONBOARDING_STEPS.size(); i++) {
+			const step = DAWN_ONBOARDING_STEPS[i];
+			if (!unlocked.has(step.achievementId)) {
+				return { step, index: i };
+			}
+		}
+	}
+	return undefined;
+}
+
+function getNextNightOnboardingStep(): { step: OnboardingStep; index: number } | undefined {
 	if (
 		unlocked.has("FIRST_ASSASSINATION") &&
 		!unlocked.has("FIRST_TURN_IN") &&
@@ -154,11 +171,12 @@ function pushBody(): void {
 	if (renderer) {
 		const upcoming = getNextOnboardingStep();
 		if (upcoming) {
+			const isDawn = DAWN_ONBOARDING_STEPS.indexOf(upcoming.step) >= 0;
 			renderer.renderBody({
 				mode: "guidance",
 				step: upcoming.step,
 				stepIndex: upcoming.index,
-				totalSteps: ONBOARDING_STEPS.size(),
+				totalSteps: isDawn ? DAWN_ONBOARDING_STEPS.size() : ONBOARDING_STEPS.size(),
 			});
 		} else {
 			renderer.renderBody({ mode: "contract" });

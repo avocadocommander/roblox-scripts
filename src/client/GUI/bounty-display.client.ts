@@ -21,6 +21,7 @@ import {
 	showServerEvent,
 } from "../modules/board-state";
 import { initializeTutorialController } from "../modules/tutorial-controller";
+import { initializeTutorialDirectionArrow } from "../modules/tutorial-direction-arrow";
 import { initializeTutorialHighlight } from "../modules/tutorial-highlight";
 import { initializeTutorialUIPulse } from "../modules/tutorial-ui-pulse";
 
@@ -61,9 +62,11 @@ let stepPulseElapsed = 0;
 let guidanceObjectiveLabel: TextLabel | undefined;
 let guidanceFooterLabel: TextLabel | undefined;
 
-const GLOW_COLOR = Color3.fromRGB(245, 200, 70);
+const NIGHT_GLOW_COLOR = Color3.fromRGB(245, 200, 70);
+const DAWN_GLOW_COLOR = Color3.fromRGB(235, 80, 55);
 const DIM_COLOR = Color3.fromRGB(195, 182, 158); // UI_THEME.textPrimary
 const GLOW_CYCLE = 1.4; // seconds for one full pulse
+let activeGuidanceGlowColor = NIGHT_GLOW_COLOR;
 
 // Single always-running Heartbeat for the step-counter text pulse.
 // Using a persistent connection (rather than connect/disconnect per mode change)
@@ -73,7 +76,7 @@ RunService.Heartbeat.Connect((dt) => {
 	stepPulseElapsed += dt;
 	// t oscillates 0 -> 1 -> 0 once per GLOW_CYCLE. At 1: bright gold, fully opaque.
 	const t = (math.sin((stepPulseElapsed / GLOW_CYCLE) * math.pi * 2 - math.pi / 2) + 1) / 2;
-	guidanceFooterLabel.TextColor3 = DIM_COLOR.Lerp(GLOW_COLOR, t);
+	guidanceFooterLabel.TextColor3 = DIM_COLOR.Lerp(activeGuidanceGlowColor, t);
 	guidanceFooterLabel.TextTransparency = 0.55 * (1 - t); // 0.55 at dim, 0 at peak
 });
 
@@ -88,7 +91,7 @@ function startGuidancePulse(): void {
 			TweenService.Create(
 				bountyBoardGlowStroke!,
 				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-				{ Color: GLOW_COLOR, Thickness: sc(3), Transparency: 0.1 },
+				{ Color: activeGuidanceGlowColor, Thickness: sc(3), Transparency: 0.1 },
 			).Play();
 			TweenService.Create(
 				bountyBoardWrapper!,
@@ -99,7 +102,7 @@ function startGuidancePulse(): void {
 			TweenService.Create(
 				cardStrokeRef!,
 				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-				{ Color: GLOW_COLOR, Thickness: sc(2.5), Transparency: 0 },
+				{ Color: activeGuidanceGlowColor, Thickness: sc(2.5), Transparency: 0 },
 			).Play();
 			TweenService.Create(
 				missionCard!,
@@ -112,7 +115,7 @@ function startGuidancePulse(): void {
 			TweenService.Create(
 				bountyBoardGlowStroke!,
 				new TweenInfo(GLOW_CYCLE / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-				{ Color: GLOW_COLOR, Thickness: sc(1.5), Transparency: 0.75 },
+				{ Color: activeGuidanceGlowColor, Thickness: sc(1.5), Transparency: 0.75 },
 			).Play();
 			TweenService.Create(
 				bountyBoardWrapper!,
@@ -140,7 +143,7 @@ function stopGuidancePulse(): void {
 	guidancePulseThread = undefined;
 	if (bountyBoardWrapper && bountyBoardGlowStroke) {
 		TweenService.Create(bountyBoardGlowStroke, new TweenInfo(0.3, Enum.EasingStyle.Sine), {
-			Color: GLOW_COLOR,
+			Color: activeGuidanceGlowColor,
 			Thickness: sc(1.5),
 			Transparency: 1,
 		}).Play();
@@ -220,7 +223,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	wrapper.Size = new UDim2(0, W, 0, 0);
 	wrapper.Position = new UDim2(1, -rightMargin - W, 0, topMargin);
 	wrapper.AutomaticSize = Enum.AutomaticSize.Y;
-	wrapper.BackgroundColor3 = GLOW_COLOR;
+	wrapper.BackgroundColor3 = NIGHT_GLOW_COLOR;
 	wrapper.BackgroundTransparency = 1;
 	wrapper.Parent = screenGui;
 	bountyBoardWrapper = wrapper;
@@ -230,7 +233,7 @@ function buildBountyCard(screenGui: ScreenGui): void {
 	wrapperCorner.Parent = wrapper;
 
 	const wrapperGlowStroke = new Instance("UIStroke");
-	wrapperGlowStroke.Color = GLOW_COLOR;
+	wrapperGlowStroke.Color = NIGHT_GLOW_COLOR;
 	wrapperGlowStroke.Thickness = sc(1.5);
 	wrapperGlowStroke.Transparency = 1;
 	wrapperGlowStroke.Parent = wrapper;
@@ -701,14 +704,19 @@ function renderBody(content: BoardBodyContent): void {
 		renderContractBody(latestBounty);
 		return;
 	}
-	startGuidancePulse();
 
 	// Guidance mode
+	const isDawnGuidance = content.step.highlightType === "dawnGuildLeader" || content.step.title.sub(1, 4) === "DAWN";
+	activeGuidanceGlowColor = isDawnGuidance ? DAWN_GLOW_COLOR : NIGHT_GLOW_COLOR;
+	if (bountyBoardWrapper) bountyBoardWrapper.BackgroundColor3 = activeGuidanceGlowColor;
+	if (bountyBoardGlowStroke) bountyBoardGlowStroke.Color = activeGuidanceGlowColor;
+	startGuidancePulse();
+
 	const showBountyCard = content.step.showBountyCard === true;
 
 	if (cardHeaderLabel) {
 		cardHeaderLabel.Text = showBountyCard ? "YOUR MARK" : content.step.title;
-		cardHeaderLabel.TextColor3 = showBountyCard ? UI_THEME.textSection : UI_THEME.textHeader;
+		cardHeaderLabel.TextColor3 = showBountyCard ? UI_THEME.textSection : activeGuidanceGlowColor;
 	}
 
 	if (contractBody) contractBody.Visible = showBountyCard;
@@ -957,6 +965,9 @@ onPlayerInitialized(() => {
 
 	// World-space highlights on the active tutorial targets.
 	initializeTutorialHighlight();
+
+	// Screen-space directional arrow for the same tutorial targets.
+	initializeTutorialDirectionArrow();
 
 	// UI pulses (inventory button / dagger tile) for UI-driven tutorial steps.
 	initializeTutorialUIPulse();

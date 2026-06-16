@@ -47,7 +47,14 @@ export function initializeTutorialController(): void {
 
 	getInventorySyncRemote().OnClientEvent.Connect((data: unknown) => {
 		const payload = data as InventoryPayload;
-		setTutorialBountyScrollCount((payload.bountyScrolls ?? []).size());
+		let npcScrolls = 0;
+		let playerScrolls = 0;
+		for (const scroll of payload.bountyScrolls ?? []) {
+			const source = scroll.source ?? (scroll.rarity === "player" ? "player" : "npc");
+			if (source === "player") playerScrolls++;
+			else npcScrolls++;
+		}
+		setTutorialBountyScrollCount(npcScrolls, playerScrolls);
 	});
 
 	// Server-wide broadcast (special events, decrees, etc.)

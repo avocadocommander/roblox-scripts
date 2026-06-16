@@ -35,6 +35,14 @@ export const TUTORIAL_STEPS = {
 
 export type TutorialStepKey = keyof typeof TUTORIAL_STEPS;
 
+export const DAWN_TUTORIAL_STEPS = {
+	DawnTutorialStarted: { step: 1, name: "DawnTutorialStarted" },
+	DawnGuildLeaderMet: { step: 2, name: "DawnGuildLeaderMet" },
+	DawnTutorialCompleted: { step: 3, name: "DawnTutorialCompleted" },
+} as const;
+
+export type DawnTutorialStepKey = keyof typeof DAWN_TUTORIAL_STEPS;
+
 /** Step number that marks the funnel as fully completed (last entry). */
 export const TUTORIAL_FINAL_STEP = TUTORIAL_STEPS.TutorialCompleted.step;
 
@@ -49,6 +57,12 @@ export const ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP: Record<string, TutorialSte
 	EQUIPPED_DAGGER: "TutorialStep2Completed",
 	FIRST_ASSASSINATION: "TutorialStep3Completed",
 	FIRST_TURN_IN: "TutorialCompleted",
+};
+
+export const DAWN_ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP: Record<string, DawnTutorialStepKey> = {
+	FIRST_PVP_SCROLL: "DawnTutorialStarted",
+	MET_DAWN_GUILD_LEADER: "DawnGuildLeaderMet",
+	FIRST_PVP_TURN_IN: "DawnTutorialCompleted",
 };
 
 // ── Custom event names ────────────────────────────────────────────────────────

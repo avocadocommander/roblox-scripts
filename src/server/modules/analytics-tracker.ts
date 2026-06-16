@@ -37,6 +37,9 @@ import {
 	ANALYTICS_EVENTS,
 	AnalyticsEventName,
 	AnalyticsField,
+	DAWN_ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP,
+	DAWN_TUTORIAL_STEPS,
+	DawnTutorialStepKey,
 	EVENT_FIELD_SLOTS,
 	ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP,
 	TUTORIAL_FIELD_SLOTS,
@@ -59,6 +62,8 @@ interface SessionState {
 	tutorialCompleted: boolean;
 	/** Highest tutorial step number already fired this session (dedupe). */
 	lastTutorialStep: number;
+	/** Highest Dawn tutorial step number already fired this session (dedupe). */
+	lastDawnTutorialStep: number;
 	/** True once `TargetFound` has fired for the current bounty assignment. */
 	targetFoundForCurrentBounty: boolean;
 	/** Death reason to attach to the next PlayerDied event. Cleared on use. */
@@ -79,6 +84,7 @@ function getOrCreateSession(player: Player): SessionState {
 			deviceType: DEFAULT_DEVICE,
 			tutorialCompleted: false,
 			lastTutorialStep: 0,
+			lastDawnTutorialStep: 0,
 			targetFoundForCurrentBounty: false,
 			pendingDeathReason: undefined,
 		};
@@ -215,6 +221,18 @@ export function trackTutorialStep(player: Player, stepKey: TutorialStepKey): voi
 	});
 }
 
+export function trackDawnTutorialStep(player: Player, stepKey: DawnTutorialStepKey): void {
+	if (!player.IsDescendantOf(Players)) return;
+	const session = getOrCreateSession(player);
+	const def = DAWN_TUTORIAL_STEPS[stepKey];
+	if (def.step <= session.lastDawnTutorialStep) return;
+	session.lastDawnTutorialStep = def.step;
+	safe(`LogOnboardingFunnelStepEvent(${def.name})`, () => {
+		const customFields = buildCustomFields(player, TUTORIAL_FIELD_SLOTS, undefined, session);
+		AnalyticsService.LogOnboardingFunnelStepEvent(player, def.step, def.name, customFields);
+	});
+}
+
 /**
  * Mark the session as past-tutorial without firing a funnel event. Useful when
  * the server detects on join that the player has already completed onboarding
@@ -236,8 +254,14 @@ export function markTutorialCompleted(player: Player): void {
  */
 export function trackTutorialStepForAchievement(player: Player, achievementId: string): void {
 	const stepKey = ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP[achievementId];
-	if (stepKey === undefined) return;
-	trackTutorialStep(player, stepKey);
+	if (stepKey !== undefined) {
+		trackTutorialStep(player, stepKey);
+		return;
+	}
+	const dawnStepKey = DAWN_ONBOARDING_ACHIEVEMENT_TO_TUTORIAL_STEP[achievementId];
+	if (dawnStepKey !== undefined) {
+		trackDawnTutorialStep(player, dawnStepKey);
+	}
 }
 
 // ── Public API: gameplay helpers ──────────────────────────────────────────────

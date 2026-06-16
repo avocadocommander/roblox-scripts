@@ -66,8 +66,9 @@ function showMetricsStatsBar(stats: AdminMetricsStats): void {
 	setStatText(1, "Players", tostring(stats.players));
 	setStatText(2, "Paths", tostring(stats.paths));
 	setStatText(3, "Points", tostring(stats.points));
-	setStatText(4, "Longest", stats.longestSession);
-	setStatText(5, "Window", stats.window);
+	setStatText(4, "Distance", stats.distance);
+	setStatText(5, "Longest", stats.longestSession);
+	setStatText(6, "Window", stats.window);
 	metricsStatsBar.Visible = true;
 	metricsStatsBar.BackgroundTransparency = 0.12;
 }
@@ -80,7 +81,7 @@ function hideMetricsStatsBar(): void {
 function buildMetricsStatsBar(screenGui: ScreenGui): void {
 	const bar = new Instance("Frame");
 	bar.Name = "MetricsStatsBar";
-	bar.Size = new UDim2(0, sc(760), 0, sc(56));
+	bar.Size = new UDim2(0, sc(860), 0, sc(56));
 	bar.Position = new UDim2(0.5, 0, 0, sc(8));
 	bar.AnchorPoint = new Vector2(0.5, 0);
 	bar.BackgroundColor3 = UI_THEME.bg;
@@ -129,8 +130,8 @@ function buildMetricsStatsBar(screenGui: ScreenGui): void {
 	metricsTitleLabel = title;
 
 	metricsStatLabels = [];
-	const statWidth = sc(92);
-	for (let i = 0; i < 6; i++) {
+	const statWidth = sc(84);
+	for (let i = 0; i < 7; i++) {
 		const stat = new Instance("TextLabel");
 		stat.Name = "Stat_" + tostring(i);
 		stat.LayoutOrder = i + 1;
@@ -175,6 +176,63 @@ interface DropdownDef {
 	label: string;
 	color: Color3;
 	buttons: AdminButton[];
+}
+
+interface AnalyticsSectionDef {
+	title: string;
+	subtitle: string;
+	color: Color3;
+	buttons: AdminButton[];
+}
+
+function makeAdminButton(parent: Instance, def: AdminButton, height: number, order: number): TextButton {
+	const btn = new Instance("TextButton");
+	btn.LayoutOrder = order;
+	btn.Size = new UDim2(1, 0, 0, height);
+	btn.BackgroundColor3 = UI_THEME.bgInset;
+	btn.BackgroundTransparency = 0.35;
+	btn.BorderSizePixel = 0;
+	btn.Text = def.label;
+	btn.TextColor3 = def.color;
+	btn.Font = UI_THEME.fontBold;
+	btn.TextSize = sc(12);
+	btn.TextXAlignment = Enum.TextXAlignment.Left;
+	btn.AutoButtonColor = false;
+	btn.ZIndex = 62;
+	btn.Parent = parent;
+
+	const btnCorner = new Instance("UICorner");
+	btnCorner.CornerRadius = new UDim(0, sc(4));
+	btnCorner.Parent = btn;
+
+	const btnStroke = new Instance("UIStroke");
+	btnStroke.Color = UI_THEME.divider;
+	btnStroke.Thickness = sc(0.8);
+	btnStroke.Transparency = 0.3;
+	btnStroke.Parent = btn;
+
+	const btnPad = new Instance("UIPadding");
+	btnPad.PaddingLeft = new UDim(0, sc(8));
+	btnPad.PaddingRight = new UDim(0, sc(8));
+	btnPad.Parent = btn;
+
+	btn.MouseEnter.Connect(() => {
+		btn.BackgroundTransparency = 0.15;
+	});
+	btn.MouseLeave.Connect(() => {
+		btn.BackgroundTransparency = 0.35;
+	});
+	btn.Activated.Connect(() => {
+		def.action();
+		btn.BackgroundColor3 = def.color;
+		btn.BackgroundTransparency = 0.5;
+		task.delay(0.15, () => {
+			btn.BackgroundColor3 = UI_THEME.bgInset;
+			btn.BackgroundTransparency = 0.35;
+		});
+	});
+
+	return btn;
 }
 
 function getDropdowns(): DropdownDef[] {
@@ -271,38 +329,6 @@ function getDropdowns(): DropdownDef[] {
 			],
 		},
 		{
-			id: "metrics",
-			label: "Metrics",
-			color: Color3.fromRGB(150, 210, 230),
-			buttons: [
-				{
-					label: "Live Trails Toggle",
-					color: Color3.fromRGB(150, 210, 230),
-					action: () => runCommand("togglePositionTrails"),
-				},
-				{
-					label: "Historical Toggle",
-					color: Color3.fromRGB(190, 150, 230),
-					action: () => runCommand("toggleHistoricalPositionTrails"),
-				},
-				{
-					label: "1 Today Activity",
-					color: Color3.fromRGB(80, 180, 160),
-					action: () => runCommand("showTodayPositionTrails"),
-				},
-				{
-					label: "2 Yesterday Activity",
-					color: Color3.fromRGB(120, 150, 210),
-					action: () => runCommand("showYesterdayPositionTrails"),
-				},
-				{
-					label: "3 Latest Sessions",
-					color: Color3.fromRGB(190, 150, 230),
-					action: () => runCommand("showLatestPositionTrails"),
-				},
-			],
-		},
-		{
 			id: "reset",
 			label: "Reset",
 			color: UI_THEME.danger,
@@ -341,6 +367,218 @@ function getDropdowns(): DropdownDef[] {
 			})),
 		},
 	];
+}
+
+function getAnalyticsSections(): AnalyticsSectionDef[] {
+	return [
+		{
+			title: "Live Trails",
+			subtitle: "Current server samples. Filters redraw from the newest in-memory data.",
+			color: Color3.fromRGB(150, 210, 230),
+			buttons: [
+				{
+					label: "Show All Live Trails",
+					color: Color3.fromRGB(150, 210, 230),
+					action: () => runCommand("showAllLivePositionTrails"),
+				},
+				{
+					label: "Top 10 Longest Distance",
+					color: Color3.fromRGB(90, 190, 130),
+					action: () => runCommand("showTopDistanceLivePositionTrails"),
+				},
+				{
+					label: "Bottom 10 Distance",
+					color: Color3.fromRGB(210, 150, 80),
+					action: () => runCommand("showBottomDistanceLivePositionTrails"),
+				},
+				{
+					label: "Turn Live Trails Off",
+					color: Color3.fromRGB(190, 90, 80),
+					action: () => runCommand("togglePositionTrails"),
+				},
+			],
+		},
+		{
+			title: "Historical Trails",
+			subtitle: "Fetches DataStore snapshots at click time, then rebuilds saved paths.",
+			color: Color3.fromRGB(190, 150, 230),
+			buttons: [
+				{
+					label: "Today Activity",
+					color: Color3.fromRGB(80, 180, 160),
+					action: () => runCommand("showTodayPositionTrails"),
+				},
+				{
+					label: "Yesterday Activity",
+					color: Color3.fromRGB(120, 150, 210),
+					action: () => runCommand("showYesterdayPositionTrails"),
+				},
+				{
+					label: "Latest Sessions",
+					color: Color3.fromRGB(190, 150, 230),
+					action: () => runCommand("showLatestPositionTrails"),
+				},
+				{
+					label: "Top 10 Longest Distance",
+					color: Color3.fromRGB(90, 190, 130),
+					action: () => runCommand("showTopDistanceHistoricalPositionTrails"),
+				},
+				{
+					label: "Bottom 10 Distance",
+					color: Color3.fromRGB(210, 150, 80),
+					action: () => runCommand("showBottomDistanceHistoricalPositionTrails"),
+				},
+				{
+					label: "Turn Historical Off",
+					color: Color3.fromRGB(190, 90, 80),
+					action: () => runCommand("toggleHistoricalPositionTrails"),
+				},
+			],
+		},
+	];
+}
+
+function buildAnalyticsPanel(root: Frame): void {
+	const analytics = new Instance("Frame");
+	analytics.Name = "AnalyticsPanel";
+	analytics.Size = new UDim2(1, 0, 0.42, sc(-56));
+	analytics.Position = new UDim2(0, 0, 0.58, sc(48));
+	analytics.BackgroundColor3 = UI_THEME.bgInset;
+	analytics.BackgroundTransparency = 0.18;
+	analytics.BorderSizePixel = 0;
+	analytics.ZIndex = 61;
+	analytics.Parent = root;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = new UDim(0, sc(5));
+	corner.Parent = analytics;
+
+	const stroke = new Instance("UIStroke");
+	stroke.Color = Color3.fromRGB(86, 116, 128);
+	stroke.Thickness = sc(1);
+	stroke.Transparency = 0.2;
+	stroke.Parent = analytics;
+
+	const pad = new Instance("UIPadding");
+	pad.PaddingTop = new UDim(0, sc(10));
+	pad.PaddingBottom = new UDim(0, sc(10));
+	pad.PaddingLeft = new UDim(0, sc(12));
+	pad.PaddingRight = new UDim(0, sc(12));
+	pad.Parent = analytics;
+
+	const title = new Instance("TextLabel");
+	title.Name = "Title";
+	title.Size = new UDim2(1, 0, 0, sc(22));
+	title.BackgroundTransparency = 1;
+	title.Text = "ANALYTICS TOOLS";
+	title.TextColor3 = Color3.fromRGB(150, 210, 230);
+	title.Font = UI_THEME.fontBold;
+	title.TextSize = sc(14);
+	title.TextXAlignment = Enum.TextXAlignment.Left;
+	title.ZIndex = 62;
+	title.Parent = analytics;
+
+	const subtitle = new Instance("TextLabel");
+	subtitle.Name = "Subtitle";
+	subtitle.Size = new UDim2(1, 0, 0, sc(18));
+	subtitle.Position = new UDim2(0, 0, 0, sc(22));
+	subtitle.BackgroundTransparency = 1;
+	subtitle.Text = "Live filters redraw current trails; historical views fetch saved DataStore paths.";
+	subtitle.TextColor3 = UI_THEME.textMuted;
+	subtitle.Font = UI_THEME.fontBody;
+	subtitle.TextSize = sc(11);
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left;
+	subtitle.ZIndex = 62;
+	subtitle.Parent = analytics;
+
+	const sectionsRoot = new Instance("Frame");
+	sectionsRoot.Name = "Sections";
+	sectionsRoot.Size = new UDim2(1, 0, 1, sc(-48));
+	sectionsRoot.Position = new UDim2(0, 0, 0, sc(48));
+	sectionsRoot.BackgroundTransparency = 1;
+	sectionsRoot.ZIndex = 62;
+	sectionsRoot.Parent = analytics;
+
+	const sectionsLayout = new Instance("UIListLayout");
+	sectionsLayout.FillDirection = Enum.FillDirection.Horizontal;
+	sectionsLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	sectionsLayout.Padding = new UDim(0, sc(12));
+	sectionsLayout.Parent = sectionsRoot;
+
+	const sections = getAnalyticsSections();
+	for (let i = 0; i < sections.size(); i++) {
+		const section = sections[i];
+		const card = new Instance("Frame");
+		card.Name = section.title.gsub(" ", "")[0];
+		card.LayoutOrder = i;
+		card.Size = new UDim2(0.5, sc(-6), 1, 0);
+		card.BackgroundColor3 = UI_THEME.bg;
+		card.BackgroundTransparency = 0.25;
+		card.BorderSizePixel = 0;
+		card.ZIndex = 62;
+		card.Parent = sectionsRoot;
+
+		const cardCorner = new Instance("UICorner");
+		cardCorner.CornerRadius = new UDim(0, sc(5));
+		cardCorner.Parent = card;
+
+		const cardStroke = new Instance("UIStroke");
+		cardStroke.Color = section.color;
+		cardStroke.Thickness = sc(0.9);
+		cardStroke.Transparency = 0.25;
+		cardStroke.Parent = card;
+
+		const cardPad = new Instance("UIPadding");
+		cardPad.PaddingTop = new UDim(0, sc(8));
+		cardPad.PaddingBottom = new UDim(0, sc(8));
+		cardPad.PaddingLeft = new UDim(0, sc(8));
+		cardPad.PaddingRight = new UDim(0, sc(8));
+		cardPad.Parent = card;
+
+		const header = new Instance("TextLabel");
+		header.Name = "Header";
+		header.Size = new UDim2(1, 0, 0, sc(18));
+		header.BackgroundTransparency = 1;
+		header.Text = section.title.upper();
+		header.TextColor3 = section.color;
+		header.Font = UI_THEME.fontBold;
+		header.TextSize = sc(12);
+		header.TextXAlignment = Enum.TextXAlignment.Left;
+		header.ZIndex = 63;
+		header.Parent = card;
+
+		const copy = new Instance("TextLabel");
+		copy.Name = "Copy";
+		copy.Size = new UDim2(1, 0, 0, sc(30));
+		copy.Position = new UDim2(0, 0, 0, sc(20));
+		copy.BackgroundTransparency = 1;
+		copy.Text = section.subtitle;
+		copy.TextColor3 = UI_THEME.textMuted;
+		copy.Font = UI_THEME.fontBody;
+		copy.TextSize = sc(10);
+		copy.TextWrapped = true;
+		copy.TextXAlignment = Enum.TextXAlignment.Left;
+		copy.TextYAlignment = Enum.TextYAlignment.Top;
+		copy.ZIndex = 63;
+		copy.Parent = card;
+
+		const buttonStack = new Instance("Frame");
+		buttonStack.Name = "Buttons";
+		buttonStack.Size = new UDim2(1, 0, 1, sc(-56));
+		buttonStack.Position = new UDim2(0, 0, 0, sc(56));
+		buttonStack.BackgroundTransparency = 1;
+		buttonStack.ZIndex = 63;
+		buttonStack.Parent = card;
+
+		const stackLayout = new Instance("UIListLayout");
+		stackLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+		stackLayout.Padding = new UDim(0, sc(5));
+		stackLayout.Parent = buttonStack;
+
+		for (let j = 0; j < section.buttons.size(); j++) {
+			makeAdminButton(buttonStack, section.buttons[j], sc(28), j);
+		}
+	}
 }
 
 // -- Build --------------------------------------------------------------------
@@ -432,7 +670,7 @@ function buildAdminHUD(screenGui: ScreenGui): void {
 	// ── Scrollable body holding one column per section ─────────────────────
 	const body = new Instance("ScrollingFrame");
 	body.Name = "Body";
-	body.Size = new UDim2(1, 0, 1, sc(-52));
+	body.Size = new UDim2(1, 0, 0.58, sc(-56));
 	body.Position = new UDim2(0, 0, 0, sc(52));
 	body.BackgroundTransparency = 1;
 	body.BorderSizePixel = 0;
@@ -507,54 +745,11 @@ function buildAdminHUD(screenGui: ScreenGui): void {
 
 		// Buttons
 		for (let j = 0; j < dd.buttons.size(); j++) {
-			const def = dd.buttons[j];
-			const btn = new Instance("TextButton");
-			btn.LayoutOrder = 2 + j;
-			btn.Size = new UDim2(1, 0, 0, btnHeight);
-			btn.BackgroundColor3 = UI_THEME.bgInset;
-			btn.BackgroundTransparency = 0.35;
-			btn.BorderSizePixel = 0;
-			btn.Text = def.label;
-			btn.TextColor3 = def.color;
-			btn.Font = UI_THEME.fontBold;
-			btn.TextSize = sc(12);
-			btn.TextXAlignment = Enum.TextXAlignment.Left;
-			btn.AutoButtonColor = false;
-			btn.ZIndex = 62;
-			btn.Parent = col;
-
-			const btnCorner = new Instance("UICorner");
-			btnCorner.CornerRadius = new UDim(0, sc(4));
-			btnCorner.Parent = btn;
-
-			const btnStroke = new Instance("UIStroke");
-			btnStroke.Color = UI_THEME.divider;
-			btnStroke.Thickness = sc(0.8);
-			btnStroke.Transparency = 0.3;
-			btnStroke.Parent = btn;
-
-			const btnPad = new Instance("UIPadding");
-			btnPad.PaddingLeft = new UDim(0, sc(8));
-			btnPad.PaddingRight = new UDim(0, sc(8));
-			btnPad.Parent = btn;
-
-			btn.MouseEnter.Connect(() => {
-				btn.BackgroundTransparency = 0.15;
-			});
-			btn.MouseLeave.Connect(() => {
-				btn.BackgroundTransparency = 0.35;
-			});
-			btn.Activated.Connect(() => {
-				def.action();
-				btn.BackgroundColor3 = def.color;
-				btn.BackgroundTransparency = 0.5;
-				task.delay(0.15, () => {
-					btn.BackgroundColor3 = UI_THEME.bgInset;
-					btn.BackgroundTransparency = 0.35;
-				});
-			});
+			makeAdminButton(col, dd.buttons[j], btnHeight, 2 + j);
 		}
 	}
+
+	buildAnalyticsPanel(root);
 }
 
 // -- Init ---------------------------------------------------------------------
