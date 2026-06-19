@@ -3,6 +3,7 @@ import { log } from "shared/helpers";
 import { getPlaceCampfireRemote, getCampfireRemovedRemote } from "shared/remotes/campfire-remote";
 import { trackPlacedCamp } from "./analytics-tracker";
 import { playSoundEffect } from "./sound-effect-bus";
+import { awardAchievement } from "./achievement-handler";
 
 // Track each player's campfire location
 const playerCampfires = new Map<Player, { campfire: Model; position: Vector3 }>();
@@ -34,6 +35,7 @@ function placePlayerCampfire(player: Player, position: Vector3, lookDir: Vector3
 	if (!spawnCampfireModel(player, position, lookDir)) return;
 	playSoundEffect(player, "dropRune");
 	trackPlacedCamp(player);
+	awardAchievement(player, "FIRST_RUNE");
 
 	// Persist the ground-level position that spawnCampfireModel resolved
 	const placed = playerCampfires.get(player);

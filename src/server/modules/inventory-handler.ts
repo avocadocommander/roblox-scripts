@@ -379,8 +379,10 @@ export function turnInBountyScrolls(
 
 	if (faction === undefined || faction === "Night") {
 		awardAchievementLazy(player, "FIRST_TURN_IN");
+		awardAchievementLazy(player, "NIGHT_TUTORIAL_COMPLETE");
 	} else if (faction === "Dawn") {
 		awardAchievementLazy(player, "FIRST_PVP_TURN_IN");
+		awardAchievementLazy(player, "DAWN_TUTORIAL_COMPLETE");
 	}
 	playSoundEffect(player, "bountyTurnIn");
 

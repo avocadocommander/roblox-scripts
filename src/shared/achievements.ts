@@ -98,6 +98,31 @@ export const ACHIEVEMENTS: Record<string, AchievementDef> = {
 		category: "general",
 		sortOrder: 1,
 	},
+	FIRST_RUNE: {
+		id: "FIRST_RUNE",
+		title: "Rune Placed",
+		description: "Place a rune to return to that spot when you log back in.",
+		icon: "^",
+		category: "exploration",
+		sortOrder: 2,
+	},
+	NIGHT_TUTORIAL_COMPLETE: {
+		id: "NIGHT_TUTORIAL_COMPLETE",
+		title: "Tutorial Complete",
+		description:
+			"Earn XP with the Night Guild, or choose another path. Track your next bounty, whether it belongs to Night or Dawn.",
+		icon: "N",
+		category: "general",
+		sortOrder: 2,
+	},
+	DAWN_TUTORIAL_COMPLETE: {
+		id: "DAWN_TUTORIAL_COMPLETE",
+		title: "Dawn Tutorial Complete",
+		description: "The Dawn path is open. Track your next bounty and choose which guild deserves your next scroll.",
+		icon: "D",
+		category: "general",
+		sortOrder: 7,
+	},
 	BOUNTY_HUNTER: {
 		id: "BOUNTY_HUNTER",
 		title: "Bounty Hunter",

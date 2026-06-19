@@ -19,7 +19,6 @@ import {
 	showBoardMessage,
 	showServerEvent,
 } from "./board-state";
-import { ACHIEVEMENTS } from "shared/achievements";
 import { InventoryPayload } from "shared/inventory";
 import { getInventorySyncRemote } from "shared/remotes/inventory-remote";
 
@@ -39,10 +38,6 @@ export function initializeTutorialController(): void {
 	getAchievementUnlockedRemote().OnClientEvent.Connect((achievementId: unknown) => {
 		const id = achievementId as string;
 		addUnlockedAchievement(id);
-		const def = ACHIEVEMENTS[id];
-		if (def) {
-			showBoardMessage("unlock", "New Achievement: " + def.title);
-		}
 	});
 
 	getInventorySyncRemote().OnClientEvent.Connect((data: unknown) => {

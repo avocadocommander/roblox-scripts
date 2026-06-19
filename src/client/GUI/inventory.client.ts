@@ -31,6 +31,9 @@ const requestRemote = getRequestInventoryRemote();
 const mockBountyKillRemote = getMockBountyKillRemote();
 const turnInBountyRemote = getTurnInBountyRemote();
 
+const INVENTORY_LAYER_BASE = 90;
+let inventoryLayerApplied = false;
+
 // ── Scaling helper ────────────────────────────────────────────────────────────
 
 function sc(base: number): number {
@@ -73,6 +76,25 @@ let activeWeaponLabel: TextLabel | undefined;
 let activePoisonLabel: TextLabel | undefined;
 let activeElixirLabel: TextLabel | undefined;
 let inventoryBackdrop: TextButton | undefined;
+
+function moveGuiObjectLayer(root: Instance, sourceBase: number, targetBase: number): void {
+	if (root.IsA("GuiObject")) {
+		root.ZIndex = targetBase + math.max(0, root.ZIndex - sourceBase);
+	}
+	for (const descendant of root.GetDescendants()) {
+		if (descendant.IsA("GuiObject")) {
+			descendant.ZIndex = targetBase + math.max(0, descendant.ZIndex - sourceBase);
+		}
+	}
+}
+
+function bringInventoryToFront(): void {
+	if (inventoryLayerApplied) return;
+	inventoryLayerApplied = true;
+	if (inventoryBackdrop) inventoryBackdrop.ZIndex = INVENTORY_LAYER_BASE - 1;
+	if (rootFrame) moveGuiObjectLayer(rootFrame, 30, INVENTORY_LAYER_BASE);
+	if (tooltipFrame) moveGuiObjectLayer(tooltipFrame, 50, INVENTORY_LAYER_BASE + 20);
+}
 
 // ── Build the UI ──────────────────────────────────────────────────────────────
 
@@ -804,6 +826,8 @@ function buildTooltip(screenGui: ScreenGui): void {
 	consumeLabel.ZIndex = 51;
 	consumeLabel.Parent = tt;
 	tooltipConsumable = consumeLabel;
+
+	bringInventoryToFront();
 }
 
 function positionTooltip(anchor: GuiObject, extraHeight: number = 0): void {

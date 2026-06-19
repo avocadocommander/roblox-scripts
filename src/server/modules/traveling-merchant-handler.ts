@@ -26,6 +26,7 @@
 import { ServerStorage, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { NPC_REGISTRY } from "shared/config/npcs";
+import { pickNobleEquipmentItemId, pickRoyalEquipmentItemId } from "shared/config/npc-equipment";
 import { MERCHANT_NPC_POOL, buildShopInventory, ShopType } from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
 import { ITEMS, RARITY_COLORS } from "shared/inventory";
@@ -289,7 +290,13 @@ function spawnNPCForCart(cart: Model): ShopItem[] {
 		return [];
 	}
 	ensureCharacterWeaponAnchors(npc.model);
-	if (def.race === "Pirate") {
+	if (def.socialClass === "Royalty") {
+		const itemId = pickRoyalEquipmentItemId(npcName);
+		if (itemId !== undefined) applySheathedWeaponVisualToCharacter(npc.model, itemId);
+	} else if (def.socialClass === "Nobility") {
+		const itemId = pickNobleEquipmentItemId(npcName);
+		if (itemId !== undefined) applySheathedWeaponVisualToCharacter(npc.model, itemId);
+	} else if (def.race === "Pirate") {
 		applySheathedWeaponVisualToCharacter(npc.model, "cutlass");
 	}
 

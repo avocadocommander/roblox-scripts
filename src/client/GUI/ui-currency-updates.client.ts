@@ -1,7 +1,5 @@
 import { Players, ReplicatedStorage, TweenService } from "@rbxts/services";
 import { onPlayerInitialized } from "../modules/client-init";
-import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
-import { ACHIEVEMENTS } from "shared/achievements";
 import { UI_THEME } from "shared/ui-theme";
 
 const playerState = ReplicatedStorage.WaitForChild("PlayerState") as Folder;
@@ -240,67 +238,6 @@ function showLevelUp(level: number, screenGui: ScreenGui): void {
 	pushNotification(card, screenGui);
 }
 
-// ── Achievement unlocked ──────────────────────────────────────────────────────
-
-function showAchievement(achievementName: string, description: string, icon: string, screenGui: ScreenGui): void {
-	const card = makeBaseCard();
-
-	const cardStroke = new Instance("UIStroke");
-	cardStroke.Color = UI_THEME.gold;
-	cardStroke.Thickness = 1.5;
-	cardStroke.Parent = card;
-
-	const iconLabel = new Instance("TextLabel");
-	iconLabel.Size = new UDim2(0, 56, 1, 0);
-	iconLabel.BackgroundTransparency = 1;
-	iconLabel.Text = icon;
-	iconLabel.TextColor3 = UI_THEME.gold;
-	iconLabel.Font = UI_THEME.fontDisplay;
-	iconLabel.TextSize = 32;
-	iconLabel.ZIndex = 31;
-	iconLabel.Parent = card;
-
-	const topLine = new Instance("TextLabel");
-	topLine.Size = new UDim2(1, -60, 0.32, 0);
-	topLine.Position = new UDim2(0, 58, 0.04, 0);
-	topLine.BackgroundTransparency = 1;
-	topLine.Text = "-- ACHIEVEMENT UNLOCKED --";
-	topLine.TextColor3 = UI_THEME.textSection;
-	topLine.Font = UI_THEME.fontBold;
-	topLine.TextSize = 9;
-	topLine.TextXAlignment = Enum.TextXAlignment.Left;
-	topLine.ZIndex = 31;
-	topLine.Parent = card;
-
-	const nameLine = new Instance("TextLabel");
-	nameLine.Size = new UDim2(1, -60, 0.36, 0);
-	nameLine.Position = new UDim2(0, 58, 0.32, 0);
-	nameLine.BackgroundTransparency = 1;
-	nameLine.Text = achievementName;
-	nameLine.TextColor3 = UI_THEME.textHeader;
-	nameLine.Font = UI_THEME.fontDisplay;
-	nameLine.TextSize = 20;
-	nameLine.TextTruncate = Enum.TextTruncate.AtEnd;
-	nameLine.TextXAlignment = Enum.TextXAlignment.Left;
-	nameLine.ZIndex = 31;
-	nameLine.Parent = card;
-
-	const descLine = new Instance("TextLabel");
-	descLine.Size = new UDim2(1, -60, 0.26, 0);
-	descLine.Position = new UDim2(0, 58, 0.7, 0);
-	descLine.BackgroundTransparency = 1;
-	descLine.Text = description;
-	descLine.TextColor3 = UI_THEME.textMuted;
-	descLine.Font = UI_THEME.fontBody;
-	descLine.TextSize = 10;
-	descLine.TextTruncate = Enum.TextTruncate.AtEnd;
-	descLine.TextXAlignment = Enum.TextXAlignment.Left;
-	descLine.ZIndex = 31;
-	descLine.Parent = card;
-
-	pushNotification(card, screenGui);
-}
-
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 onPlayerInitialized(() => {
@@ -319,12 +256,4 @@ onPlayerInitialized(() => {
 		showLevelUp(newLevel, screenGui);
 	});
 
-	// Achievement unlocked notification
-	const achievementRemote = getAchievementUnlockedRemote();
-	achievementRemote.OnClientEvent.Connect((achievementId: unknown) => {
-		const id = achievementId as string;
-		const def = ACHIEVEMENTS[id];
-		if (!def) return;
-		showAchievement(def.title, def.description, def.icon, screenGui);
-	});
 });

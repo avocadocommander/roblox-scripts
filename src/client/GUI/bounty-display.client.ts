@@ -13,6 +13,8 @@ import { MEDIEVAL_NPCS, NPCData } from "shared/module";
 import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { getNPCDisplay } from "shared/npc-display";
 import { RARITY_COLORS } from "shared/inventory";
+import { ACHIEVEMENTS, AchievementDef } from "shared/achievements";
+import { getAchievementUnlockedRemote } from "shared/remotes/achievement-remote";
 import {
 	BoardBodyContent,
 	BoardMessage,
@@ -47,6 +49,7 @@ function isCompactBoard(): boolean {
 let cardHeaderLabel: TextLabel | undefined;
 let contractBody: Frame | undefined;
 let guidanceBody: Frame | undefined;
+let achievementBody: Frame | undefined;
 
 // Tutorial-glow refs — pulsed during guidance mode
 let bountyBoardWrapper: Frame | undefined;
@@ -61,23 +64,49 @@ let stepPulseElapsed = 0;
 // them as Lua upvalues (not globals). Must be above the Heartbeat.Connect call.
 let guidanceObjectiveLabel: TextLabel | undefined;
 let guidanceFooterLabel: TextLabel | undefined;
+let achievementIconLabel: TextLabel | undefined;
+let achievementTitleLabel: TextLabel | undefined;
+let achievementDescriptionLabel: TextLabel | undefined;
+let achievementRewardLabel: TextLabel | undefined;
+let achievementProgressFill: Frame | undefined;
+let achievementStroke: UIStroke | undefined;
 
 const NIGHT_GLOW_COLOR = Color3.fromRGB(245, 200, 70);
 const DAWN_GLOW_COLOR = Color3.fromRGB(235, 80, 55);
 const DIM_COLOR = Color3.fromRGB(195, 182, 158); // UI_THEME.textPrimary
 const GLOW_CYCLE = 1.4; // seconds for one full pulse
+const ACHIEVEMENT_HOLD_SECS = 8;
 let activeGuidanceGlowColor = NIGHT_GLOW_COLOR;
+let latestBoardContent: BoardBodyContent = { mode: "contract" };
+let isAchievementOverlayActive = false;
+let achievementOverlayElapsed = 0;
+let achievementOverlayToken = 0;
 
 // Single always-running Heartbeat for the step-counter text pulse.
 // Using a persistent connection (rather than connect/disconnect per mode change)
 // avoids all race conditions with task.spawn and avoids missed connections.
 RunService.Heartbeat.Connect((dt) => {
-	if (!isGuidancePulseActive || guidanceFooterLabel === undefined) return;
-	stepPulseElapsed += dt;
-	// t oscillates 0 -> 1 -> 0 once per GLOW_CYCLE. At 1: bright gold, fully opaque.
-	const t = (math.sin((stepPulseElapsed / GLOW_CYCLE) * math.pi * 2 - math.pi / 2) + 1) / 2;
-	guidanceFooterLabel.TextColor3 = DIM_COLOR.Lerp(activeGuidanceGlowColor, t);
-	guidanceFooterLabel.TextTransparency = 0.55 * (1 - t); // 0.55 at dim, 0 at peak
+	if (isGuidancePulseActive && guidanceFooterLabel !== undefined) {
+		stepPulseElapsed += dt;
+		// t oscillates 0 -> 1 -> 0 once per GLOW_CYCLE. At 1: bright gold, fully opaque.
+		const t = (math.sin((stepPulseElapsed / GLOW_CYCLE) * math.pi * 2 - math.pi / 2) + 1) / 2;
+		guidanceFooterLabel.TextColor3 = DIM_COLOR.Lerp(activeGuidanceGlowColor, t);
+		guidanceFooterLabel.TextTransparency = 0.55 * (1 - t); // 0.55 at dim, 0 at peak
+	}
+
+	if (isAchievementOverlayActive) {
+		achievementOverlayElapsed += dt;
+		const progress = math.min(1, achievementOverlayElapsed / ACHIEVEMENT_HOLD_SECS);
+		const t = (math.sin((achievementOverlayElapsed / 0.55) * math.pi * 2 - math.pi / 2) + 1) / 2;
+		const pulseColor = UI_THEME.gold.Lerp(Color3.fromRGB(255, 226, 88), t);
+
+		if (achievementProgressFill) achievementProgressFill.Size = new UDim2(progress, 0, 1, 0);
+		if (achievementStroke) {
+			achievementStroke.Color = pulseColor;
+			achievementStroke.Thickness = sc(1.5 + t);
+			achievementStroke.Transparency = 0.05 + 0.25 * (1 - t);
+		}
+	}
 });
 
 function startGuidancePulse(): void {
@@ -335,6 +364,7 @@ function buildMissionCard(wrapper: Frame): void {
 
 	// ── Guidance body (tutorial step layout) ──────────────────────────────
 	guidanceBody = buildGuidanceBody(card);
+	achievementBody = buildAchievementBody(card);
 }
 
 // ── Contract-mode body ───────────────────────────────────────────────────────
@@ -458,6 +488,123 @@ function buildGuidanceBody(card: Frame): Frame {
 	guidanceFooterLabel.TextSize = sc(13);
 	guidanceFooterLabel.TextXAlignment = Enum.TextXAlignment.Left;
 	guidanceFooterLabel.Parent = body;
+
+	return body;
+}
+
+function buildAchievementBody(card: Frame): Frame {
+	const compact = isCompactBoard();
+	const body = new Instance("Frame");
+	body.Name = "AchievementBody";
+	body.LayoutOrder = 3;
+	body.Size = new UDim2(1, 0, 0, 0);
+	body.AutomaticSize = Enum.AutomaticSize.Y;
+	body.BackgroundTransparency = 1;
+	body.Visible = false;
+	body.Parent = card;
+
+	const corner = new Instance("UICorner");
+	corner.CornerRadius = UI_THEME.cornerRadius;
+	corner.Parent = body;
+
+	achievementStroke = new Instance("UIStroke");
+	achievementStroke.Color = UI_THEME.gold;
+	achievementStroke.Thickness = sc(1.5);
+	achievementStroke.Transparency = 0.35;
+	achievementStroke.Parent = body;
+
+	const layout = new Instance("UIListLayout");
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	layout.Padding = new UDim(0, sc(5));
+	layout.Parent = body;
+
+	const row = new Instance("Frame");
+	row.Name = "Main";
+	row.LayoutOrder = 1;
+	row.Size = new UDim2(1, 0, 0, sc(compact ? 54 : 62));
+	row.BackgroundTransparency = 1;
+	row.Parent = body;
+
+	achievementIconLabel = new Instance("TextLabel");
+	achievementIconLabel.Name = "Icon";
+	achievementIconLabel.Size = new UDim2(0, sc(compact ? 42 : 50), 1, 0);
+	achievementIconLabel.BackgroundTransparency = 1;
+	achievementIconLabel.Text = "*";
+	achievementIconLabel.TextColor3 = UI_THEME.gold;
+	achievementIconLabel.Font = UI_THEME.fontDisplay;
+	achievementIconLabel.TextSize = sc(compact ? 30 : 36);
+	achievementIconLabel.Parent = row;
+
+	const textCol = new Instance("Frame");
+	textCol.Name = "Text";
+	textCol.Size = new UDim2(1, -sc(compact ? 48 : 56), 1, 0);
+	textCol.Position = new UDim2(0, sc(compact ? 48 : 56), 0, 0);
+	textCol.BackgroundTransparency = 1;
+	textCol.Parent = row;
+
+	const textLayout = new Instance("UIListLayout");
+	textLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	textLayout.Padding = new UDim(0, sc(2));
+	textLayout.Parent = textCol;
+
+	achievementTitleLabel = new Instance("TextLabel");
+	achievementTitleLabel.Name = "Title";
+	achievementTitleLabel.LayoutOrder = 1;
+	achievementTitleLabel.Size = new UDim2(1, 0, 0, sc(compact ? 22 : 26));
+	achievementTitleLabel.BackgroundTransparency = 1;
+	achievementTitleLabel.Text = "";
+	achievementTitleLabel.TextColor3 = UI_THEME.textHeader;
+	achievementTitleLabel.Font = UI_THEME.fontDisplay;
+	achievementTitleLabel.TextSize = sc(compact ? 20 : 24);
+	achievementTitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	achievementTitleLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	achievementTitleLabel.Parent = textCol;
+
+	achievementDescriptionLabel = new Instance("TextLabel");
+	achievementDescriptionLabel.Name = "Description";
+	achievementDescriptionLabel.LayoutOrder = 2;
+	achievementDescriptionLabel.Size = new UDim2(1, 0, 0, sc(28));
+	achievementDescriptionLabel.AutomaticSize = Enum.AutomaticSize.Y;
+	achievementDescriptionLabel.BackgroundTransparency = 1;
+	achievementDescriptionLabel.Text = "";
+	achievementDescriptionLabel.TextColor3 = UI_THEME.textPrimary;
+	achievementDescriptionLabel.Font = UI_THEME.fontBody;
+	achievementDescriptionLabel.TextSize = sc(compact ? 11 : 12);
+	achievementDescriptionLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	achievementDescriptionLabel.TextYAlignment = Enum.TextYAlignment.Top;
+	achievementDescriptionLabel.TextWrapped = true;
+	achievementDescriptionLabel.Parent = textCol;
+
+	achievementRewardLabel = new Instance("TextLabel");
+	achievementRewardLabel.Name = "Reward";
+	achievementRewardLabel.LayoutOrder = 2;
+	achievementRewardLabel.Size = new UDim2(1, 0, 0, sc(15));
+	achievementRewardLabel.BackgroundTransparency = 1;
+	achievementRewardLabel.Text = "";
+	achievementRewardLabel.TextColor3 = UI_THEME.gold;
+	achievementRewardLabel.Font = UI_THEME.fontBold;
+	achievementRewardLabel.TextSize = sc(11);
+	achievementRewardLabel.TextXAlignment = Enum.TextXAlignment.Left;
+	achievementRewardLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+	achievementRewardLabel.Visible = false;
+	achievementRewardLabel.Parent = body;
+
+	const progressTrack = new Instance("Frame");
+	progressTrack.Name = "ProgressTrack";
+	progressTrack.LayoutOrder = 3;
+	progressTrack.Size = new UDim2(1, 0, 0, sc(4));
+	progressTrack.BackgroundColor3 = UI_THEME.divider;
+	progressTrack.BackgroundTransparency = 0.2;
+	progressTrack.BorderSizePixel = 0;
+	progressTrack.ClipsDescendants = true;
+	progressTrack.Parent = body;
+
+	achievementProgressFill = new Instance("Frame");
+	achievementProgressFill.Name = "Fill";
+	achievementProgressFill.Size = new UDim2(1, 0, 1, 0);
+	achievementProgressFill.BackgroundColor3 = Color3.fromRGB(255, 212, 58);
+	achievementProgressFill.BorderSizePixel = 0;
+	achievementProgressFill.Parent = progressTrack;
 
 	return body;
 }
@@ -693,12 +840,19 @@ function clearNPCBounty(): void {
 // ── Board renderer (state-driven via board-state) ────────────────────────────
 
 function renderBody(content: BoardBodyContent): void {
+	latestBoardContent = content;
+	if (isAchievementOverlayActive) return;
+	renderBoardBodyContent(content);
+}
+
+function renderBoardBodyContent(content: BoardBodyContent): void {
 	if (content.mode === "contract") {
 		stopGuidancePulse();
 		if (cardHeaderLabel) {
 			cardHeaderLabel.Text = "YOUR MARK";
 			cardHeaderLabel.TextColor3 = UI_THEME.textSection;
 		}
+		if (achievementBody) achievementBody.Visible = false;
 		if (guidanceBody) guidanceBody.Visible = false;
 		if (contractBody) contractBody.Visible = true;
 		renderContractBody(latestBounty);
@@ -719,6 +873,7 @@ function renderBody(content: BoardBodyContent): void {
 		cardHeaderLabel.TextColor3 = showBountyCard ? UI_THEME.textSection : activeGuidanceGlowColor;
 	}
 
+	if (achievementBody) achievementBody.Visible = false;
 	if (contractBody) contractBody.Visible = showBountyCard;
 	if (showBountyCard) renderContractBody(latestBounty);
 
@@ -739,6 +894,70 @@ function renderBody(content: BoardBodyContent): void {
 }
 
 // ── Message stack rendering ──────────────────────────────────────────────────
+
+function getAchievementRewardText(def: AchievementDef): string {
+	const reward = def.reward;
+	if (reward === undefined) return "";
+
+	const parts: string[] = [];
+	if (reward.coins !== undefined) parts.push("+" + reward.coins + "g");
+	if (reward.xp !== undefined) parts.push("+" + reward.xp + " xp");
+	if (reward.titleId !== undefined) parts.push("Title unlocked");
+	if (reward.itemId !== undefined) parts.push("Item: " + reward.itemId + " x" + (reward.itemCount ?? 1));
+	return parts.size() > 0 ? "Reward: " + parts.join("  |  ") : "";
+}
+
+function clearAchievementOverlayVisuals(): void {
+	if (achievementBody) achievementBody.Visible = false;
+	if (achievementProgressFill) achievementProgressFill.Size = new UDim2(1, 0, 1, 0);
+	if (achievementStroke) achievementStroke.Transparency = 0.35;
+	if (bountyBoardWrapper) {
+		bountyBoardWrapper.BackgroundTransparency = 1;
+	}
+	if (cardStrokeRef) {
+		cardStrokeRef.Color = UI_THEME.border;
+		cardStrokeRef.Thickness = UI_THEME.strokeThickness;
+		cardStrokeRef.Transparency = 0;
+	}
+	if (missionCard) {
+		missionCard.BackgroundTransparency = UI_THEME.bgTransparency;
+	}
+}
+
+function showAchievementOnBoard(def: AchievementDef): void {
+	achievementOverlayToken += 1;
+	const token = achievementOverlayToken;
+	achievementOverlayElapsed = 0;
+	isAchievementOverlayActive = true;
+
+	stopGuidancePulse();
+
+	if (contractBody) contractBody.Visible = false;
+	if (guidanceBody) guidanceBody.Visible = false;
+	if (achievementBody) achievementBody.Visible = true;
+
+	if (cardHeaderLabel) {
+		cardHeaderLabel.Text = "ACHIEVEMENT UNLOCKED";
+		cardHeaderLabel.TextColor3 = UI_THEME.gold;
+	}
+	if (achievementIconLabel) achievementIconLabel.Text = def.icon;
+	if (achievementTitleLabel) achievementTitleLabel.Text = def.title;
+	if (achievementDescriptionLabel) achievementDescriptionLabel.Text = def.description;
+	if (achievementProgressFill) achievementProgressFill.Size = new UDim2(0, 0, 1, 0);
+
+	const rewardText = getAchievementRewardText(def);
+	if (achievementRewardLabel) {
+		achievementRewardLabel.Text = rewardText;
+		achievementRewardLabel.Visible = rewardText !== "";
+	}
+
+	task.delay(ACHIEVEMENT_HOLD_SECS, () => {
+		if (token !== achievementOverlayToken) return;
+		isAchievementOverlayActive = false;
+		clearAchievementOverlayVisuals();
+		renderBoardBodyContent(latestBoardContent);
+	});
+}
 
 const MESSAGE_FADE_IN = 0.25;
 const MESSAGE_FADE_OUT = 0.4;
@@ -971,6 +1190,11 @@ onPlayerInitialized(() => {
 
 	// UI pulses (inventory button / dagger tile) for UI-driven tutorial steps.
 	initializeTutorialUIPulse();
+
+	getAchievementUnlockedRemote().OnClientEvent.Connect((achievementId: unknown) => {
+		const def = ACHIEVEMENTS[achievementId as string];
+		if (def) showAchievementOnBoard(def);
+	});
 
 	// Personal NPC bounty assigned / renewed
 	getBountyAssignedRemote().OnClientEvent.Connect((data: unknown) => {

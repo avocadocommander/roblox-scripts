@@ -226,7 +226,7 @@ function applyDreamBeam(beam: Beam, defaults: BeamDefaults): void {
 	beam.Enabled = true;
 	beam.Color = DREAM_COLOR;
 	beam.Transparency = DREAM_TRANSPARENCY;
-	beam.LightEmission = 0.24;
+	beam.LightEmission = 0.12;
 	beam.LightInfluence = 0.03;
 	beam.TextureSpeed = eventSpeed;
 	beam.TextureLength = defaults.textureLength;
@@ -237,9 +237,9 @@ function applyDreamBeam(beam: Beam, defaults: BeamDefaults): void {
 function applyDreamTorchLight(light: Light, defaults: LightDefaults): void {
 	light.Enabled = true;
 	light.Color = MOON_BLUE_LIGHT;
-	light.Brightness = math.max(defaults.brightness, 0.8);
+	light.Brightness = math.max(defaults.brightness * 0.5, 0.4);
 	if (light.IsA("PointLight") || light.IsA("SpotLight") || light.IsA("SurfaceLight")) {
-		light.Range = math.max(defaults.range, 14);
+		light.Range = math.max(defaults.range * 0.5, 7);
 	}
 }
 
@@ -264,18 +264,18 @@ function applyDreamTorchEmitter(emitter: ParticleEmitter, defaults: ParticleEmit
 function applyDreamFireflyLight(light: Light, defaults: LightDefaults): void {
 	light.Enabled = true;
 	light.Color = Color3.fromRGB(92, 180, 255);
-	light.Brightness = math.max(defaults.brightness * 2.35, 1.45);
+	light.Brightness = math.max(defaults.brightness * 1.175, 0.725);
 	if (light.IsA("PointLight") || light.IsA("SpotLight") || light.IsA("SurfaceLight")) {
-		light.Range = math.max(defaults.range * 1.35, 12);
+		light.Range = math.max(defaults.range * 0.675, 6);
 	}
 }
 
 function applyDreamFireflyEmitter(emitter: ParticleEmitter, defaults: ParticleEmitterDefaults): void {
 	emitter.Enabled = true;
 	emitter.Color = FIREFLY_DREAM_COLOR;
-	emitter.Brightness = math.max(defaults.brightness * 2.1, 1.45);
+	emitter.Brightness = math.max(defaults.brightness * 1.05, 0.725);
 	emitter.Rate = math.max(defaults.rate * 2.5, 18);
-	emitter.LightEmission = 0.72;
+	emitter.LightEmission = 0.36;
 	emitter.LightInfluence = 0.02;
 }
 
@@ -322,7 +322,7 @@ function isDawnsGuideEffect(instance: Instance): boolean {
 
 function tweenDreamTorchLight(light: Light, defaults: LightDefaults): void {
 	light.Enabled = true;
-	tweenLight(light, MOON_BLUE_LIGHT, math.max(defaults.brightness, 0.8), math.max(defaults.range, 14));
+	tweenLight(light, MOON_BLUE_LIGHT, math.max(defaults.brightness * 0.5, 0.4), math.max(defaults.range * 0.5, 7));
 }
 
 function tweenEmitterOff(emitter: ParticleEmitter, defaults: ParticleEmitterDefaults): void {
@@ -399,7 +399,7 @@ function transitionCloudBeamState(isDreaming: boolean): number {
 			beam.Width0 = normalTargets.Width0;
 			beam.Width1 = normalTargets.Width1;
 			TweenService.Create(beam, EFFECT_FADE_INFO, {
-				LightEmission: 0.24,
+				LightEmission: 0.12,
 				LightInfluence: 0.03,
 				TextureSpeed: eventSpeed,
 				Width0: defaults.width0 * 1.18,
@@ -491,8 +491,8 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 					tweenLight(
 						descendant,
 						Color3.fromRGB(92, 180, 255),
-						math.max(defaults.brightness * 2.35, 1.45),
-						math.max(defaults.range * 1.35, 12),
+						math.max(defaults.brightness * 1.175, 0.725),
+						math.max(defaults.range * 0.675, 6),
 					);
 				}
 			} else {
@@ -520,9 +520,9 @@ function transitionDreamEnvironmentState(isDreaming: boolean): { torches: number
 				if (inFireflies) {
 					descendant.Color = FIREFLY_DREAM_COLOR;
 					TweenService.Create(descendant, EFFECT_FADE_INFO, {
-						Brightness: math.max(defaults.brightness * 2.1, 1.45),
+						Brightness: math.max(defaults.brightness * 1.05, 0.725),
 						Rate: math.max(defaults.rate * 2.5, 18),
-						LightEmission: 0.72,
+						LightEmission: 0.36,
 						LightInfluence: 0.02,
 					}).Play();
 				}

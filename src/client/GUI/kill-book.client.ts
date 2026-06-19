@@ -30,6 +30,7 @@ const TAB_SECTIONS: Array<string | undefined> = [undefined, "killbook:bestiary",
 let activeTab = 0;
 let tabButtons: TextButton[] = [];
 let titleDropdownOpen = false;
+const KILL_BOOK_DISPLAY_ORDER = 100;
 
 /** Track expanded cards in bestiary / achievements (reset on tab switch). */
 let bestiaryExpanded = new Set<string>();
@@ -765,7 +766,7 @@ function buildKillBook(playerGui: PlayerGui): void {
 	bookGui.Name = "KillBookGui";
 	bookGui.ResetOnSpawn = false;
 	bookGui.IgnoreGuiInset = true;
-	bookGui.DisplayOrder = 5;
+	bookGui.DisplayOrder = KILL_BOOK_DISPLAY_ORDER;
 	bookGui.Parent = playerGui;
 
 	// Backdrop
@@ -903,6 +904,7 @@ function buildKillBook(playerGui: PlayerGui): void {
 function toggleBook(): void {
 	if (!bookGui) return;
 	isOpen = !isOpen;
+	bookGui.DisplayOrder = KILL_BOOK_DISPLAY_ORDER;
 	bookGui.Enabled = isOpen;
 	if (isOpen) {
 		getOrCreateUIEventRemote().FireServer(UI_OPEN_EVENTS.KillBook);
@@ -931,8 +933,8 @@ onPlayerInitialized(() => {
 		// Track as new so the HUD codex button + achievements tab show a dot.
 		markNew("killbook:achievements", id);
 		// If book is open on achievements tab, refresh
-		if (isOpen && activeTab === 3) {
-			fetchAndRender(3);
+		if (isOpen && activeTab === 2) {
+			fetchAndRender(2);
 		} else if (isOpen) {
 			// Refresh tab dots on any other tab.
 			updateTabHighlights();

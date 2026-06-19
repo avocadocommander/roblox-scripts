@@ -2,6 +2,7 @@ import { CollectionService, Workspace } from "@rbxts/services";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
 import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
+import { pickNobleEquipmentItemId, pickRoyalEquipmentItemId } from "shared/config/npc-equipment";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getRouteEnchantment, getRouteRole, RouteRole } from "shared/npc-manager";
 import { getReservedMerchantNames } from "./merchant-handler";
@@ -30,7 +31,13 @@ const FIXED_RESPAWN_DELAY = 30;
 // kept in sync by spawn/respawn/death callbacks via the shared reference.
 const spawnAssignments: Map<string, Assignment> = new Map();
 
-function applyDefaultNPCWeaponVisual(npcModel: Model, race: Race, role: RouteRole | undefined): void {
+function applyDefaultNPCWeaponVisual(
+	npcModel: Model,
+	npcName: string,
+	race: Race,
+	socialClass: SocialClass,
+	role: RouteRole | undefined,
+): void {
 	ensureCharacterWeaponAnchors(npcModel);
 	if (role === "Dawnsworn") {
 		applyHeldWeaponVisualToCharacter(npcModel, "halberd");
@@ -38,6 +45,12 @@ function applyDefaultNPCWeaponVisual(npcModel: Model, race: Race, role: RouteRol
 		applySheathedWeaponVisualToCharacter(npcModel, "dagger");
 	} else if (role === "Chaplain") {
 		applyHeldWeaponVisualToCharacter(npcModel, "ornate_staff");
+	} else if (socialClass === "Royalty") {
+		const itemId = pickRoyalEquipmentItemId(npcName);
+		if (itemId !== undefined) applySheathedWeaponVisualToCharacter(npcModel, itemId);
+	} else if (socialClass === "Nobility") {
+		const itemId = pickNobleEquipmentItemId(npcName);
+		if (itemId !== undefined) applySheathedWeaponVisualToCharacter(npcModel, itemId);
 	} else if (race === "Pirate") {
 		applySheathedWeaponVisualToCharacter(npcModel, "cutlass");
 	}
@@ -260,7 +273,7 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			throw "Not able to create NPC";
 		}
 
-		applyDefaultNPCWeaponVisual(npc.model, npcData.race as Race, routeRole);
+		applyDefaultNPCWeaponVisual(npc.model, npcName, npcData.race as Race, npcData.status as SocialClass, routeRole);
 		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		npc.model.PivotTo(new CFrame(spawnPosition));
 		npc.model.SetAttribute("RouteName", npcRoute.Name);
@@ -305,7 +318,7 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, npcRoute);
 		if (!npc) throw `Not able to create NPC ${npcName}`;
 
-		applyDefaultNPCWeaponVisual(npc.model, npcDef.race, getRouteRole(npcRoute));
+		applyDefaultNPCWeaponVisual(npc.model, npcName, npcDef.race, npcDef.socialClass, getRouteRole(npcRoute));
 		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		const firstRoutePoint = routePoints[0];
 		const spawnPosition = resolveSpawnPosition(firstRoutePoint, isInitial);
