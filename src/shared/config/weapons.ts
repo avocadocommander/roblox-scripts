@@ -36,6 +36,8 @@ export interface WeaponDef {
 	heldGripStyle?: "oneHanded" | "twoHanded";
 	/** Optional effect spawned at BladeTipAttachment on the held weapon visual. */
 	bladeTipEffect?: "dawnsGuide";
+	/** Optional faction-level requirement to purchase or equip this weapon. */
+	requirement?: { factionId: import("./factions").FactionId; level: number };
 }
 
 /** Master weapon catalogue — keyed by weapon ID. */
@@ -61,6 +63,56 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		deliveryType: "dagger",
 		heldModelName: "Dagger",
 		handedness: "oneHanded",
+	},
+	shiv: {
+		id: "shiv",
+		name: "Shiv",
+		description: "A crude close-quarters blade favored by the Nightbound.",
+		effect: "+7 melee damage. Fast and easy to conceal.",
+		weaponType: "Blade",
+		icon: "/",
+		rarity: "uncommon",
+		deliveryType: "dagger",
+		heldModelName: "Shiv",
+		handedness: "oneHanded",
+		requirement: { factionId: "Night", level: 5 },
+	},
+	broken_sword: {
+		id: "broken_sword",
+		name: "Broken Sword",
+		description: "A ruined blade with enough edge left for desperate work.",
+		effect: "+6 melee damage. Short reach.",
+		weaponType: "Blade",
+		icon: "/",
+		rarity: "common",
+		deliveryType: "dagger",
+		heldModelName: "Broken Sword",
+		handedness: "oneHanded",
+	},
+	iron_spear: {
+		id: "iron_spear",
+		name: "Iron Spear",
+		description: "A sturdy iron-tipped spear issued to proven Dawnsworn.",
+		effect: "+11 melee damage. Extended reach.",
+		weaponType: "Polearm",
+		icon: "T",
+		rarity: "rare",
+		deliveryType: "dagger",
+		heldModelName: "Iron Spear",
+		handedness: "twoHanded",
+		requirement: { factionId: "Dawn", level: 5 },
+	},
+	rune_axe: {
+		id: "rune_axe",
+		name: "Rune Axe",
+		description: "An ancient axe whose etched runes stir when blood is near.",
+		effect: "+13 melee damage. Heavy two-handed axe.",
+		weaponType: "Axe",
+		icon: "T",
+		rarity: "legendary",
+		deliveryType: "dagger",
+		heldModelName: "Run Axe",
+		handedness: "twoHanded",
 	},
 	warhammer: {
 		id: "warhammer",

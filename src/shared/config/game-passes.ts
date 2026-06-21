@@ -36,6 +36,13 @@ export const GAME_PASSES: Record<string, GamePassDef> = {
 		description: "Unlocks the Warhammer -- a brutal blunt weapon with devastating knockback.",
 		unlocksItemId: "warhammer",
 	},
+	rune_axe_pass: {
+		id: "rune_axe_pass",
+		passId: 1882679259,
+		name: "Rune Axe",
+		description: "Permanently unlocks the legendary Rune Axe.",
+		unlocksItemId: "rune_axe",
+	},
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -44,13 +51,14 @@ export const GAME_PASSES: Record<string, GamePassDef> = {
 export const ALL_GAME_PASS_IDS: number[] = (() => {
 	const ids: number[] = [];
 	for (const [, def] of pairs(GAME_PASSES)) {
-		ids.push(def.passId);
+		if (def.passId > 0) ids.push(def.passId);
 	}
 	return ids;
 })();
 
 /** Look up a Game Pass definition by its Roblox pass ID. */
 export function getGamePassByPassId(passId: number): GamePassDef | undefined {
+	if (passId <= 0) return undefined;
 	for (const [, def] of pairs(GAME_PASSES)) {
 		if (def.passId === passId) return def;
 	}
@@ -60,7 +68,7 @@ export function getGamePassByPassId(passId: number): GamePassDef | undefined {
 /** Look up the Game Pass ID required for a given item. Returns undefined if no pass needed. */
 export function getGamePassForItem(itemId: string): number | undefined {
 	for (const [, def] of pairs(GAME_PASSES)) {
-		if (def.unlocksItemId === itemId) return def.passId;
+		if (def.unlocksItemId === itemId && def.passId > 0) return def.passId;
 	}
 	return undefined;
 }

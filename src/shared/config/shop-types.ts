@@ -41,7 +41,9 @@ export function isExplicitOnlyShopType(shopType: ShopType): boolean {
 /** Item pools keyed by shop type. Merchants sell ALL items in their pool. */
 export const SHOP_TYPE_POOLS: Record<ShopType, ShopItem[]> = {
 	weapon: [
+		{ itemId: "shiv", price: 300 },
 		{ itemId: "dagger", price: 450 },
+		{ itemId: "iron_spear", price: 700 },
 		{ itemId: "warhammer", price: 850 },
 	],
 	elixir: [

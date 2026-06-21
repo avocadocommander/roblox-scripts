@@ -32,10 +32,10 @@ import {
 	trackActiveConsumableReplaced,
 } from "./analytics-tracker";
 import { getGamePassForItem } from "shared/config/game-passes";
-import { onPlayerStateLoaded, setInventoryState, getInventoryState } from "shared/player-state";
+import { onPlayerStateLoaded, setInventoryState, getInventoryState, getFactionXP } from "shared/player-state";
 import { playSoundEffect } from "./sound-effect-bus";
 import { applyHeldWeaponVisual, applySheathedWeaponVisual, ensureCharacterWeaponAnchors } from "./weapon-visual-handler";
-import { FactionId } from "shared/config/factions";
+import { FactionId, levelFromXP } from "shared/config/factions";
 
 // Lazy import to avoid circular dependency with bounty-manager
 let _broadcastWantedScrollUpdate: ((player: Player) => void) | undefined;
@@ -183,6 +183,15 @@ function handleActivateItem(player: Player, itemId: string): void {
 		if (requiredPassId !== undefined && !checkPlayerOwnsPass(player, requiredPassId)) {
 			log(`[INVENTORY] ${player.Name} tried to equip premium weapon ${itemDef.name} without pass`);
 			return;
+		}
+		if (itemDef.requirement) {
+			const factionLevel = levelFromXP(getFactionXP(player)[itemDef.requirement.factionId] ?? 0);
+			if (factionLevel < itemDef.requirement.level) {
+				log(
+					`[INVENTORY] ${player.Name} tried to equip ${itemDef.name} below ${itemDef.requirement.factionId} level ${itemDef.requirement.level}`,
+				);
+				return;
+			}
 		}
 		// Equip weapon (toggle — if already equipped, switch back to fists)
 		if (inv.equippedWeapon === itemId) {

@@ -10,9 +10,10 @@ import { MarketplaceService, Players } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { getPromptPassPurchaseRemote, getPassOwnershipSyncRemote } from "shared/remotes/pass-remote";
 import { ALL_GAME_PASS_IDS, GAME_PASSES, getGamePassByPassId } from "shared/config/game-passes";
-import { givePlayerItem } from "./inventory-handler";
+import { getPlayerOwnedCount, givePlayerItem } from "./inventory-handler";
 import { trackPurchaseMade, trackPurchasePromptShown } from "./analytics-tracker";
 import { playSoundEffect } from "./sound-effect-bus";
+import { onPlayerStateLoaded } from "shared/player-state";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ function warmCache(player: Player): void {
 			log("[PASS] " + player.Name + " owns pass " + passId);
 		}
 	}
+	reconcileOwnedPassItems(player);
 }
 
 /**
@@ -66,9 +68,17 @@ function warmCache(player: Player): void {
 function autoGrantItemForPass(player: Player, passId: number): void {
 	const passDef = getGamePassByPassId(passId);
 	if (passDef && passDef.unlocksItemId !== undefined) {
-		givePlayerItem(player, passDef.unlocksItemId, 1);
-		log("[PASS] Auto-granted item " + passDef.unlocksItemId + " to " + player.Name + " for pass " + passId);
+		if (getPlayerOwnedCount(player, passDef.unlocksItemId) <= 0 && givePlayerItem(player, passDef.unlocksItemId, 1)) {
+			log("[PASS] Auto-granted item " + passDef.unlocksItemId + " to " + player.Name + " for pass " + passId);
+		}
 	}
+}
+
+function reconcileOwnedPassItems(player: Player): void {
+	const cache = ownershipCache.get(player);
+	if (!cache || player.Parent === undefined) return;
+	for (const passId of cache) autoGrantItemForPass(player, passId);
+	syncPassOwnership(player);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -123,11 +133,17 @@ export function initializePassHandler(): void {
 	// Warm cache when players join
 	Players.PlayerAdded.Connect((player) => {
 		task.spawn(() => warmCache(player));
+		onPlayerStateLoaded(player, () => {
+			// Inventory restoration also runs from this event. Give it one task
+			// window to finish before reconciling permanent pass unlocks.
+			task.delay(1, () => reconcileOwnedPassItems(player));
+		});
 	});
 
 	// Also warm for players already in game (in case bootstrap runs late)
 	for (const player of Players.GetPlayers()) {
 		task.spawn(() => warmCache(player));
+		onPlayerStateLoaded(player, () => task.delay(1, () => reconcileOwnedPassItems(player)));
 	}
 
 	// Cleanup on leave

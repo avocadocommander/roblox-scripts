@@ -110,6 +110,7 @@ for (const [, w] of pairs(WEAPONS)) {
 		icon: w.icon,
 		rarity: w.rarity,
 		consumable: false,
+		requirement: w.requirement,
 	};
 }
 

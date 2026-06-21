@@ -39,7 +39,11 @@ function applyDefaultNPCWeaponVisual(
 	role: RouteRole | undefined,
 ): void {
 	ensureCharacterWeaponAnchors(npcModel);
-	if (role === "Dawnsworn") {
+	if ((role === "Dawnsworn" || role === "Nightbound") && socialClass === "Royalty") {
+		applySheathedWeaponVisualToCharacter(npcModel, "rune_axe");
+	} else if ((role === "Dawnsworn" || role === "Nightbound") && socialClass === "Nobility") {
+		applySheathedWeaponVisualToCharacter(npcModel, "warhammer");
+	} else if (role === "Dawnsworn") {
 		applyHeldWeaponVisualToCharacter(npcModel, "halberd");
 	} else if (role === "Nightbound") {
 		applySheathedWeaponVisualToCharacter(npcModel, "dagger");
@@ -261,6 +265,8 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			throw `NPC name is invalid: ${npcName}`;
 		}
 
+		const equipmentClass = routeClass ?? NPC_REGISTRY[npcName].socialClass;
+
 		// Dawnsworn/Nightbound representatives are always Commoners regardless of their name's status.
 		const npcData = { ...MEDIEVAL_NPCS[npcName] };
 		if (routeRole !== undefined) {
@@ -273,7 +279,7 @@ function spawnForRoute(npcRoute: Folder, assigned: Map<string, Assignment>, isIn
 			throw "Not able to create NPC";
 		}
 
-		applyDefaultNPCWeaponVisual(npc.model, npcName, npcData.race as Race, npcData.status as SocialClass, routeRole);
+		applyDefaultNPCWeaponVisual(npc.model, npcName, npcData.race as Race, equipmentClass, routeRole);
 		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		npc.model.PivotTo(new CFrame(spawnPosition));
 		npc.model.SetAttribute("RouteName", npcRoute.Name);
@@ -318,7 +324,13 @@ function spawnFixedRouteNPC(npcName: string, npcRoute: Folder, assigned: Map<str
 		const npc: NPC | undefined = createNPCModelAndGenerateHumanoid(npcName, npcData, npcRoute);
 		if (!npc) throw `Not able to create NPC ${npcName}`;
 
-		applyDefaultNPCWeaponVisual(npc.model, npcName, npcDef.race, npcDef.socialClass, getRouteRole(npcRoute));
+		applyDefaultNPCWeaponVisual(
+			npc.model,
+			npcName,
+			npcDef.race,
+			getRouteSocialClass(npcRoute) ?? npcDef.socialClass,
+			getRouteRole(npcRoute),
+		);
 		applyEnchantmentVisualToCharacter(npc.model, getRouteEnchantment(npcRoute));
 		const firstRoutePoint = routePoints[0];
 		const spawnPosition = resolveSpawnPosition(firstRoutePoint, isInitial);

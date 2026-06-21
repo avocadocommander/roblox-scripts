@@ -36,6 +36,11 @@ function smoothTurn(npc: NPC, targetPosition: Vector3): void {
 	TweenService.Create(root, info, { CFrame: lookCF }).Play();
 }
 
+function getLookAtAttachment(routePoint: BasePart): Attachment | undefined {
+	const lookAt = routePoint.FindFirstChild("LookAt") ?? routePoint.FindFirstChild("Look");
+	return lookAt?.IsA("Attachment") ? lookAt : undefined;
+}
+
 /** Brief idle behaviour at a waypoint — multiple organic behaviours. */
 function idleFidget(npc: NPC, waitTime: number): void {
 	const root = npc.model.FindFirstChild("HumanoidRootPart") as BasePart | undefined;
@@ -150,16 +155,16 @@ async function assignNpcToRoute(
 			await Promise.delay(1);
 			continue;
 		}
-		const lookAtDirection: Attachment | undefined = activeRoutePoint.FindFirstChild("Look") as Attachment;
+		const lookAtDirection = getLookAtAttachment(activeRoutePoint);
 
 		if (isStationary) {
 			// ── Stationary NPCs: occasional idle fidget ──────────────────
 			setState("IDLE", npc);
 			const stationaryWait = math.random(4, 12);
-			idleFidget(npc, stationaryWait);
-
 			if (lookAtDirection) {
 				smoothTurn(npc, lookAtDirection.WorldPosition);
+			} else {
+				idleFidget(npc, stationaryWait);
 			}
 
 			await Promise.delay(stationaryWait);
@@ -185,7 +190,9 @@ async function assignNpcToRoute(
 		const waitTime = getLingerSeconds(activeRoutePoint);
 
 		if (waitTime > 0) {
-			idleFidget(npc, waitTime);
+			if (!lookAtDirection) {
+				idleFidget(npc, waitTime);
+			}
 			await Promise.delay(waitTime);
 		}
 

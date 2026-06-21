@@ -780,9 +780,9 @@ function showShopTooltip(shopItem: ShopItemPayload, tile: TextButton): void {
 			shopItem.requirement.level +
 			" with the " +
 			guildName +
-			" to learn of this brew.";
+			" to unlock this item.";
 		if (tradeTTName) {
-			tradeTTName.Text = "Unknown Brew";
+			tradeTTName.Text = "Locked Item";
 			tradeTTName.TextColor3 = rarityColor;
 		}
 		if (tradeTTPrice) tradeTTPrice.Text = "LOCKED";

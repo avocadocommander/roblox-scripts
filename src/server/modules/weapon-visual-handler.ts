@@ -106,7 +106,7 @@ function clearWeaponVisuals(character: Model): void {
 
 function getWeaponTemplate(def: WeaponDef): Instance | undefined {
 	const weaponFolder = ReplicatedStorage.FindFirstChild(WEAPON_FOLDER_NAME);
-	return weaponFolder?.FindFirstChild(def.heldModelName!);
+	return weaponFolder?.FindFirstChild(def.heldModelName!) ?? ReplicatedStorage.FindFirstChild(def.heldModelName!);
 }
 
 function cloneAsModel(template: Instance, modelName: string): Model {
@@ -196,7 +196,15 @@ function applyWeaponVisualToCharacter(character: Model, weaponId: string, mode: 
 
 	const template = getWeaponTemplate(def);
 	if (!template) {
-		log("[WEAPON-VISUAL] Missing ReplicatedStorage/" + WEAPON_FOLDER_NAME + "/" + def.heldModelName, "WARN");
+		log(
+			"[WEAPON-VISUAL] Missing ReplicatedStorage/" +
+				WEAPON_FOLDER_NAME +
+				"/" +
+				def.heldModelName +
+				" and ReplicatedStorage/" +
+				def.heldModelName,
+			"WARN",
+		);
 		return;
 	}
 

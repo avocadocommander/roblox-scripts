@@ -65,6 +65,15 @@ export const PREMIUM_OFFERS: Record<string, PremiumWorldOffer> = {
 		chargesLabel: undefined,
 		displayModelName: "Warhammer",
 	},
+	rune_axe_pass: {
+		offerId: "rune_axe_pass",
+		offerType: "gamepass",
+		productId: GAME_PASSES.rune_axe_pass.passId,
+		title: "Rune Axe",
+		description: "Permanently unlock the legendary Rune Axe.",
+		flavorText: "Old runes wake along its edge, hungry for another name.",
+		displayModelName: "Run Axe",
+	},
 
 	os_guidance: {
 		offerId: "os_guidance",
@@ -92,7 +101,8 @@ export function getPremiumOffer(offerId: string): PremiumWorldOffer | undefined 
 // To add a new offer to a shop type, append its offerId here.
 
 export const SHOP_OFFER_SLOTS: Record<ShopType, string[]> = {
-	weapon: ["warhammer_pass"],
+	weapon:
+		GAME_PASSES.rune_axe_pass.passId > 0 ? ["rune_axe_pass", "warhammer_pass"] : ["warhammer_pass"],
 	poison: ["os_guidance"],
 	elixir: [],
 	rare: [],

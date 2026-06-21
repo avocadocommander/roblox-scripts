@@ -34,7 +34,12 @@ import {
 	isExplicitOnlyShopType,
 } from "shared/config/shop-types";
 import { ShopItem } from "shared/config/npcs";
-import { SHOP_OFFER_SLOTS, getOfferSlotsForShopType, getPremiumOffer } from "shared/config/premium-offers";
+import {
+	PREMIUM_OFFERS,
+	SHOP_OFFER_SLOTS,
+	getOfferSlotsForShopType,
+	getPremiumOffer,
+} from "shared/config/premium-offers";
 import { SHOP_TYPE_MARKERS, SIGN_COLORS, SignColorScheme, generateShopName } from "shared/config/shop-signs";
 import { createNPCModelAndGenerateHumanoid, NPC, setState, assignNpcToRoute } from "shared/npc/main";
 import { getRouteEnchantment } from "shared/npc-manager";
@@ -66,6 +71,7 @@ const SHOP_OFFER_IDS: ReadonlySet<string> = (() => {
 
 const OFFER_SLOT_FAR_WARNING_DISTANCE_FROM_SIGN = 36;
 const GENERATED_OFFERS_FOLDER_NAME = "GeneratedOffers";
+const GENERATED_WORLD_OFFERS_FOLDER_NAME = "GeneratedWorldOffers";
 
 // ── Fallback route config (used when a Route folder has no route attributes) ──
 
@@ -308,6 +314,18 @@ function isInsideGeneratedOffer(inst: Instance): boolean {
 	return false;
 }
 
+function isInsideMerchantShopSite(inst: Instance): boolean {
+	let ancestor: Instance | undefined = inst;
+	while (ancestor !== undefined && ancestor !== Workspace) {
+		if (ancestor.IsA("Model")) {
+			if (CollectionService.HasTag(ancestor, "MerchantShop")) return true;
+			if (ancestor.Name === "Shop" && ancestor.FindFirstChild("Routes")?.IsA("Folder")) return true;
+		}
+		ancestor = ancestor.Parent;
+	}
+	return false;
+}
+
 function cleanupLegacyShopOfferObjects(): void {
 	const doomed = new Set<Instance>();
 
@@ -315,6 +333,7 @@ function cleanupLegacyShopOfferObjects(): void {
 		const offerId = inst.GetAttribute("offerId") as string | undefined;
 		if (offerId === undefined || !SHOP_OFFER_IDS.has(offerId)) continue;
 		if (inst.GetAttribute("GeneratedMerchantOffer") === true || isInsideGeneratedOffer(inst)) continue;
+		if (!isInsideMerchantShopSite(inst)) continue;
 
 		if (inst.IsA("Model")) {
 			doomed.add(inst);
@@ -332,6 +351,222 @@ function cleanupLegacyShopOfferObjects(): void {
 		log("[MERCHANT] Removing legacy static shop offer object: " + inst.GetFullName());
 		inst.Destroy();
 	}
+}
+
+function isOfferSlotName(inst: Instance): boolean {
+	const normalized = inst.Name.lower().gsub("[^%w]", "")[0];
+	return normalized.sub(1, 9) === "offerslot";
+}
+
+function isOfferSlotInstance(inst: Instance): boolean {
+	return (
+		isOfferSlotName(inst) ||
+		CollectionService.HasTag(inst, "OfferSlot") ||
+		inst.GetAttribute("OfferSlot") === true
+	);
+}
+
+function normalizeAssetName(name: string): string {
+	return name.lower().gsub("[^%w]", "")[0];
+}
+
+function findOfferDisplaySource(displayModelName: string): Instance | undefined {
+	const roots: Instance[] = [];
+	const weaponFolder = ReplicatedStorage.FindFirstChild("Weapons");
+	const displayFolder = ReplicatedStorage.FindFirstChild("DisplayModels");
+	if (weaponFolder) roots.push(weaponFolder);
+	if (displayFolder) roots.push(displayFolder);
+	roots.push(ReplicatedStorage);
+
+	const normalizedTarget = normalizeAssetName(displayModelName);
+	for (const root of roots) {
+		const exact = root.FindFirstChild(displayModelName);
+		if (exact) return exact;
+		for (const child of root.GetChildren()) {
+			if (normalizeAssetName(child.Name) === normalizedTarget) return child;
+		}
+	}
+	return undefined;
+}
+
+function resolveWorldOfferSlotPosition(slot: Instance): Vector3 | undefined {
+	if (slot.IsA("Attachment")) return slot.WorldPosition;
+	if (slot.IsA("BasePart")) {
+		const attachment = slot.GetDescendants().find(
+			(desc): desc is Attachment => desc.IsA("Attachment") && isOfferSlotInstance(desc),
+		);
+		return attachment?.WorldPosition ?? slot.Position;
+	}
+	if (slot.IsA("Model")) {
+		const attachment = slot.GetDescendants().find(
+			(desc): desc is Attachment => desc.IsA("Attachment") && isOfferSlotInstance(desc),
+		);
+		if (attachment) return attachment.WorldPosition;
+		return slot.PrimaryPart?.Position ?? (slot.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined)?.Position;
+	}
+	return undefined;
+}
+
+function spawnStandaloneOfferDisplay(
+	slot: Instance,
+	offerId: string,
+	position: Vector3,
+	parent: Instance,
+): Model | undefined {
+	const offer = getPremiumOffer(offerId);
+	if (!offer || offer.productId <= 0) return undefined;
+
+	const model = new Instance("Model");
+	model.Name = "WorldOffer_" + offerId;
+
+	const source =
+		offer.displayModelName !== undefined ? findOfferDisplaySource(offer.displayModelName) : undefined;
+
+	let displayClone: Model | undefined;
+	if (source?.IsA("Accessory")) {
+		const handle = source.FindFirstChild("Handle");
+		if (handle?.IsA("BasePart")) {
+			displayClone = new Instance("Model");
+			const clone = handle.Clone();
+			clone.Parent = displayClone;
+			displayClone.PrimaryPart = clone;
+		}
+	} else if (source?.IsA("Model")) {
+		displayClone = source.Clone();
+	} else if (source?.IsA("BasePart")) {
+		displayClone = new Instance("Model");
+		const clone = source.Clone();
+		clone.Parent = displayClone;
+		displayClone.PrimaryPart = clone;
+	}
+
+	if (displayClone) {
+		displayClone.Parent = model;
+		for (const desc of displayClone.GetDescendants()) {
+			desc.SetAttribute("offerId", undefined);
+			desc.SetAttribute("inspectId", undefined);
+			if (
+				desc.IsA("Humanoid") ||
+				desc.IsA("Script") ||
+				desc.IsA("LocalScript") ||
+				desc.IsA("ModuleScript") ||
+				desc.IsA("Tool") ||
+				desc.IsA("ProximityPrompt") ||
+				desc.IsA("ClickDetector") ||
+				desc.IsA("WeldConstraint") ||
+				desc.IsA("Weld") ||
+				desc.IsA("Motor6D") ||
+				desc.IsA("Motor")
+			) {
+				desc.Destroy();
+			}
+		}
+
+		const parts = displayClone.GetDescendants().filter((desc): desc is BasePart => desc.IsA("BasePart"));
+		const visibleParts = parts.filter((part) => part.Transparency < 0.98);
+		const centerParts = visibleParts.size() > 0 ? visibleParts : parts;
+		for (const part of parts) {
+			part.Anchored = true;
+			part.CanCollide = false;
+			part.CanTouch = false;
+			part.CanQuery = false;
+		}
+		if (centerParts.size() > 0) {
+			let center = new Vector3();
+			for (const part of centerParts) center = center.add(part.Position);
+			center = center.div(centerParts.size());
+			const offset = position.sub(center);
+			for (const part of parts) part.CFrame = part.CFrame.add(offset);
+		}
+	}
+
+	const anchor = new Instance("Part");
+	anchor.Name = "Anchor";
+	anchor.Size = new Vector3(1, 1, 1);
+	anchor.Anchored = true;
+	anchor.CanCollide = false;
+	anchor.CanTouch = false;
+	anchor.CanQuery = false;
+	anchor.Transparency = 1;
+	anchor.Position = position;
+	anchor.Parent = model;
+	model.PrimaryPart = anchor;
+
+	model.SetAttribute("offerId", offerId);
+	model.SetAttribute("GeneratedMerchantOffer", true);
+	model.SetAttribute("StandaloneWorldOffer", true);
+	model.SetAttribute("OfferSlotPosition", position);
+	model.SetAttribute("OfferSlotSource", slot.GetFullName());
+	model.SetAttribute("OfferHasDisplayModel", displayClone !== undefined);
+	model.SetAttribute("OfferVisualReady", true);
+	model.Parent = parent;
+	return model;
+}
+
+export function spawnStandaloneWorldOfferSlots(): void {
+	const stale = Workspace.FindFirstChild(GENERATED_WORLD_OFFERS_FOLDER_NAME);
+	if (stale) stale.Destroy();
+
+	const folder = new Instance("Folder");
+	folder.Name = GENERATED_WORLD_OFFERS_FOLDER_NAME;
+	folder.Parent = Workspace;
+
+	const offerIds: string[] = [];
+	for (const [offerId, offer] of pairs(PREMIUM_OFFERS)) {
+		if (offer.productId > 0) offerIds.push(offerId as string);
+	}
+	if (offerIds.size() === 0) return;
+	for (let i = offerIds.size() - 1; i > 0; i--) {
+		const j = math.random(0, i);
+		const temp = offerIds[i];
+		offerIds[i] = offerIds[j];
+		offerIds[j] = temp;
+	}
+
+	const slotCandidates = new Set<Instance>();
+	for (const inst of Workspace.GetDescendants()) {
+		if (isOfferSlotInstance(inst)) slotCandidates.add(inst);
+	}
+	for (const inst of CollectionService.GetTagged("OfferSlot")) {
+		if (inst.IsDescendantOf(Workspace)) slotCandidates.add(inst);
+	}
+
+	const slots: Instance[] = [];
+	for (const inst of slotCandidates) {
+		if (isInsideGeneratedOfferContainer(inst) || isInsideMerchantShopSite(inst)) continue;
+		let hasSlotAncestor = false;
+		let ancestor = inst.Parent;
+		while (ancestor !== undefined && ancestor !== Workspace) {
+			if (isOfferSlotInstance(ancestor)) {
+				hasSlotAncestor = true;
+				break;
+			}
+			ancestor = ancestor.Parent;
+		}
+		if (!hasSlotAncestor && (inst.IsA("Attachment") || inst.IsA("BasePart") || inst.IsA("Model"))) slots.push(inst);
+	}
+	slots.sort((a, b) => a.GetFullName() < b.GetFullName());
+	log("[PREMIUM] Found " + slots.size() + " standalone OfferSlot candidate(s).");
+
+	let spawned = 0;
+	for (let i = 0; i < slots.size(); i++) {
+		const slot = slots[i];
+		const position = resolveWorldOfferSlotPosition(slot);
+		if (!position) continue;
+		const requestedOfferId = slot.GetAttribute("offerId") ?? slot.GetAttribute("OfferId");
+		const requestedOffer = typeIs(requestedOfferId, "string") ? getPremiumOffer(requestedOfferId) : undefined;
+		const offerId =
+			requestedOffer !== undefined && requestedOffer.productId > 0 ? requestedOffer.offerId : offerIds[i % offerIds.size()];
+		const model = spawnStandaloneOfferDisplay(slot, offerId, position, folder);
+		if (model) {
+			spawned++;
+			log("[PREMIUM] Standalone slot " + slot.GetFullName() + " -> " + offerId);
+		} else {
+			log("[PREMIUM] Failed standalone slot " + slot.GetFullName() + " -> " + offerId, "WARN");
+		}
+	}
+
+	if (spawned > 0) log("[PREMIUM] Spawned " + spawned + " standalone world offer slot(s).");
 }
 
 function cleanupGeneratedMerchantOfferObjects(): void {
@@ -383,7 +618,8 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 	const slots: { position: Vector3; fullName: string }[] = [];
 
 	function isOfferSlotName(inst: Instance): boolean {
-		return (inst.Name as string).lower().sub(1, 9).match("offerslot")[0] !== undefined;
+		const normalized = inst.Name.lower().gsub("[^%w]", "")[0];
+		return normalized.sub(1, 9) === "offerslot" || CollectionService.HasTag(inst, "OfferSlot");
 	}
 
 	function firstOfferSlotAttachment(root: Instance): Attachment | undefined {
@@ -546,14 +782,9 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 		//   2) ReplicatedStorage.DisplayModels.<name>  (legacy display models)
 		//   3) ReplicatedStorage.<name>                (Accessory, Model, or BasePart at root)
 		// Accessories are cloned and the Handle is extracted as the display.
-		const weaponFolder = ReplicatedStorage.FindFirstChild("Weapons") as Folder | undefined;
-		const displayFolder = ReplicatedStorage.FindFirstChild("DisplayModels") as Folder | undefined;
 		let displayClone: Model | undefined;
 		if (offer.displayModelName !== undefined) {
-			let source: Instance | undefined =
-				weaponFolder?.FindFirstChild(offer.displayModelName) ??
-				displayFolder?.FindFirstChild(offer.displayModelName) ??
-				ReplicatedStorage.FindFirstChild(offer.displayModelName);
+			let source = findOfferDisplaySource(offer.displayModelName);
 
 			if (source && source.IsA("Accessory")) {
 				const handle = source.FindFirstChild("Handle") as BasePart | undefined;
@@ -837,6 +1068,7 @@ function readShopTypeAttribute(site: Model): ShopType | undefined {
 function runMerchantInit(): void {
 	cleanupGeneratedMerchantOfferObjects();
 	cleanupLegacyShopOfferObjects();
+	spawnStandaloneWorldOfferSlots();
 
 	// Collect shop sites: tagged "MerchantShop" + any Model named "Shop"
 	const tagged = CollectionService.GetTagged("MerchantShop").filter((inst): inst is Model => {
