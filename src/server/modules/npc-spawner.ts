@@ -2,7 +2,11 @@ import { CollectionService, Workspace } from "@rbxts/services";
 import { getActiveNPCNames, log } from "shared/helpers";
 import { Assignment, MEDIEVAL_NPCS } from "shared/module";
 import { NPC_REGISTRY, ROUTABLE_NPC_NAMES, SocialClass, Race } from "shared/config/npcs";
-import { pickNobleEquipmentItemId, pickRoyalEquipmentItemId } from "shared/config/npc-equipment";
+import {
+	pickDawnswornEquipmentItemId,
+	pickNobleEquipmentItemId,
+	pickRoyalEquipmentItemId,
+} from "shared/config/npc-equipment";
 import { assignNpcToRoute, createNPCModelAndGenerateHumanoid, NPC, setState } from "shared/npc/main";
 import { getRouteEnchantment, getRouteRole, RouteRole } from "shared/npc-manager";
 import { getReservedMerchantNames } from "./merchant-handler";
@@ -44,7 +48,8 @@ function applyDefaultNPCWeaponVisual(
 	} else if ((role === "Dawnsworn" || role === "Nightbound") && socialClass === "Nobility") {
 		applySheathedWeaponVisualToCharacter(npcModel, "warhammer");
 	} else if (role === "Dawnsworn") {
-		applyHeldWeaponVisualToCharacter(npcModel, "halberd");
+		const itemId = pickDawnswornEquipmentItemId(npcName);
+		if (itemId !== undefined) applyHeldWeaponVisualToCharacter(npcModel, itemId);
 	} else if (role === "Nightbound") {
 		applySheathedWeaponVisualToCharacter(npcModel, "dagger");
 	} else if (role === "Chaplain") {

@@ -39,9 +39,11 @@ import { WEAPON_KILL_SOUND_EFFECTS } from "shared/config/sound-effects";
 import { getAssassinationFeedbackRemote } from "shared/remotes/assassination-feedback-remote";
 import { getBoardBroadcastRemote } from "shared/remotes/board-broadcast-remote";
 import { playSoundEffect } from "./sound-effect-bus";
+import { getWeaponAnimationRemote } from "shared/remotes/weapon-animation-remote";
 
 const assassinationRemote = getOrCreateAssassinationRemote();
 const boardBroadcastRemote = getBoardBroadcastRemote();
+const weaponAnimationRemote = getWeaponAnimationRemote();
 
 /** Base rewards granted for every assassination regardless of bounty. */
 const BASE_SCORE = 100;
@@ -85,6 +87,10 @@ function broadcastBoardMessage(messageType: "info" | "warning" | "unlock", text:
 function playKillSoundForWeapon(player: Player, weaponId: string): void {
 	const effectId = WEAPON_KILL_SOUND_EFFECTS[weaponId];
 	if (effectId !== undefined) playSoundEffect(player, effectId);
+}
+
+function playWeaponAttackAnimation(player: Player, weaponId: string): void {
+	weaponAnimationRemote.FireClient(player, "attack", weaponId);
 }
 
 function initializeAssassinationHandler() {
@@ -186,6 +192,7 @@ function initializeAssassinationHandler() {
 		const activePoisonId = getActivePoison(player);
 		const poisonDef = activePoisonId ? POISONS[activePoisonId] : undefined;
 		const equippedWeapon = getPlayerEquippedWeapon(player);
+		playWeaponAttackAnimation(player, equippedWeapon);
 
 		if (poisonDef) {
 			// Poison active — it determines the death effect
@@ -332,6 +339,8 @@ function initializeAssassinationHandler() {
 
 		// Kill the wanted player
 		log("[ASSASSINATION] " + killer.Name + " assassinated wanted player " + targetPlayer.Name + "!");
+		const equippedWeapon = getPlayerEquippedWeapon(killer);
+		playWeaponAttackAnimation(killer, equippedWeapon);
 		// Tag the upcoming Humanoid.Died so the global PlayerDied event records
 		// the PvP kill correctly. trackPlayerDied (fired from network-lifecycles)
 		// consumes the reason and clears it.
@@ -340,7 +349,7 @@ function initializeAssassinationHandler() {
 		if (targetHumanoid) {
 			targetHumanoid.Health = 0;
 		}
-		playKillSoundForWeapon(killer, getPlayerEquippedWeapon(killer));
+		playKillSoundForWeapon(killer, equippedWeapon);
 
 		// Reward the assassin with the bounty
 		const wantedGold = getWantedPlayerGold(targetPlayer) ?? 300;

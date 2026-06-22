@@ -43,6 +43,7 @@ export const SHOP_TYPE_POOLS: Record<ShopType, ShopItem[]> = {
 	weapon: [
 		{ itemId: "shiv", price: 300 },
 		{ itemId: "dagger", price: 450 },
+		{ itemId: "cutlass", price: 600 },
 		{ itemId: "iron_spear", price: 700 },
 		{ itemId: "warhammer", price: 850 },
 	],

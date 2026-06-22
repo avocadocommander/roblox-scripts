@@ -12,6 +12,9 @@ export const ROYAL_EQUIPMENT_ITEM_IDS = [
 	"royal_axe",
 ];
 
+/** Seeded held-weapon pool for Dawnsworn route representatives. */
+export const DAWNSWORN_EQUIPMENT_ITEM_IDS = ["halberd", "war_axe"];
+
 function pickSeeded(items: string[], seed: number): string | undefined {
 	if (items.size() === 0) return undefined;
 	const rand = makeSeededRandom(seed);
@@ -26,4 +29,9 @@ export function pickNobleEquipmentItemId(npcName: string): string | undefined {
 /** Deterministically pick a royal equipment item from the NPC name seed. */
 export function pickRoyalEquipmentItemId(npcName: string): string | undefined {
 	return pickSeeded(ROYAL_EQUIPMENT_ITEM_IDS, getSeedFromName(npcName));
+}
+
+/** Deterministically pick a Dawnsworn weapon from the NPC name seed. */
+export function pickDawnswornEquipmentItemId(npcName: string): string | undefined {
+	return pickSeeded(DAWNSWORN_EQUIPMENT_ITEM_IDS, getSeedFromName(npcName) + 307);
 }

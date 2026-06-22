@@ -1,11 +1,12 @@
 import { ReplicatedStorage } from "@rbxts/services";
 import { getNPCFolder, log } from "../helpers";
 import { NPCData, Race, useAssetId } from "../module";
-import { getRoutePace } from "../npc-manager";
+import { getRoutePace, getRouteRole } from "../npc-manager";
 import { getHumanoidPace, assignNpcToRoute, navigate } from "./movement";
 import { getGenericSeededAppearance, setHumanoidDefaults } from "./appearance";
 import { makeSeededRandom, getSeedFromName } from "./utils";
 import { isNPCKillable } from "../config/npcs";
+import { getNPCAnimationSelection } from "../config/npc-animations";
 
 export interface NPC {
 	name: string;
@@ -42,12 +43,17 @@ export function createNPCModelAndGenerateHumanoid(
 		log("[NPC] No Animator found on " + name + ", skipping animations");
 		return undefined;
 	}
-	const animationInstances = getAnimationTracks(animator);
+	const seed = getSeedFromName(name);
+	const animationSelection = getNPCAnimationSelection(data.race, seed, getRouteRole(routeFolder));
+	const animationInstances = getAnimationTracks(animator, animationSelection.walk, animationSelection.idle);
+	modelClone.SetAttribute("WalkAnimationId", animationSelection.walk);
+	modelClone.SetAttribute("IdleAnimationId", animationSelection.idle);
+	animationInstances.IDLE.Play();
 
 	return {
 		name,
 		race: data.race,
-		seed: getSeedFromName(name),
+		seed,
 		rarity: "Commoner",
 		humanoid,
 		model: modelClone,
@@ -66,14 +72,18 @@ export function setState(newState: NPCStateKeys, npc: NPC) {
 
 export { assignNpcToRoute, navigate };
 
-export function getAnimationTracks(animator: Animator): NPCStateRecord {
+export function getAnimationTracks(
+	animator: Animator,
+	walkAnimationId = "133708367021932",
+	idleAnimationId = "507766951",
+): NPCStateRecord {
 	const walkAnim = new Instance("Animation");
 	walkAnim.Name = "Walking Animation";
-	walkAnim.AnimationId = useAssetId("133708367021932");
+	walkAnim.AnimationId = useAssetId(walkAnimationId);
 
 	const idleAnim = new Instance("Animation");
 	idleAnim.Name = "Idle Animation";
-	idleAnim.AnimationId = useAssetId("507766951");
+	idleAnim.AnimationId = useAssetId(idleAnimationId);
 
 	const walkTrack = animator.LoadAnimation(walkAnim);
 	walkTrack.Priority = Enum.AnimationPriority.Movement;

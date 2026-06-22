@@ -32,6 +32,7 @@ import {
 	getPremiumOfferPayloadRemote,
 	PremiumOfferPayload,
 } from "shared/remotes/premium-offer-remote";
+import { createItemVisual } from "./item-viewport";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -603,20 +604,18 @@ function buildShopTile(parent: ScrollingFrame, shopItem: ShopItemPayload, order:
 	tileStroke.Transparency = isLocked ? 0.6 : isSelected ? 0 : 0.4;
 	tileStroke.Parent = tile;
 
-	const icon = new Instance("TextLabel");
-	icon.Size = new UDim2(1, 0, 0, sc(24));
-	icon.Position = new UDim2(0, 0, 0, sc(4));
-	icon.BackgroundTransparency = 1;
-	icon.Text = isLocked ? "?" : shopItem.icon;
-	icon.TextColor3 = isLocked
-		? Color3.fromRGB(120, 110, 100)
-		: shopItem.gamePassId !== undefined
-			? UI_THEME.gold
-			: rarityColor;
-	icon.Font = UI_THEME.fontDisplay;
-	icon.TextSize = sc(20);
-	icon.ZIndex = 33;
-	icon.Parent = tile;
+	createItemVisual(tile, isLocked ? "" : shopItem.itemId, {
+		size: new UDim2(1, 0, 0, sc(26)),
+		position: new UDim2(0, 0, 0, sc(2)),
+		zIndex: 33,
+		fallbackText: isLocked ? "?" : shopItem.icon,
+		fallbackColor: isLocked
+			? Color3.fromRGB(120, 110, 100)
+			: shopItem.gamePassId !== undefined
+				? UI_THEME.gold
+				: rarityColor,
+		fallbackTextSize: sc(20),
+	});
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Size = new UDim2(1, -4, 0, sc(20));

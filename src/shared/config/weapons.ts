@@ -36,6 +36,10 @@ export interface WeaponDef {
 	heldGripStyle?: "oneHanded" | "twoHanded";
 	/** Optional effect spawned at BladeTipAttachment on the held weapon visual. */
 	bladeTipEffect?: "dawnsGuide";
+	/** Player attack animation played when this weapon performs an assassination. */
+	attackAnimationId?: string;
+	/** Player idle animation loop played while this weapon is equipped. */
+	idleAnimationId?: string;
 	/** Optional faction-level requirement to purchase or equip this weapon. */
 	requirement?: { factionId: import("./factions").FactionId; level: number };
 }
@@ -63,6 +67,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		deliveryType: "dagger",
 		heldModelName: "Dagger",
 		handedness: "oneHanded",
+		attackAnimationId: "132230147213617",
 	},
 	shiv: {
 		id: "shiv",
@@ -75,6 +80,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		deliveryType: "dagger",
 		heldModelName: "Shiv",
 		handedness: "oneHanded",
+		attackAnimationId: "132230147213617",
 		requirement: { factionId: "Night", level: 5 },
 	},
 	broken_sword: {
@@ -128,6 +134,8 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		knockbackForce: 55,
 		knockbackLift: 18,
 		ragdollSecs: 1,
+		idleAnimationId: "114416417811332",
+		attackAnimationId: "85753502858979",
 	},
 	shortsword: {
 		id: "shortsword",
@@ -145,13 +153,14 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		id: "cutlass",
 		name: "Cutlass",
 		description: "A curved pirate blade made for close, ugly work.",
-		effect: "+10 melee damage. Reliable and quick.",
+		effect: "+10 melee damage. Swift one-handed slash.",
 		weaponType: "Blade",
 		icon: "/",
 		rarity: "uncommon",
 		deliveryType: "dagger",
 		heldModelName: "Cutlass",
 		handedness: "oneHanded",
+		attackAnimationId: "124527012131364",
 	},
 	noble_sword: {
 		id: "noble_sword",
@@ -237,6 +246,18 @@ export const WEAPONS: Record<string, WeaponDef> = {
 		heldModelName: "Halberd",
 		handedness: "twoHanded",
 		heldGripStyle: "oneHanded",
+	},
+	war_axe: {
+		id: "war_axe",
+		name: "War Axe",
+		description: "A broad two-handed axe carried by heavily armed Dawnsworn.",
+		effect: "Heavy two-handed axe. Used by Dawnsworn.",
+		weaponType: "Axe",
+		icon: "T",
+		rarity: "rare",
+		deliveryType: "dagger",
+		heldModelName: "WarAxe",
+		handedness: "twoHanded",
 	},
 	ornate_staff: {
 		id: "ornate_staff",

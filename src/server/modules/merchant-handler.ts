@@ -23,7 +23,7 @@
  *   initializeMerchantSystem()     — call once from bootstrap BEFORE setServerStatus.
  */
 
-import { CollectionService, ReplicatedStorage, Workspace } from "@rbxts/services";
+import { CollectionService, HttpService, ReplicatedStorage, Workspace } from "@rbxts/services";
 import { log } from "shared/helpers";
 import { NPC_REGISTRY } from "shared/config/npcs";
 import {
@@ -389,20 +389,53 @@ function findOfferDisplaySource(displayModelName: string): Instance | undefined 
 	return undefined;
 }
 
-function resolveWorldOfferSlotPosition(slot: Instance): Vector3 | undefined {
-	if (slot.IsA("Attachment")) return slot.WorldPosition;
+function positionDisplayAtSlot(display: Model, slotCFrame: CFrame): void {
+	const parts = display.GetDescendants().filter((desc): desc is BasePart => desc.IsA("BasePart"));
+	for (const part of parts) {
+		part.Anchored = true;
+		part.CanCollide = false;
+		part.CanTouch = false;
+		part.CanQuery = false;
+	}
+	if (parts.size() === 0) return;
+
+	// Map the display's actual oriented bounding-box center to the authored
+	// slot CFrame. This is exact for asymmetric and multi-part weapon models.
+	const [boundingBoxCFrame] = display.GetBoundingBox();
+	const transform = slotCFrame.mul(boundingBoxCFrame.Inverse());
+	for (const part of parts) part.CFrame = transform.mul(part.CFrame);
+}
+
+function cframesApproximatelyEqual(a: CFrame, b: CFrame): boolean {
+	return (
+		a.Position.sub(b.Position).Magnitude < 0.01 &&
+		a.LookVector.Dot(b.LookVector) > 0.9999 &&
+		a.UpVector.Dot(b.UpVector) > 0.9999
+	);
+}
+
+function getOrCreateOfferSlotKey(slot: Instance): string {
+	const existing = slot.GetAttribute("GeneratedOfferSlotKey");
+	if (typeIs(existing, "string") && existing !== "") return existing;
+	const key = HttpService.GenerateGUID(false);
+	slot.SetAttribute("GeneratedOfferSlotKey", key);
+	return key;
+}
+
+function resolveWorldOfferSlotCFrame(slot: Instance): CFrame | undefined {
+	if (slot.IsA("Attachment")) return slot.WorldCFrame;
 	if (slot.IsA("BasePart")) {
 		const attachment = slot.GetDescendants().find(
 			(desc): desc is Attachment => desc.IsA("Attachment") && isOfferSlotInstance(desc),
 		);
-		return attachment?.WorldPosition ?? slot.Position;
+		return attachment?.WorldCFrame ?? slot.CFrame;
 	}
 	if (slot.IsA("Model")) {
 		const attachment = slot.GetDescendants().find(
 			(desc): desc is Attachment => desc.IsA("Attachment") && isOfferSlotInstance(desc),
 		);
-		if (attachment) return attachment.WorldPosition;
-		return slot.PrimaryPart?.Position ?? (slot.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined)?.Position;
+		if (attachment) return attachment.WorldCFrame;
+		return slot.PrimaryPart?.CFrame ?? (slot.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined)?.CFrame;
 	}
 	return undefined;
 }
@@ -410,7 +443,7 @@ function resolveWorldOfferSlotPosition(slot: Instance): Vector3 | undefined {
 function spawnStandaloneOfferDisplay(
 	slot: Instance,
 	offerId: string,
-	position: Vector3,
+	slotCFrame: CFrame,
 	parent: Instance,
 ): Model | undefined {
 	const offer = getPremiumOffer(offerId);
@@ -462,22 +495,7 @@ function spawnStandaloneOfferDisplay(
 			}
 		}
 
-		const parts = displayClone.GetDescendants().filter((desc): desc is BasePart => desc.IsA("BasePart"));
-		const visibleParts = parts.filter((part) => part.Transparency < 0.98);
-		const centerParts = visibleParts.size() > 0 ? visibleParts : parts;
-		for (const part of parts) {
-			part.Anchored = true;
-			part.CanCollide = false;
-			part.CanTouch = false;
-			part.CanQuery = false;
-		}
-		if (centerParts.size() > 0) {
-			let center = new Vector3();
-			for (const part of centerParts) center = center.add(part.Position);
-			center = center.div(centerParts.size());
-			const offset = position.sub(center);
-			for (const part of parts) part.CFrame = part.CFrame.add(offset);
-		}
+		positionDisplayAtSlot(displayClone, slotCFrame);
 	}
 
 	const anchor = new Instance("Part");
@@ -488,14 +506,15 @@ function spawnStandaloneOfferDisplay(
 	anchor.CanTouch = false;
 	anchor.CanQuery = false;
 	anchor.Transparency = 1;
-	anchor.Position = position;
+	anchor.CFrame = slotCFrame;
 	anchor.Parent = model;
 	model.PrimaryPart = anchor;
 
 	model.SetAttribute("offerId", offerId);
 	model.SetAttribute("GeneratedMerchantOffer", true);
 	model.SetAttribute("StandaloneWorldOffer", true);
-	model.SetAttribute("OfferSlotPosition", position);
+	model.SetAttribute("OfferSlotPosition", slotCFrame.Position);
+	model.SetAttribute("OfferSlotCFrame", slotCFrame);
 	model.SetAttribute("OfferSlotSource", slot.GetFullName());
 	model.SetAttribute("OfferHasDisplayModel", displayClone !== undefined);
 	model.SetAttribute("OfferVisualReady", true);
@@ -504,12 +523,23 @@ function spawnStandaloneOfferDisplay(
 }
 
 export function spawnStandaloneWorldOfferSlots(): void {
-	const stale = Workspace.FindFirstChild(GENERATED_WORLD_OFFERS_FOLDER_NAME);
-	if (stale) stale.Destroy();
+	let folder = Workspace.FindFirstChild(GENERATED_WORLD_OFFERS_FOLDER_NAME) as Folder | undefined;
+	if (!folder?.IsA("Folder")) {
+		folder = new Instance("Folder");
+		folder.Name = GENERATED_WORLD_OFFERS_FOLDER_NAME;
+		folder.Parent = Workspace;
+	}
 
-	const folder = new Instance("Folder");
-	folder.Name = GENERATED_WORLD_OFFERS_FOLDER_NAME;
-	folder.Parent = Workspace;
+	const existingBySlotKey = new Map<string, Model>();
+	for (const child of folder.GetChildren()) {
+		if (!child.IsA("Model")) continue;
+		const slotKey = child.GetAttribute("OfferSlotKey");
+		if (typeIs(slotKey, "string") && slotKey !== "") {
+			existingBySlotKey.set(slotKey, child);
+		} else {
+			child.Destroy();
+		}
+	}
 
 	const offerIds: string[] = [];
 	for (const [offerId, offer] of pairs(PREMIUM_OFFERS)) {
@@ -549,16 +579,35 @@ export function spawnStandaloneWorldOfferSlots(): void {
 	log("[PREMIUM] Found " + slots.size() + " standalone OfferSlot candidate(s).");
 
 	let spawned = 0;
+	const activeSources = new Set<string>();
 	for (let i = 0; i < slots.size(); i++) {
 		const slot = slots[i];
-		const position = resolveWorldOfferSlotPosition(slot);
-		if (!position) continue;
+		const sourceName = slot.GetFullName();
+		const slotKey = getOrCreateOfferSlotKey(slot);
+		activeSources.add(slotKey);
+		const slotCFrame = resolveWorldOfferSlotCFrame(slot);
+		if (!slotCFrame) continue;
 		const requestedOfferId = slot.GetAttribute("offerId") ?? slot.GetAttribute("OfferId");
 		const requestedOffer = typeIs(requestedOfferId, "string") ? getPremiumOffer(requestedOfferId) : undefined;
 		const offerId =
 			requestedOffer !== undefined && requestedOffer.productId > 0 ? requestedOffer.offerId : offerIds[i % offerIds.size()];
-		const model = spawnStandaloneOfferDisplay(slot, offerId, position, folder);
+		const existing = existingBySlotKey.get(slotKey);
+		if (existing) {
+			const oldCFrame = existing.GetAttribute("OfferSlotCFrame");
+			const oldOfferId = existing.GetAttribute("offerId");
+			if (
+				typeIs(oldCFrame, "CFrame") &&
+				cframesApproximatelyEqual(oldCFrame, slotCFrame) &&
+				oldOfferId === offerId
+			) {
+				continue;
+			}
+			existing.Destroy();
+			existingBySlotKey.delete(slotKey);
+		}
+		const model = spawnStandaloneOfferDisplay(slot, offerId, slotCFrame, folder);
 		if (model) {
+			model.SetAttribute("OfferSlotKey", slotKey);
 			spawned++;
 			log("[PREMIUM] Standalone slot " + slot.GetFullName() + " -> " + offerId);
 		} else {
@@ -566,12 +615,20 @@ export function spawnStandaloneWorldOfferSlots(): void {
 		}
 	}
 
+	for (const [slotKey, model] of existingBySlotKey) {
+		if (!activeSources.has(slotKey)) model.Destroy();
+	}
+
 	if (spawned > 0) log("[PREMIUM] Spawned " + spawned + " standalone world offer slot(s).");
 }
 
 function cleanupGeneratedMerchantOfferObjects(): void {
 	for (const inst of Workspace.GetDescendants()) {
-		if (inst.IsA("Model") && inst.GetAttribute("GeneratedMerchantOffer") === true) {
+		if (
+			inst.IsA("Model") &&
+			inst.GetAttribute("GeneratedMerchantOffer") === true &&
+			inst.GetAttribute("StandaloneWorldOffer") !== true
+		) {
 			log("[MERCHANT] Removing stale generated shop offer object: " + inst.GetFullName());
 			inst.Destroy();
 		}
@@ -597,7 +654,7 @@ function getOrCreateGeneratedOffersFolder(offerSearchRoot: Instance): Folder {
 function isInsideGeneratedOfferContainer(inst: Instance): boolean {
 	let ancestor = inst.Parent;
 	while (ancestor !== undefined) {
-		if (ancestor.Name === GENERATED_OFFERS_FOLDER_NAME) return true;
+		if (ancestor.Name === GENERATED_OFFERS_FOLDER_NAME || ancestor.Name === GENERATED_WORLD_OFFERS_FOLDER_NAME) return true;
 		if (ancestor.IsA("Model") && ancestor.GetAttribute("GeneratedMerchantOffer") === true) return true;
 		ancestor = ancestor.Parent;
 	}
@@ -615,7 +672,7 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 	// Collect slot positions: Models, BaseParts, or Attachments whose name
 	// starts with "offerslot" (case-insensitive). This accepts "OfferSlot",
 	// "OfferSlot1", "OfferSlot_Main", an OfferSlot Model wrapper, etc.
-	const slots: { position: Vector3; fullName: string }[] = [];
+	const slots: { cframe: CFrame; position: Vector3; fullName: string }[] = [];
 
 	function isOfferSlotName(inst: Instance): boolean {
 		const normalized = inst.Name.lower().gsub("[^%w]", "")[0];
@@ -638,24 +695,24 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 		return false;
 	}
 
-	function resolveOfferSlotPosition(slot: Instance): Vector3 | undefined {
-		if (slot.IsA("Attachment")) return slot.WorldPosition;
+	function resolveOfferSlotCFrame(slot: Instance): CFrame | undefined {
+		if (slot.IsA("Attachment")) return slot.WorldCFrame;
 
 		// In the authored map, OfferSlot parts/models often contain a child
 		// Attachment also named OfferSlot. That attachment is the designer's
 		// exact placement point; the parent part/model may be offset or at an
 		// authored origin, which created stray premium offer displays.
 		const attachment = firstOfferSlotAttachment(slot);
-		if (attachment) return attachment.WorldPosition;
+		if (attachment) return attachment.WorldCFrame;
 
-		if (slot.IsA("BasePart")) return slot.Position;
+		if (slot.IsA("BasePart")) return slot.CFrame;
 
 		if (slot.IsA("Model")) {
 			const primary = slot.PrimaryPart;
-			if (primary) return primary.Position;
+			if (primary) return primary.CFrame;
 
 			const part = slot.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined;
-			if (part) return part.Position;
+			if (part) return part.CFrame;
 		}
 
 		return undefined;
@@ -667,9 +724,9 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 		if (desc.IsA("Model")) {
 			// Resolve from actual geometry/attachments. An empty Model's pivot
 			// defaults to world origin, which would create a stray rotating offer.
-			const position = resolveOfferSlotPosition(desc);
-			if (position) {
-				slots.push({ position, fullName: desc.GetFullName() });
+			const cframe = resolveOfferSlotCFrame(desc);
+			if (cframe) {
+				slots.push({ cframe, position: cframe.Position, fullName: desc.GetFullName() });
 			} else {
 				log("[MERCHANT] OfferSlot model has no BasePart/Attachment: " + desc.GetFullName(), "WARN");
 			}
@@ -677,13 +734,13 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 			// If this attachment lives under an OfferSlot part/model, that parent
 			// already resolves to the attachment's WorldPosition. Don't double-count it.
 			if (desc.Parent?.IsA("BasePart") && !hasOfferSlotAncestor(desc)) {
-				slots.push({ position: desc.WorldPosition, fullName: desc.GetFullName() });
+				slots.push({ cframe: desc.WorldCFrame, position: desc.WorldPosition, fullName: desc.GetFullName() });
 			}
 		} else if (desc.IsA("BasePart")) {
 			// Skip BaseParts inside an OfferSlot Model -- already counted by the model wrapper.
 			if (!hasOfferSlotAncestor(desc)) {
-				const position = resolveOfferSlotPosition(desc);
-				if (position) slots.push({ position, fullName: desc.GetFullName() });
+				const cframe = resolveOfferSlotCFrame(desc);
+				if (cframe) slots.push({ cframe, position: cframe.Position, fullName: desc.GetFullName() });
 			}
 		}
 	}
@@ -836,12 +893,7 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 						inst.Destroy();
 					}
 				}
-				for (const part of displayClone.GetDescendants()) {
-					if (part.IsA("BasePart")) {
-						part.Anchored = true;
-						part.CanCollide = false;
-					}
-				}
+				positionDisplayAtSlot(displayClone, slot.cframe);
 			} else if (!source) {
 				log(
 					"[MERCHANT] Display source '" +
@@ -859,55 +911,16 @@ function spawnOfferSlots(shopSite: Model, shopType: ShopType, placementOrigin: V
 		anchor.Anchored = true;
 		anchor.CanCollide = false;
 		anchor.Transparency = 1;
-		anchor.Position = slot.position;
+		anchor.CFrame = slot.cframe;
 		anchor.Parent = model;
 
 		model.PrimaryPart = anchor;
-
-		// Position the display clone at the slot: translate every BasePart so
-		// the model's bounding-box center lands exactly at slot.position. This
-		// ignores any (possibly wrong) authored WorldPivot/PrimaryPart on the
-		// source model. Use visible parts for the center, since imported display
-		// models sometimes carry an invisible root part back at their authored
-		// Workspace position.
-		if (displayClone) {
-			const parts: BasePart[] = [];
-			const visibleParts: BasePart[] = [];
-			for (const desc of displayClone.GetDescendants()) {
-				if (desc.IsA("BasePart")) {
-					parts.push(desc);
-					if (desc.Transparency < 0.98) visibleParts.push(desc);
-				}
-			}
-			const centerParts = visibleParts.size() > 0 ? visibleParts : parts;
-			if (centerParts.size() > 0) {
-				let minX = math.huge,
-					minY = math.huge,
-					minZ = math.huge;
-				let maxX = -math.huge,
-					maxY = -math.huge,
-					maxZ = -math.huge;
-				for (const p of centerParts) {
-					const c = p.Position;
-					if (c.X < minX) minX = c.X;
-					if (c.Y < minY) minY = c.Y;
-					if (c.Z < minZ) minZ = c.Z;
-					if (c.X > maxX) maxX = c.X;
-					if (c.Y > maxY) maxY = c.Y;
-					if (c.Z > maxZ) maxZ = c.Z;
-				}
-				const center = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
-				const offset = slot.position.sub(center);
-				for (const p of parts) {
-					p.CFrame = p.CFrame.add(offset);
-				}
-			}
-		}
 
 		model.SetAttribute("offerId", offerId);
 		model.SetAttribute("GeneratedMerchantOffer", true);
 		model.SetAttribute("ShopSite", shopSite.GetFullName());
 		model.SetAttribute("OfferSlotPosition", slot.position);
+		model.SetAttribute("OfferSlotCFrame", slot.cframe);
 		model.SetAttribute("OfferSlotSource", slot.fullName);
 		model.SetAttribute("OfferHasDisplayModel", displayClone !== undefined);
 		model.SetAttribute("OfferVisualReady", true);

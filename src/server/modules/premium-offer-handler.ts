@@ -22,7 +22,6 @@ import {
 } from "shared/remotes/premium-offer-remote";
 import { playerOwnsPass } from "./pass-handler";
 import { trackPurchasePromptShown } from "./analytics-tracker";
-import { spawnStandaloneWorldOfferSlots } from "./merchant-handler";
 
 // ── Remotes ───────────────────────────────────────────────────────────────────
 
@@ -38,11 +37,6 @@ const activeOffer = new Map<Player, string>(); // player -> offerId
 
 export function initializePremiumOfferHandler(): void {
 	log("[PREMIUM] Initializing premium world-offer handler");
-
-	// World geometry and PackageLinks can finish appearing after merchant init.
-	// Refresh rogue slots independently so they do not depend on a shop spawn.
-	task.delay(4, () => spawnStandaloneWorldOfferSlots());
-	task.delay(12, () => spawnStandaloneWorldOfferSlots());
 
 	// ── Open: player interacted with a world object ───────────────────────
 	openRemote.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {

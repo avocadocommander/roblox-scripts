@@ -24,6 +24,7 @@ import { initializeAnalyticsTracker } from "./modules/analytics-tracker";
 import { initializeCloudEventSystem } from "./modules/cloud-event-handler";
 import { initializeSoundEffectBus } from "./modules/sound-effect-bus";
 import { initializePositionMetrics } from "./modules/position-metrics";
+import { getWeaponAnimationRemote } from "shared/remotes/weapon-animation-remote";
 
 const Players = game.GetService("Players");
 Players.CharacterAutoLoads = false;
@@ -31,6 +32,9 @@ Players.CharacterAutoLoads = false;
 export async function bootstrapServer() {
 	// load assets / systems
 	//task.wait(5);
+	// Create this before player initialization so the owning client never waits
+	// for a lazily-created weapon animation remote.
+	getWeaponAnimationRemote();
 	initializeAnalyticsTracker();
 	initializePositionMetrics();
 	initializeSoundEffectBus();

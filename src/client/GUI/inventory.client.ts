@@ -24,6 +24,7 @@ import { UI_THEME, getUIScale } from "shared/ui-theme";
 import { buildEffectRichText, TIER_HIGHLIGHT_COLOR } from "shared/tooltip-effect";
 import { formatDuration } from "shared/helpers";
 import { isNew, markSeen, setDotVisible, trackPresent } from "../modules/new-indicator";
+import { createItemVisual } from "../modules/item-viewport";
 
 const activateRemote = getActivateItemRemote();
 const syncRemote = getInventorySyncRemote();
@@ -75,6 +76,9 @@ const filterButtons: Map<InventoryFilter, TextButton> = new Map();
 let activeWeaponLabel: TextLabel | undefined;
 let activePoisonLabel: TextLabel | undefined;
 let activeElixirLabel: TextLabel | undefined;
+let activeWeaponVisual: Frame | undefined;
+let activePoisonVisual: Frame | undefined;
+let activeElixirVisual: Frame | undefined;
 let inventoryBackdrop: TextButton | undefined;
 
 function moveGuiObjectLayer(root: Instance, sourceBase: number, targetBase: number): void {
@@ -177,10 +181,10 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 
 	const wLabel = new Instance("TextLabel");
 	wLabel.Name = "ActiveWeapon";
-	wLabel.Size = new UDim2(0.34, 0, 1, 0);
-	wLabel.Position = new UDim2(0, sc(4), 0, 0);
+	wLabel.Size = new UDim2(0.34, -sc(23), 1, 0);
+	wLabel.Position = new UDim2(0, sc(27), 0, 0);
 	wLabel.BackgroundTransparency = 1;
-	wLabel.Text = "/ Fists";
+	wLabel.Text = "Fists";
 	wLabel.TextColor3 = UI_THEME.textPrimary;
 	wLabel.Font = UI_THEME.fontBold;
 	wLabel.TextSize = sc(11);
@@ -190,12 +194,21 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	wLabel.Parent = statusBar;
 	activeWeaponLabel = wLabel;
 
+	const wVisual = new Instance("Frame");
+	wVisual.Name = "ActiveWeaponVisual";
+	wVisual.Size = new UDim2(0, sc(22), 1, 0);
+	wVisual.Position = new UDim2(0, sc(2), 0, 0);
+	wVisual.BackgroundTransparency = 1;
+	wVisual.ZIndex = 32;
+	wVisual.Parent = statusBar;
+	activeWeaponVisual = wVisual;
+
 	const pLabel = new Instance("TextLabel");
 	pLabel.Name = "ActivePoison";
-	pLabel.Size = new UDim2(0.33, 0, 1, 0);
-	pLabel.Position = new UDim2(0.34, 0, 0, 0);
+	pLabel.Size = new UDim2(0.33, -sc(24), 1, 0);
+	pLabel.Position = new UDim2(0.34, sc(22), 0, 0);
 	pLabel.BackgroundTransparency = 1;
-	pLabel.Text = "~ None";
+	pLabel.Text = "None";
 	pLabel.TextColor3 = UI_THEME.textMuted;
 	pLabel.Font = UI_THEME.fontBody;
 	pLabel.TextSize = sc(11);
@@ -205,12 +218,21 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	pLabel.Parent = statusBar;
 	activePoisonLabel = pLabel;
 
+	const pVisual = new Instance("Frame");
+	pVisual.Name = "ActivePoisonVisual";
+	pVisual.Size = new UDim2(0, sc(22), 1, 0);
+	pVisual.Position = new UDim2(0.34, 0, 0, 0);
+	pVisual.BackgroundTransparency = 1;
+	pVisual.ZIndex = 32;
+	pVisual.Parent = statusBar;
+	activePoisonVisual = pVisual;
+
 	const eLabel = new Instance("TextLabel");
 	eLabel.Name = "ActiveElixir";
-	eLabel.Size = new UDim2(0.33, 0, 1, 0);
+	eLabel.Size = new UDim2(0.33, -sc(24), 1, 0);
 	eLabel.Position = new UDim2(0.67, 0, 0, 0);
 	eLabel.BackgroundTransparency = 1;
-	eLabel.Text = "+ None";
+	eLabel.Text = "None";
 	eLabel.TextColor3 = UI_THEME.textMuted;
 	eLabel.Font = UI_THEME.fontBody;
 	eLabel.TextSize = sc(11);
@@ -219,6 +241,15 @@ function buildInventoryUI(screenGui: ScreenGui): void {
 	eLabel.ZIndex = 32;
 	eLabel.Parent = statusBar;
 	activeElixirLabel = eLabel;
+
+	const eVisual = new Instance("Frame");
+	eVisual.Name = "ActiveElixirVisual";
+	eVisual.Size = new UDim2(0, sc(22), 1, 0);
+	eVisual.Position = new UDim2(1, -sc(22), 0, 0);
+	eVisual.BackgroundTransparency = 1;
+	eVisual.ZIndex = 32;
+	eVisual.Parent = statusBar;
+	activeElixirVisual = eVisual;
 
 	// ── Divider ───────────────────────────────────────────────────────────
 	const divider = new Instance("Frame");
@@ -337,16 +368,33 @@ function refreshFilterButtons(): void {
 // ── Active status display ─────────────────────────────────────────────────────
 
 function refreshActiveStatusBar(): void {
+	function refreshVisual(host: Frame | undefined, itemId: string | undefined, color: Color3): void {
+		if (!host) return;
+		for (const child of host.GetChildren()) child.Destroy();
+		if (!itemId) return;
+		const item = ITEMS[itemId];
+		createItemVisual(host, itemId, {
+			size: new UDim2(1, 0, 1, 0),
+			position: new UDim2(),
+			zIndex: 33,
+			fallbackText: item?.icon ?? "",
+			fallbackColor: color,
+			fallbackTextSize: sc(16),
+		});
+	}
+
 	if (activeWeaponLabel) {
 		const wId = currentEquippedWeapon ?? "fists";
 		const wDef = ITEMS[wId];
 		if (wDef) {
 			const wColor = RARITY_COLORS[wDef.rarity] ?? UI_THEME.textPrimary;
-			activeWeaponLabel.Text = wDef.icon + " " + wDef.name;
+			activeWeaponLabel.Text = wDef.name;
 			activeWeaponLabel.TextColor3 = wColor;
+			refreshVisual(activeWeaponVisual, wId, wColor);
 		} else {
-			activeWeaponLabel.Text = "/ Fists";
+			activeWeaponLabel.Text = "Fists";
 			activeWeaponLabel.TextColor3 = UI_THEME.textPrimary;
+			refreshVisual(activeWeaponVisual, undefined, UI_THEME.textPrimary);
 		}
 	}
 
@@ -355,12 +403,14 @@ function refreshActiveStatusBar(): void {
 			const pDef = ITEMS[currentActivePoison];
 			if (pDef) {
 				const pColor = RARITY_COLORS[pDef.rarity] ?? UI_THEME.textPrimary;
-				activePoisonLabel.Text = "~ " + pDef.name;
+				activePoisonLabel.Text = pDef.name;
 				activePoisonLabel.TextColor3 = pColor;
+				refreshVisual(activePoisonVisual, currentActivePoison, pColor);
 			}
 		} else {
-			activePoisonLabel.Text = "~ None";
+			activePoisonLabel.Text = "None";
 			activePoisonLabel.TextColor3 = UI_THEME.textMuted;
+			refreshVisual(activePoisonVisual, undefined, UI_THEME.textMuted);
 		}
 	}
 
@@ -371,11 +421,13 @@ function refreshActiveStatusBar(): void {
 				const eDef = ITEMS[eId];
 				if (eDef) names.push(eDef.name);
 			}
-			activeElixirLabel.Text = "+ " + (names.size() > 0 ? names.join(", ") : "None");
+			activeElixirLabel.Text = names.size() > 0 ? names.join(", ") : "None";
 			activeElixirLabel.TextColor3 = UI_THEME.gold;
+			refreshVisual(activeElixirVisual, currentActiveElixirs[0], UI_THEME.gold);
 		} else {
-			activeElixirLabel.Text = "+ None";
+			activeElixirLabel.Text = "None";
 			activeElixirLabel.TextColor3 = UI_THEME.textMuted;
+			refreshVisual(activeElixirVisual, undefined, UI_THEME.textMuted);
 		}
 	}
 }
@@ -478,16 +530,14 @@ function buildItemTile(parent: ScrollingFrame, item: ItemDef, order: number): vo
 	// New-since-last-view dot
 	setDotVisible(tile, isNew(sectionForCategory(item.category), item.id));
 
-	const icon = new Instance("TextLabel");
-	icon.Size = new UDim2(1, 0, 0, sc(28));
-	icon.Position = new UDim2(0, 0, 0, sc(4));
-	icon.BackgroundTransparency = 1;
-	icon.Text = item.icon;
-	icon.TextColor3 = rarityColor;
-	icon.Font = UI_THEME.fontDisplay;
-	icon.TextSize = sc(24);
-	icon.ZIndex = 33;
-	icon.Parent = tile;
+	createItemVisual(tile, item.id, {
+		size: new UDim2(1, 0, 0, sc(30)),
+		position: new UDim2(0, 0, 0, sc(2)),
+		zIndex: 33,
+		fallbackText: item.icon,
+		fallbackColor: rarityColor,
+		fallbackTextSize: sc(24),
+	});
 
 	const nameLabel = new Instance("TextLabel");
 	nameLabel.Size = new UDim2(1, -4, 0, sc(20));

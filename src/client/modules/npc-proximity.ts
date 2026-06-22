@@ -720,45 +720,12 @@ function setupPremiumOfferProximity(model: Model): void {
 	// the slot pivot. The billboard must track this Part directly (not the
 	// rotating model) so it never orbits. Reparent and use world-space offset.
 	if (anchorPart) {
+		const authoredSlotCFrame = model.GetAttribute("OfferSlotCFrame") as CFrame | undefined;
 		const authoredSlotPosition = model.GetAttribute("OfferSlotPosition") as Vector3 | undefined;
-		if (authoredSlotPosition !== undefined) {
+		if (authoredSlotCFrame !== undefined) {
+			anchorPart.CFrame = authoredSlotCFrame;
+		} else if (authoredSlotPosition !== undefined) {
 			anchorPart.CFrame = new CFrame(authoredSlotPosition);
-		}
-
-		if (visibleDisplayParts.size() > 0) {
-			let minX = math.huge,
-				minY = math.huge,
-				minZ = math.huge;
-			let maxX = -math.huge,
-				maxY = -math.huge,
-				maxZ = -math.huge;
-
-			for (const part of visibleDisplayParts) {
-				const position = part.Position;
-				if (position.X < minX) minX = position.X;
-				if (position.Y < minY) minY = position.Y;
-				if (position.Z < minZ) minZ = position.Z;
-				if (position.X > maxX) maxX = position.X;
-				if (position.Y > maxY) maxY = position.Y;
-				if (position.Z > maxZ) maxZ = position.Z;
-			}
-
-			const visibleCenter = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
-			const correction = anchorPart.Position.sub(visibleCenter);
-			if (correction.Magnitude > 0.05) {
-				for (const part of displayParts) {
-					part.CFrame = part.CFrame.add(correction);
-				}
-				if (correction.Magnitude > 8) {
-					warn(
-						"[PREMIUM] Recentered offer display '" +
-							model.Name +
-							"' by " +
-							math.floor(correction.Magnitude) +
-							" studs to match its server OfferSlot anchor.",
-					);
-				}
-			}
 		}
 
 		billboard.Parent = anchorPart;
@@ -935,6 +902,8 @@ function setupPremiumOfferProximity(model: Model): void {
 		const angle = (elapsed / 8) * math.pi * 2;
 
 		if (anchorPart && baseAnchorCF) {
+			// Preserve the authored OfferSlot rotation and spin around its local
+			// Y axis so the attachment controls the item's display orientation.
 			const newCF = baseAnchorCF.mul(CFrame.Angles(0, angle, 0)).add(new Vector3(0, bobOffset, 0));
 			const delta = newCF.mul(anchorPart.CFrame.Inverse());
 			for (const part of allParts) {

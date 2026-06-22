@@ -2,6 +2,7 @@ import { ReplicatedStorage } from "@rbxts/services";
 import { WEAPONS, WeaponDef } from "shared/config/weapons";
 import { log } from "shared/helpers";
 import { createDawnsGuideSpiritEffect } from "./enchantment-visual-handler";
+import { getWeaponAnimationRemote } from "shared/remotes/weapon-animation-remote";
 
 const WEAPON_FOLDER_NAME = "Weapons";
 const ACTIVE_VISUAL_NAME = "ActiveWeaponVisual";
@@ -17,7 +18,7 @@ const RIGHT_HAND_ANCHOR_NAME = "RightHandWeaponAnchor";
 const LEFT_HAND_ANCHOR_NAME = "LeftHandSupportAnchor";
 const HIP_SHEATH_ANCHOR_NAME = "HipSheathAnchor";
 const BACK_SHEATH_ANCHOR_NAME = "BackSheathAnchor";
-
+const weaponAnimationRemote = getWeaponAnimationRemote();
 type WeaponVisualMode = "held" | "sheathed";
 
 function findPart(character: Model, names: string[]): BasePart | undefined {
@@ -274,11 +275,13 @@ export function applyHeldWeaponVisual(player: Player, weaponId: string): void {
 	if (!character) return;
 
 	applyHeldWeaponVisualToCharacter(character, weaponId);
+	weaponAnimationRemote.FireClient(player, "equip", weaponId);
 }
 
 export function applySheathedWeaponVisual(player: Player, weaponId: string): void {
 	const character = player.Character;
 	if (!character) return;
 
+	weaponAnimationRemote.FireClient(player, "sheathe", weaponId);
 	applySheathedWeaponVisualToCharacter(character, weaponId);
 }

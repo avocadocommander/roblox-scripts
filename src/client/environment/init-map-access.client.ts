@@ -12,6 +12,8 @@ const LevelUpdated = playerState.WaitForChild("LevelUpdated") as RemoteEvent;
 const RequestResetFactionXP = playerState.WaitForChild("RequestResetFactionXP") as RemoteFunction;
 const RequestAddFactionXP = playerState.WaitForChild("RequestAddFactionXP") as RemoteFunction;
 const TAG = "LevelAccessRequired";
+const MAX_WALL_DISCOVERY_ATTEMPTS = 20;
+const WALL_DISCOVERY_RETRY_SECS = 0.5;
 
 const mockAchievementRemote = getMockAchievementRemote();
 
@@ -43,21 +45,26 @@ function initializeMapAccess() {
 	});
 }
 
-function setupBarrier(accessModelInstance: Model) {
-	const playerLevel: number = GetPlayerLevel.InvokeServer() as number;
-
-	const accessModelRequiredLevel = accessModelInstance.GetAttribute("AccessLevel");
-
+function findBarrierWall(accessModelInstance: Model): BasePart | undefined {
 	// Try to find Wall child, otherwise use the model itself or first Part child
-	let wall: Part | undefined = accessModelInstance.FindFirstChild("Wall") as Part | undefined;
-	if (!wall && accessModelInstance.IsA("Part")) {
-		wall = accessModelInstance as Part;
+	let wall = accessModelInstance.FindFirstChild("Wall") as BasePart | undefined;
+	if (!wall?.IsA("BasePart")) wall = undefined;
+	if (!wall && accessModelInstance.IsA("BasePart")) {
+		wall = accessModelInstance;
 	}
 	if (!wall) {
-		wall = accessModelInstance.FindFirstChildOfClass("Part") as Part | undefined;
+		wall = accessModelInstance.FindFirstChildWhichIsA("BasePart", true) as BasePart | undefined;
 	}
+	return wall;
+}
 
+function setupBarrier(accessModelInstance: Model, attempt = 0) {
+	const wall = findBarrierWall(accessModelInstance);
 	if (!wall) {
+		if (accessModelInstance.Parent && attempt < MAX_WALL_DISCOVERY_ATTEMPTS) {
+			task.delay(WALL_DISCOVERY_RETRY_SECS, () => setupBarrier(accessModelInstance, attempt + 1));
+			return;
+		}
 		warn(
 			`[MAP ACCESS] ${accessModelInstance.Name} does not have a Wall child. Children:`,
 			accessModelInstance
@@ -68,6 +75,8 @@ function setupBarrier(accessModelInstance: Model) {
 		return;
 	}
 
+	const playerLevel: number = GetPlayerLevel.InvokeServer() as number;
+	const accessModelRequiredLevel = accessModelInstance.GetAttribute("AccessLevel");
 	const requiredLevel = tonumber(accessModelRequiredLevel);
 	if (accessModelRequiredLevel === undefined || requiredLevel === undefined) {
 		log(`[MAP ACCESS] ${accessModelInstance.Name} does not have AccessLevel attribute or value`);
@@ -127,13 +136,7 @@ function checkBarrierRemoval(accessModelInstance: Model) {
 	const accessModelRequiredLevel = accessModelInstance.GetAttribute("AccessLevel");
 
 	// Try to find Wall child, otherwise use the model itself or first Part child
-	let wall: Part | undefined = accessModelInstance.FindFirstChild("Wall") as Part | undefined;
-	if (!wall && accessModelInstance.IsA("Part")) {
-		wall = accessModelInstance as Part;
-	}
-	if (!wall) {
-		wall = accessModelInstance.FindFirstChildOfClass("Part") as Part | undefined;
-	}
+	const wall = findBarrierWall(accessModelInstance);
 
 	if (!wall) return;
 
@@ -149,7 +152,7 @@ function checkBarrierRemoval(accessModelInstance: Model) {
 	}
 }
 
-function poofBarrier(wall: Part, smoke: Smoke, accessModelInstance: Model) {
+function poofBarrier(wall: BasePart, smoke: Smoke, accessModelInstance: Model) {
 	// Fade out smoke opacity
 	const tweenInfo = new TweenInfo(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.In);
 	const smokeTween = TweenService.Create(smoke, tweenInfo, { Opacity: 0 });
